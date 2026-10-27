@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>试炼场 · 连招打磨</title>
+<style>
+  :root { --ink: #f4efe2; --panel: linear-gradient(180deg, rgba(22, 38, 36, 0.82), rgba(14, 22, 24, 0.86)); --line: rgba(214, 182, 112, 0.5); --gold: #ffe7a8; --fast: #7dffb0; --slow: #ffc85a; --cut: #8a8f96; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a2230; font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif; color: var(--ink); user-select: none; }
+  #app canvas { display: block; cursor: crosshair; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px); padding: 10px 12px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18), 0 4px 14px rgba(0,0,0,.25); font-size: 12px; }
+  h2 { margin: 0 0 6px; font-family: "STKaiti", "KaiTi", serif; font-size: 18px; letter-spacing: 2px; color: var(--gold); font-weight: normal; }
+  .dim { opacity: .65; }
+  #help { left: 16px; top: 16px; width: 250px; line-height: 1.6; }
+  #routes { right: 16px; top: 16px; width: 360px; }
+  .route { padding: 5px 6px; border-radius: 4px; margin-top: 4px; transition: opacity .15s, background .15s; }
+  .route .hd { display: flex; justify-content: space-between; }
+  .route .nm { font-family: "STKaiti", "KaiTi", serif; font-size: 15px; color: var(--gold); }
+  .route .tg { opacity: .6; }
+  .route .steps { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 3px; }
+  .chip { padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.08); }
+  .arr { font-size: 11px; padding: 0 2px; font-weight: 700; }
+  .arr.F { color: var(--fast); } .arr.S { color: var(--slow); }
+  .route.off { opacity: .28; }
+  .route.cur { background: rgba(214,182,112,.12); }
+  .route.done { background: rgba(125,255,176,.18); }
+  .chip.lit { background: rgba(214,182,112,.4); border-color: var(--gold); color: #fff; }
+  .chip.now { background: #d6b670; color: #1a1a1a; }
+  #tune { left: 16px; bottom: 16px; width: 250px; }
+  #tune label { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 5px; }
+  #tune input[type=range] { width: 120px; accent-color: #d6b670; }
+  #tune .v { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  .btns { display: flex; gap: 4px; margin-top: 7px; flex-wrap: wrap; }
+  button { font: inherit; color: var(--ink); background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+  button:hover { background: rgba(214,182,112,.25); }
+  button.on { background: rgba(214,182,112,.45); }
+  #stats { right: 16px; bottom: 16px; width: 200px; line-height: 1.7; font-variant-numeric: tabular-nums; }
+  #stats b { color: var(--gold); font-weight: normal; float: right; }
+  #center { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); text-align: center; pointer-events: none; }
+  #moveName { font-family: "STKaiti", "KaiTi", serif; font-size: 30px; letter-spacing: 4px; color: var(--gold); text-shadow: 0 2px 6px rgba(0,0,0,.8); min-height: 40px; }
+  #moveName small { font-size: 15px; letter-spacing: 1px; opacity: .8; margin-left: 8px; }
+  #hits { font-size: 13px; color: #fff; text-shadow: 0 1px 3px #000; min-height: 18px; }
+  #bar { position: relative; height: 22px; margin-top: 6px; border-radius: 4px; overflow: hidden; background: rgba(0,0,0,.45); border: 1px solid var(--line); }
+  #bar .z { position: absolute; top: 0; bottom: 0; font-size: 11px; line-height: 22px; color: rgba(0,0,0,.75); font-weight: 700; }
+  #zPre { background: rgba(125,255,176,.35); } #zFast { background: rgba(125,255,176,.75); } #zSlow { background: rgba(255,200,90,.7); } #zCut { background: rgba(138,143,150,.35); color: rgba(255,255,255,.6) !important; }
+  #cursor { position: absolute; top: -2px; bottom: -2px; width: 3px; background: #fff; box-shadow: 0 0 6px #fff; }
+  #mark { position: absolute; top: -2px; bottom: -2px; width: 3px; background: #ff4a6a; box-shadow: 0 0 6px #ff4a6a; }
+  #lastIn { font-size: 12px; margin-top: 4px; min-height: 16px; text-shadow: 0 1px 2px #000; }
+  #dmg { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .dn { position: absolute; left: 0; top: 0; font-weight: 700; font-size: 18px; color: #fff; text-shadow: 0 1px 0 #000, 0 0 6px rgba(0,0,0,.8); white-space: nowrap; }
+  .dn.crit { color: #ffe28a; font-size: 24px; }
+  /* 血条 */
+  #hpLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .hb { position: absolute; left: 0; top: 0; width: 66px; transform-origin: 50% 100%; will-change: transform, opacity; pointer-events: none; }
+  .hb-frame { position: relative; height: 8px; background: rgba(8, 12, 14, .78); border: 1px solid rgba(255, 231, 168, .6); border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.7); overflow: hidden; }
+  .hb-trail, .hb-fill, .hb-flash { position: absolute; inset: 0; transform-origin: 0 50%; }
+  .hb-trail { background: linear-gradient(180deg, #fff2d0, #ff9050); }
+  .hb-trail.heal { background: linear-gradient(180deg, #f0fff4, #8dffb8); }
+  .hb-fill { --c: #5fe08e; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 45%, #fff) 0 30%, var(--c) 30% 78%, color-mix(in srgb, var(--c) 70%, #000) 78%); }
+  .hb-flash { background: #fff; opacity: 0; }
+  .hb-ticks { position: absolute; inset: 0; background-image: linear-gradient(90deg, transparent calc(100% - 1px), rgba(0,0,0,.55) 0); background-repeat: repeat-x; }
+  .hb-chip { position: absolute; bottom: 100%; margin-bottom: 1px; padding-left: 2px; font-size: 11px; font-weight: 700; color: #ffd9a0; text-shadow: 0 1px 0 #000, 0 0 3px #000; white-space: nowrap; transition: opacity .2s; }
+  .hb.low .hb-frame { animation: hbPulse .45s ease-in-out infinite alternate; }
+  @keyframes hbPulse { to { border-color: #ff8a8a; box-shadow: 0 0 8px 2px rgba(255, 60, 60, .85); } }
+  .hb.dead .hb-frame { animation: hbBreak .6s ease-out forwards; }
+  @keyframes hbBreak { 0% { filter: brightness(4); } 100% { filter: brightness(.8) grayscale(1); } }
+  .hb.big { position: fixed; left: 50%; top: 16px; width: clamp(200px, calc(100vw - 800px), 440px); transform-origin: 50% 0; z-index: 2; }
+  .hb.big .hb-frame { height: 14px; border-radius: 3px; border-color: var(--line); box-shadow: inset 0 0 0 1px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.5); }
+  .hb-hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; text-shadow: 0 1px 3px #000; }
+  .hb-nm { font-family: "STKaiti", "KaiTi", serif; font-size: 17px; letter-spacing: 3px; color: var(--gold); }
+  .hb-num { font-size: 12px; font-variant-numeric: tabular-nums; opacity: .85; }
+  .hb.big .hb-chip { bottom: auto; top: 100%; margin-top: 2px; font-size: 14px; }
+  a { color: var(--gold); }
+  .panel h2 { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .panel h2 .fold { margin-left: auto; font-family: Consolas, monospace; font-size: 14px; width: 20px; height: 20px; line-height: 18px; text-align: center; border: 1px solid var(--line); border-radius: 3px; background: rgba(0,0,0,.35); }
+  .panel h2:hover .fold { background: rgba(214,182,112,.3); }
+  .panel.min { width: auto !important; min-width: 130px; padding-bottom: 4px; }
+  .panel.min > :not(h2) { display: none !important; }
+  .panel.min h2 { margin-bottom: 2px; }
+  #sfxPanel { left: 282px; top: 16px; width: 300px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  #sfxPanel h3 { margin: 8px 0 3px; font-size: 12px; font-weight: normal; color: var(--gold); opacity: .8; }
+  #sfxPanel button { display: flex; width: 100%; justify-content: space-between; margin-top: 3px; text-align: left; }
+  #sfxPanel button .id { opacity: .5; font-family: Consolas, monospace; font-size: 11px; }
+  #sfxPanel button.play { background: rgba(125,255,176,.35); }
+  @media (max-width: 900px) { #help, #stats { display: none; } #routes { width: 260px; } .hb.big { width: clamp(180px, calc(100vw - 600px), 440px); } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hpLayer"></div>
+<div id="dmg"></div>
+
+<div id="help" class="panel">
+  <h2>试炼场</h2>
+  <div>WASD 移动 · 鼠标瞄准</div>
+  <div>左键（松开时出招）/ J 普攻，看节奏分支</div>
+  <div>空格 / Shift 闪避（打断连段）</div>
+  <div>1 单桩 · 2 一排 · 3 一群 · 4 移动靶</div>
+  <div class="dim" style="margin-top:6px">快 = 招式收尾前就点（或刚收尾）<br>慢 = 收尾后稍停再点<br>停太久 = 断招，重新起手</div>
+  <div style="margin-top:6px"><a href="index.html">← 回主世界</a></div>
+</div>
+
+<div id="routes" class="panel"><h2>连招谱</h2><div id="routeList"></div></div>
+
+<div id="tune" class="panel">
+  <h2>调参</h2>
+  <label>快 窗口 <input id="fastWin" type="range" min="0.05" max="0.4" step="0.01"><span class="v"></span></label>
+  <label>慢 窗口 <input id="slowWin" type="range" min="0.3" max="1.5" step="0.05"><span class="v"></span></label>
+  <label>时间倍率 <input id="timeScale" type="range" min="0.1" max="1.5" step="0.05"><span class="v"></span></label>
+  <label>木桩血量 <input id="dummyHp" type="range" min="100" max="2000" step="50"><span class="v"></span></label>
+  <label>音量 <input id="vol" type="range" min="0" max="1" step="0.05"><span class="v"></span></label>
+  <div class="btns">
+    <button id="bHitbox">判定框</button>
+    <button id="bStop">顿帧</button>
+    <button id="bShake">震屏</button>
+    <button id="bSound">音效</button>
+    <button id="bSoft">软边</button>
+  </div>
+</div>
+
+<div id="sfxPanel" class="panel">
+  <h2>音效试听 <span class="dim" style="font-size:12px">M</span></h2>
+  <div class="dim">点一下播一次；告诉我编号就行</div>
+  <div id="sfxList"></div>
+</div>
+
+<div id="stats" class="panel">
+  <h2>伤害</h2>
+  <div>总伤害 <b id="sTotal">0</b></div>
+  <div>DPS（5秒） <b id="sDps">0</b></div>
+  <div>本段命中 <b id="sChain">0</b></div>
+  <div>最高连击 <b id="sBest">0</b></div>
+  <div>击破 <b id="sKills">0</b></div>
+  <div class="btns"><button id="bReset">清零 (R)</button></div>
+</div>
+
+<div id="center">
+  <div id="moveName"></div>
+  <div id="hits"></div>
+  <div id="bar">
+    <div class="z" id="zPre"></div><div class="z" id="zFast">快</div><div class="z" id="zSlow">慢</div><div class="z" id="zCut">断</div>
+    <div id="mark" hidden></div><div id="cursor" hidden></div>
+  </div>
+  <div id="lastIn"></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="src/arena.js"></script>
+</body>
+</html>

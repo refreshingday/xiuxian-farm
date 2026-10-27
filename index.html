@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>灵田问道 · 原型</title>
+<style>
+  :root { --ink: #f4efe2; --panel: linear-gradient(180deg, rgba(22, 38, 36, 0.78), rgba(14, 22, 24, 0.82)); --line: rgba(214, 182, 112, 0.5); --hp: #e0524a; --qi: #4ab8e8; --xp: #e8c25a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1224; font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif; color: var(--ink); user-select: none; }
+  #app canvas { display: block; cursor: crosshair; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px); padding: 10px 12px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18), 0 4px 14px rgba(0,0,0,.25); }
+  .hidden { display: none !important; }
+  #status { position: fixed; left: 16px; top: 16px; width: 280px; }
+  .name { font-family: "STKaiti", "KaiTi", serif; font-size: 20px; letter-spacing: 2px; }
+  .name .tag { display: block; font-family: inherit; font-size: 11px; letter-spacing: 0; opacity: .7; margin-top: 2px; }
+  .bar { position: relative; height: 16px; background: rgba(0,0,0,.45); border-radius: 8px; margin-top: 7px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 8px; transition: width .15s; }
+  .bar span { position: absolute; inset: 0; font-size: 11px; line-height: 16px; text-align: center; text-shadow: 0 1px 2px #000; }
+  .hp > div { background: linear-gradient(90deg, #b8302a, var(--hp)); }
+  .qi > div { background: linear-gradient(90deg, #2a78b8, var(--qi)); }
+  .xp { height: 5px; margin-top: 5px; } .xp > div { background: var(--xp); }
+  .realm { font-size: 12px; margin-top: 7px; color: #ffe7a8; }
+  #clock { position: fixed; right: 16px; top: 16px; text-align: right; min-width: 200px; }
+  #timeText { font-size: 14px; } #regionText { font-family: "STKaiti", "KaiTi", serif; font-size: 18px; margin-top: 2px; color: #ffe7a8; letter-spacing: 1px; }
+  #inv { position: fixed; right: 16px; top: 92px; font-size: 13px; }
+  #inv b { color: #ffe7a8; margin-right: 6px; }
+  #bossbar { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); width: min(520px, 60vw); text-align: center; }
+  .bname { font-family: "STKaiti", "KaiTi", serif; font-size: 20px; letter-spacing: 4px; color: #ffb0a0; text-shadow: 0 0 8px #ff3a1a; }
+  .boss { height: 12px; border: 1px solid rgba(255,120,90,.5); } .boss > div { background: linear-gradient(90deg, #ff3a1a, #ffa04a); }
+  #skills { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; }
+  .slot { position: relative; width: 78px; height: 58px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18); display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; font-size: 12px; }
+  .slot.off { opacity: .45; }
+  .slot kbd { font-size: 10px; opacity: .7; margin-bottom: 3px; }
+  .slot .cd { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.55); height: 0; }
+  kbd { font-family: inherit; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 0 5px; }
+  #prompt { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 6px 14px; border-radius: 16px; font-size: 14px; }
+  #dialog { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); width: min(680px, 92vw); background: rgba(24, 20, 16, 0.86); border: 1px solid rgba(255, 220, 160, .3); border-radius: 12px; padding: 14px 18px; }
+  .dname { font-family: "STKaiti", "KaiTi", serif; font-size: 22px; color: #ffe7a8; letter-spacing: 2px; }
+  .dsub { font-size: 12px; opacity: .7; margin: 2px 0 8px; }
+  .dline { font-size: 16px; line-height: 1.6; }
+  .dinfo { font-size: 13px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.2); color: #bfe6ff; }
+  .dhint { font-size: 12px; margin-top: 4px; color: #ffcf9a; }
+  #help { position: fixed; left: 16px; bottom: 16px; font-size: 12px; line-height: 1.75; width: 230px; }
+  #help b { color: #ffe7a8; }
+  #comboName { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; color: #ffe7a8; text-shadow: 0 2px 6px rgba(0,0,0,.8); pointer-events: none; white-space: nowrap; }
+  #comboName small { font-size: 14px; letter-spacing: 1px; opacity: .8; margin-left: 8px; }
+  body.talking #help { display: none; }
+  #toast { position: fixed; left: 50%; top: 22%; transform: translate(-50%, -10px); font-family: "STKaiti", "KaiTi", serif; font-size: 24px; letter-spacing: 2px; color: #fff3d0; text-shadow: 0 2px 8px #000, 0 0 16px rgba(255,200,120,.6); opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; text-align: center; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(255, 30, 20, .7); opacity: 0; }
+  #hurt.on { animation: hurt .45s ease-out; }
+  @keyframes hurt { from { opacity: 1; } to { opacity: 0; } }
+  #dead { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(40, 0, 0, .55); font-family: "STKaiti", "KaiTi", serif; font-size: 34px; letter-spacing: 6px; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0d1224; font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; }
+  #dmg { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .dn { position: absolute; left: 0; top: 0; font-weight: 700; font-size: 18px; color: #fff; text-shadow: 0 1px 0 #000, 0 0 6px rgba(0,0,0,.8); white-space: nowrap; }
+  .dn.crit { color: #ffe28a; font-size: 24px; }
+  .dn.hurt { color: #ff6a5a; }
+  .dn.heal { color: #7dffb0; }
+  .dn.xp { color: #9ef0ff; font-size: 13px; }
+  .dn.item { color: #ffd36b; font-size: 14px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="dmg"></div>
+
+<div id="status" class="panel">
+  <div class="name">叶清玄<span class="tag">第一代 · 金木双灵根 · 中等资质（上限 金丹）</span></div>
+  <div class="bar hp"><div id="hpFill"></div><span id="hpText"></span></div>
+  <div class="bar qi"><div id="qiFill"></div><span id="qiText"></span></div>
+  <div class="realm" id="realm"></div>
+  <div class="bar xp"><div id="xpFill"></div></div>
+</div>
+
+<div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
+<div id="inv" class="panel">灵草 <b id="invHerb">0</b>妖丹 <b id="invCore">0</b>灵石 <b id="invStone">0</b>赤岩之心 <b id="invHeart">0</b></div>
+<div id="bossbar" class="hidden"><div class="bname" id="bossName"></div><div class="bar boss"><div id="bossFill"></div></div></div>
+
+<div id="prompt" class="hidden"></div>
+<div id="dialog" class="hidden">
+  <div class="dname"></div><div class="dsub"></div>
+  <div class="dline"></div><div class="dinfo"></div><div class="dhint"></div>
+</div>
+
+<div id="skills">
+  <div class="slot"><kbd>左键</kbd><span>连招</span></div>
+  <div class="slot" id="sk1"><kbd>右键</kbd><span>剑气 15</span><i class="cd"></i></div>
+  <div class="slot" id="sk2"><kbd>1</kbd><span>剑旋 30</span><i class="cd"></i></div>
+  <div class="slot" id="sk3"><kbd>2</kbd><span>服灵草</span><i class="cd"></i></div>
+  <div class="slot" id="sk4"><kbd>空格</kbd><span>身法</span><i class="cd"></i></div>
+</div>
+
+<div id="help" class="panel">
+  <b>WASD</b> 移动　<b>鼠标</b> 瞄准<br>
+  <b>左键</b> 连招（松开出招）<br>
+  　快点 / 慢点 走不同分支，共 6 套<br>
+  <b>右键</b> 剑气　<b>1</b> 剑旋　<b>2</b> 服灵草<br>
+  <b>空格 / Shift</b> 身法闪避（无敌）<br>
+  <b>F</b> 交谈 / 种田 / 采集　<b>Q E</b> 转镜头<br>
+  <b>按住 T</b> 加速时间　<b>H</b> 隐藏说明<br>
+  东北方的大路通往 <b>玄晶矿洞</b>，深处有妖王。
+</div>
+
+<div id="comboName"></div>
+<div id="toast"></div>
+<div id="hurt"></div>
+<div id="dead" class="hidden">重伤昏迷……</div>
+<div id="loading">灵气汇聚中…</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

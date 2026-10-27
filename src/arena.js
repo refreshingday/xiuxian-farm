@@ -1,0 +1,643 @@
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { clamp, angDiff, lerpAngle, toon, mesh, at, setFlash, outlineMat, addOutline } from './util.js';
+import { createChibi, animChibi } from './chibi.js';
+import { FX } from './fx.js';
+import { TUNE, MOVES, TREE, ROUTES, ComboRunner } from './combo.js';
+import { ComboFX, MOVE_FX } from './comboFx.js';
+import { SFX, MOVE_SFX } from './comboSfx.js';
+import { animCombo } from './comboAnim.js';
+import { HealthBar, screenOf } from './hpbar.js';
+
+// 试炼场：只有平台 + 木桩 + 玩家，专门打磨战斗手感，不加载大世界
+
+// ---------- 渲染 ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+document.getElementById('app').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fc4d8);
+scene.fog = new THREE.Fog(0x9fc4d8, 32, 60);
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.5, 140);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.5, 0.9));
+composer.addPass(new OutputPass());
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+});
+
+scene.add(new THREE.HemisphereLight(0xd8ecff, 0x9a8a50, 1.1));
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.6);
+sun.position.set(10, 22, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 60 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+scene.add(sun);
+
+// ---------- 场地 ----------
+const ARENA_R = 17;
+{
+  const grass = mesh(new THREE.CircleGeometry(60, 48).rotateX(-Math.PI / 2), toon('#7fae5a'), { cast: false, recv: true });
+  grass.position.y = -0.3; scene.add(grass);
+  const plat = mesh(new THREE.CylinderGeometry(ARENA_R + 0.6, ARENA_R + 1.2, 0.6, 48), toon('#8f9488'), { recv: true });
+  plat.position.y = -0.3; scene.add(plat);
+  for (let i = 1; i <= 3; i++) {
+    const ring = mesh(new THREE.RingGeometry(i * 5 - 0.08, i * 5 + 0.08, 64).rotateX(-Math.PI / 2), toon('#6f7468'), { cast: false, recv: true });
+    ring.position.y = 0.01; scene.add(ring);
+  }
+  const pillarGeo = new THREE.CylinderGeometry(0.45, 0.55, 3, 8), capGeo = new THREE.BoxGeometry(1.3, 0.3, 1.3);
+  const stone = toon('#a8a898'), red = toon('#b84a3a');
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2, p = new THREE.Group();
+    p.add(at(mesh(pillarGeo, stone), 0, 1.5, 0), at(mesh(capGeo, red), 0, 3.1, 0));
+    p.position.set(Math.cos(a) * (ARENA_R + 0.2), 0, Math.sin(a) * (ARENA_R + 0.2));
+    addOutline(p, outlineMat('#2b1d14', 0.03));
+    scene.add(p);
+  }
+}
+
+const g = { shakeV: 0, shake(v) { if (opt.shake) this.shakeV = Math.max(this.shakeV, v); } };
+const fx = new FX(scene, camera);
+const cfx = new ComboFX(scene, fx, { soft: true });
+const sfx = new SFX();
+
+// ---------- 调参（存在本机浏览器，刷新不丢） ----------
+const opt = { fastWin: TUNE.fastWin, slowWin: TUNE.slowWin, timeScale: 1, dummyHp: 300, hitbox: false, stop: true, shake: true, vol: 0.7, sound: true, soft: true };
+try { Object.assign(opt, JSON.parse(localStorage.getItem('arenaTune') || '{}')); } catch {}
+const saveOpt = () => { try { localStorage.setItem('arenaTune', JSON.stringify(opt)); } catch {} };
+opt.hitbox = false; // 判定框每次打开都默认关
+TUNE.fastWin = opt.fastWin; TUNE.slowWin = opt.slowWin;
+sfx.setVolume(opt.vol); sfx.enabled = opt.sound; cfx.soft = opt.soft;
+
+for (const id of ['fastWin', 'slowWin', 'timeScale', 'dummyHp', 'vol']) {
+  const el = document.getElementById(id), v = el.nextElementSibling, fmt = (x) => id === 'dummyHp' ? String(x) : x.toFixed(2);
+  el.value = opt[id]; v.textContent = fmt(+opt[id]);
+  el.addEventListener('input', () => {
+    opt[id] = +el.value; v.textContent = fmt(opt[id]);
+    if (id === 'dummyHp') { for (const d of dummies) setDummyMax(d, opt[id]); if (focusD) targetBar.snap(focusD.hp, focusD.max); }
+    if (id === 'fastWin' || id === 'slowWin') TUNE[id] = opt[id];
+    if (id === 'vol') sfx.setVolume(opt.vol);
+    if (id === 'fastWin' && opt.slowWin < opt.fastWin + 0.1) { opt.slowWin = opt.fastWin + 0.1; TUNE.slowWin = opt.slowWin; }
+    saveOpt(); layoutBar();
+  });
+}
+for (const [id, key] of [['bHitbox', 'hitbox'], ['bStop', 'stop'], ['bShake', 'shake'], ['bSound', 'sound'], ['bSoft', 'soft']]) {
+  const b = document.getElementById(id);
+  b.classList.toggle('on', opt[key]);
+  b.addEventListener('click', () => { opt[key] = !opt[key]; b.classList.toggle('on', opt[key]); sfx.enabled = opt.sound; cfx.soft = opt.soft; saveOpt(); });
+}
+
+// ---------- 木桩 ----------
+const dummies = [];
+let movingTargets = false;
+const DG = {
+  base: new THREE.CylinderGeometry(0.42, 0.5, 0.18, 10),
+  post: new THREE.CylinderGeometry(0.08, 0.08, 1.7, 6),
+  body: new THREE.CylinderGeometry(0.3, 0.34, 0.85, 10),
+  band: new THREE.CylinderGeometry(0.35, 0.35, 0.07, 10),
+  arm: new THREE.BoxGeometry(1.2, 0.1, 0.1),
+  head: new THREE.SphereGeometry(0.26, 12, 10),
+};
+function makeDummy(x, z) {
+  const mats = [];
+  const M = (c) => { const m = toon(c, { unique: true }); mats.push(m); return m; };
+  const straw = M('#d8b86a'), wood = M('#8a5a3a'), rope = M('#6a4a2a'), sack = M('#c8a878');
+  const root = new THREE.Group(), yaw = new THREE.Group(), tilt = new THREE.Group(), model = new THREE.Group();
+  root.add(yaw); yaw.add(tilt); tilt.add(model);
+  root.add(at(mesh(DG.base, toon('#6f7468')), 0, 0.09, 0));
+  model.add(at(mesh(DG.post, wood), 0, 0.85, 0), at(mesh(DG.body, straw), 0, 1.15, 0), at(mesh(DG.arm, wood), 0, 1.3, 0), at(mesh(DG.head, sack), 0, 1.85, 0));
+  for (const y of [0.85, 1.45]) model.add(at(mesh(DG.band, rope), 0, y, 0));
+  addOutline(root, outlineMat('#2b1d14', 0.025));
+  root.position.set(x, 0, z);
+  scene.add(root);
+  const d = { root, yaw, tilt, model, mats, pos: root.position, home: new THREE.Vector2(x, z), base: new THREE.Vector2(x, z), r: 0.55, vx: 0, vz: 0, ang: 0, angV: 0, flash: 0,
+    name: '试炼木桩 · ' + NUMS[dummies.length], max: opt.dummyHp, hp: opt.dummyHp, dead: false, deathT: 0, spawnT: 1 };
+  d.bar = new HealthBar({ parent: hpLayer, max: d.max, tick: 50 });
+  dummies.push(d);
+  return d;
+}
+const DC = { x: -5, z: 0 };
+const NUMS = '壹贰叁肆伍陆柒捌玖拾';
+const hpLayer = document.getElementById('hpLayer');
+const targetBar = new HealthBar({ parent: document.body, max: 300, big: true, tick: 50 });
+let focusD = null;
+const live = () => dummies.filter((d) => !d.dead);
+function setDummyMax(d, max) { d.hp = d.dead ? 0 : Math.min(max, d.hp + Math.max(0, max - d.max)); d.max = max; d.bar.snap(d.hp, max); }
+function layout(n) {
+  for (const d of dummies) { scene.remove(d.root); for (const m of d.mats) m.dispose(); d.bar.remove(); }
+  dummies.length = 0; focusD = null; targetBar.snap(1, 1, '');
+  movingTargets = n === 4;
+  // 木桩放在玩家左边（屏幕左侧）
+  if (n === 1) makeDummy(DC.x + 1, DC.z);
+  if (n === 2) for (let i = -2; i <= 2; i++) makeDummy(DC.x, DC.z + i * 2);
+  if (n === 3 || n === 4) {
+    makeDummy(DC.x, DC.z);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; makeDummy(DC.x + Math.cos(a) * 1.6, DC.z + Math.sin(a) * 1.6); }
+  }
+  for (const d of dummies) fx.burst(d.pos, '#c8b8ff', 8, { speed: 3, up: 3 });
+}
+
+const stats = { total: 0, log: [], chainHits: 0, best: 0, kills: 0 };
+function hitDummy(d, dmg, fromX, fromZ, knock, color = '#ffffff') {
+  if (d.dead) return;
+  const crit = Math.random() < 0.12, amt = dmg * (crit ? 1.8 : 1);
+  if (focusD !== d) { focusD = d; targetBar.snap(d.hp, d.max, d.name); }
+  d.hp = Math.max(0, d.hp - amt);
+  d.bar.damage(amt, crit); targetBar.damage(amt, crit);
+  const dx = d.pos.x - fromX, dz = d.pos.z - fromZ, l = Math.hypot(dx, dz) || 1;
+  d.vx += dx / l * knock; d.vz += dz / l * knock;
+  d.yaw.rotation.y = Math.atan2(dx, dz); d.model.rotation.y = -d.yaw.rotation.y;
+  d.angV += 4 + knock * 0.7;
+  d.flash = 0.1;
+  fx.num(d.pos, Math.round(amt) + (crit ? '!' : ''), crit ? 'crit' : '');
+  fx.burst(d.pos, crit ? '#ffe28a' : color, crit ? 12 : 6, { speed: 5, up: 2, life: 0.3, y: 1.1 });
+  sfx.impact({ crit, heavy: clamp((dmg - 10) / 25, 0, 1) });
+  stats.total += amt; stats.log.push({ t: realTime, amt });
+  stats.chainHits++; stats.best = Math.max(stats.best, stats.chainHits);
+  if (d.hp <= 0) killDummy(d, dx / l, dz / l);
+}
+
+// 击破：向受击方向倒下、碎草飞散，几秒后原地重生
+const RESPAWN = 2.2;
+function killDummy(d, nx, nz) {
+  d.dead = true; d.deathT = 0; d.fallYaw = Math.atan2(nx, nz);
+  d.vx += nx * 6; d.vz += nz * 6;
+  d.bar.die(); if (focusD === d) targetBar.die();
+  stats.kills++;
+  sfx.kill();
+  fx.burst(d.pos, '#e8c878', 26, { speed: 7, up: 5, life: 0.6, y: 1.2 });
+  fx.burst(d.pos, '#ffffff', 10, { speed: 4, up: 2, life: 0.25, y: 1.2 });
+  fx.shockRing(d.pos.x, d.pos.z, 1.6, '#ffe7a8', 0.35);
+  fx.num(d.pos, '击破', 'crit');
+  if (opt.stop) hitStop = Math.max(hitStop, 0.09);
+  g.shake(0.4);
+}
+function respawnDummy(d) {
+  d.dead = false; d.hp = d.max; d.spawnT = 0; d.ang = 0; d.angV = 0;
+  d.pos.set(d.home.x, 0, d.home.y); d.vx = d.vz = 0;
+  d.root.visible = true; d.model.position.y = 0;
+  d.bar.revive(); if (focusD === d) targetBar.revive();
+  fx.burst(d.pos, '#c8b8ff', 14, { speed: 3, up: 4, life: 0.5 });
+  fx.shockRing(d.pos.x, d.pos.z, 1.2, '#c8b8ff', 0.3);
+  sfx.respawn();
+}
+function updateDummies(dt, time) {
+  for (const d of dummies) {
+    if (movingTargets) {
+      const a = time * 0.5 + Math.PI;
+      d.home.set(Math.cos(a) * 6 + (d.base.x - DC.x) * 0.5, Math.sin(a) * 6 + (d.base.y - DC.z) * 0.5);
+    } else d.home.copy(d.base);
+    d.vx += (d.home.x - d.pos.x) * 6 * dt; d.vz += (d.home.y - d.pos.z) * 6 * dt;
+    const k = Math.exp(-5 * dt); d.vx *= k; d.vz *= k;
+    d.pos.x += d.vx * dt; d.pos.z += d.vz * dt;
+    if (d.dead) {
+      // 倒地 → 沉入地面 → 等待重生
+      d.deathT += dt;
+      const k = Math.min(1, d.deathT / 0.35);
+      d.yaw.rotation.y = d.fallYaw; d.model.rotation.y = -d.fallYaw;
+      d.tilt.rotation.x = 1.45 * (k * k) - Math.sin(k * Math.PI) * 0.15 + (k >= 1 ? Math.sin(Math.min(1, (d.deathT - 0.35) / 0.15) * Math.PI) * 0.08 : 0);
+      d.model.position.y = -Math.max(0, d.deathT - 1.1) * 1.2;
+      if (d.deathT > 1.8) d.root.visible = false;
+      if (d.deathT > RESPAWN) respawnDummy(d);
+      continue;
+    }
+    d.angV += (-140 * d.ang - 9 * d.angV) * dt; d.ang += d.angV * dt;
+    d.tilt.rotation.x = clamp(d.ang, -0.7, 0.7);
+    if (d.spawnT < 1) { d.spawnT = Math.min(1, d.spawnT + dt * 3); const k = d.spawnT; d.model.scale.setScalar(k < 1 ? 1 + Math.sin(k * Math.PI) * 0.25 - (1 - k) * (1 - k) * 0.9 : 1); }
+    if (d.flash > 0) { d.flash -= dt; setFlash(d.mats, d.flash > 0 ? 0.9 : 0); }
+  }
+  for (const d of dummies) if (d.dead && d.flash > 0) { d.flash = 0; setFlash(d.mats, 0); }
+  for (let i = 0; i < dummies.length; i++) for (let j = i + 1; j < dummies.length; j++) {
+    const a = dummies[i], b = dummies[j];
+    if (a.dead || b.dead) continue;
+    const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, rr = a.r + b.r, d2 = dx * dx + dz * dz;
+    if (d2 < rr * rr && d2 > 1e-6) { const d = Math.sqrt(d2), k = (rr - d) / d * 0.5; a.pos.x -= dx * k; a.pos.z -= dz * k; b.pos.x += dx * k; b.pos.z += dz * k; }
+  }
+}
+
+// ---------- 玩家 ----------
+const P = {
+  c: createChibi({ skin: '#f8d8bc', hair: '#4a2e22', hairStyle: 2, robe: '#f2f4f6', robe2: '#4f7fb0', belt: '#3a5a78', pants: '#3a4250', sword: true }),
+  r: 0.4, yaw: -Math.PI / 2, iframe: 0, dashT: 0, dashCd: 0, dashDir: 0,
+  leapFrom: new THREE.Vector2(), leapTo: new THREE.Vector2(), sweepHit: new Set(),
+};
+P.pos = P.c.root.position;
+P.pos.set(1, 0, 0);
+scene.add(P.c.root);
+
+const runner = new ComboRunner(TUNE);
+const fwd = () => new THREE.Vector2(Math.sin(P.yaw), Math.cos(P.yaw));
+const fxCtx = (m, cx, cz) => ({ cfx, fx, x: P.pos.x, z: P.pos.z, yaw: P.yaw, fx0: Math.sin(P.yaw), fz0: Math.cos(P.yaw), color: m.color || '#9ef0ff', cx, cz, getPos: () => P.pos });
+
+runner.on.start = (m, path, type) => {
+  P.yaw = aimYaw();
+  P.iframe = Math.max(P.iframe, m.iframe || 0);
+  P.sweepHit.clear();
+  if (path === '') stats.chainHits = 0;
+  if (m.leap) {
+    const L = m.leap, f = fwd();
+    P.leapFrom.set(P.pos.x, P.pos.z);
+    let dist = L.dist ?? 0;
+    if (L.to === 'aim') dist = Math.min(L.max, Math.hypot(aim.x - P.pos.x, aim.z - P.pos.z));
+    P.leapTo.set(P.pos.x + f.x * dist, P.pos.z + f.y * dist);
+    clampArena(P.leapTo);
+    const h = m.hits[0];
+    fx.circle(P.leapTo.x, P.leapTo.y, h.r, L.t1 - L.t0);
+  }
+  if (m.pose === 'dash') fx.burst(P.pos, '#9ef0ff', 14, { speed: 6, up: 1, life: 0.3 });
+  MOVE_FX[m.id]?.start?.(fxCtx(m, P.leapTo.x, P.leapTo.y), m);
+  if (sfx.ok) { sfx.tick(type); MOVE_SFX[m.id]?.start?.(sfx, m, (m.hits[0]?.t ?? 0.15) / opt.timeScale); }
+  P.ghostT = 0;
+  showMove(m, path);
+};
+
+runner.on.hit = (m, h, idx) => {
+  const f = fwd(), color = m.color || '#9ef0ff';
+  let hitAny = false;
+  if (h.shape === 'arc') {
+    debugArc(P.pos.x, P.pos.z, P.yaw, h.range, h.arc);
+    for (const d of live()) {
+      const dx = d.pos.x - P.pos.x, dz = d.pos.z - P.pos.z;
+      if (Math.hypot(dx, dz) - d.r > h.range || Math.abs(angDiff(Math.atan2(dx, dz), P.yaw)) > h.arc) continue;
+      hitDummy(d, h.dmg, P.pos.x, P.pos.z, h.knock, color); hitAny = true;
+    }
+  } else if (h.shape === 'circle') {
+    const cx = P.pos.x + f.x * h.at, cz = P.pos.z + f.y * h.at;
+    debugCircle(cx, cz, h.r);
+    fx.shockRing(cx, cz, h.r, color, 0.3);
+    for (const d of live()) {
+      if (Math.hypot(d.pos.x - cx, d.pos.z - cz) - d.r > h.r) continue;
+      hitDummy(d, h.dmg, cx, cz, h.knock, color); hitAny = true;
+    }
+  } else if (h.shape === 'wave') {
+    debugLine(P.pos.x, P.pos.z, P.yaw, h.len, h.w);
+    waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color, hit: new Set(), m: spawnWaveMesh(color) });
+  }
+  const f2 = fwd();
+  MOVE_FX[m.id]?.hit?.(fxCtx(m, P.pos.x + f2.x * (h.at || 0), P.pos.z + f2.y * (h.at || 0)), h, idx);
+  if (sfx.ok) MOVE_SFX[m.id]?.hit?.(sfx, h, idx, m);
+  if (hitAny || h.shape !== 'arc') hitFeel(h);
+};
+
+function hitFeel(h) {
+  if (opt.stop && h.stop) hitStop = Math.max(hitStop, h.stop);
+  g.shake(h.shake ?? 0.15);
+}
+
+// 剑气（疾风·终）
+const waves = [];
+function spawnWaveMesh(color) {
+  const mk = (c, k) => new THREE.Mesh(fx.crescentGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k), side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  const g = new THREE.Group(), a = mk(color, 3), b = mk('#ffffff', 2.5), c = mk(color, 2);
+  a.scale.setScalar(1.6); b.scale.setScalar(1.25); c.scale.set(1.9, 1, 1.1); c.position.set(0, 0, -0.5);
+  g.add(a, b, c); scene.add(g);
+  g.material = { set opacity(v) { a.material.opacity = v; b.material.opacity = v; c.material.opacity = v * 0.5; }, dispose() { for (const o of [a, b, c]) o.material.dispose(); } };
+  return g;
+}
+function updateWaves(dt) {
+  for (let i = waves.length - 1; i >= 0; i--) {
+    const w = waves[i], step = Math.min(w.left, 20 * dt);
+    w.x += Math.sin(w.yaw) * step; w.z += Math.cos(w.yaw) * step; w.left -= step;
+    w.m.position.set(w.x, 1, w.z); w.m.rotation.y = w.yaw;
+    w.m.material.opacity = Math.min(1, w.left * 0.6);
+    w.age = (w.age || 0) + dt;
+    for (const sd of [-1, 1]) {
+      const o = Math.sin(w.age * 30 + sd * 1.6) * 1.1 * sd;
+      fx.mote(w.x + Math.cos(w.yaw) * o, 1 + Math.cos(w.age * 30) * 0.4, w.z - Math.sin(w.yaw) * o, w.color, { life: 0.35, size: 0.8 });
+    }
+    if (Math.random() < 0.5) fx.burst({ x: w.x, z: w.z }, '#d8e8f0', 1, { speed: 1.5, up: 1, life: 0.5, y: 0.1, bright: 0.8 });
+    for (const d of live()) {
+      if (w.hit.has(d) || Math.hypot(d.pos.x - w.x, d.pos.z - w.z) > d.r + w.h.w * 0.6) continue;
+      w.hit.add(d); hitDummy(d, w.h.dmg, w.x - Math.sin(w.yaw), w.z - Math.cos(w.yaw), w.h.knock, w.color);
+      cfx.arc(d.pos, w.yaw, w.color, { tilt: 0.7, scale: 0.6, y: 1.2, dur: 0.18 });
+    }
+    if (w.left <= 0) { fx.burst({ x: w.x, z: w.z }, w.color, 14, { speed: 5, up: 2, life: 0.35, y: 1 }); scene.remove(w.m); w.m.material.dispose(); waves.splice(i, 1); }
+  }
+}
+
+// ---------- 判定框可视化（调参面板「判定框」开关，默认关） ----------
+const dbg = [];
+const dbgMat = () => new THREE.MeshBasicMaterial({ color: 0xff3a6a, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+function addDbg(m) { if (!opt.hitbox) { m.geometry.dispose(); return; } m.position.y = 0.06; scene.add(m); dbg.push({ m, t: 0 }); }
+function debugArc(x, z, yaw, range, arc) {
+  const geo = new THREE.RingGeometry(0.05, range, 24, 1, -arc, arc * 2).rotateX(-Math.PI / 2).rotateY(-Math.PI / 2);
+  const m = new THREE.Mesh(geo, dbgMat()); m.position.set(x, 0, z); m.rotation.y = yaw; addDbg(m);
+}
+function debugCircle(x, z, r) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 32).rotateX(-Math.PI / 2), dbgMat()); m.position.set(x, 0, z); addDbg(m);
+}
+function debugLine(x, z, yaw, len, w) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, len).rotateX(-Math.PI / 2).translate(0, 0, len / 2), dbgMat()); m.position.set(x, 0, z); m.rotation.y = yaw; addDbg(m);
+}
+function updateDbg(dt) {
+  for (let i = dbg.length - 1; i >= 0; i--) {
+    const d = dbg[i]; d.t += dt; d.m.material.opacity = 0.32 * (1 - d.t / 0.25);
+    if (d.t >= 0.25) { scene.remove(d.m); d.m.geometry.dispose(); d.m.material.dispose(); dbg.splice(i, 1); }
+  }
+}
+
+// ---------- 输入 ----------
+const keys = new Set();
+const mouse = new THREE.Vector2();
+const aim = new THREE.Vector3();
+addEventListener('keydown', (e) => {
+  sfx.unlock();
+  if (e.repeat) return;
+  keys.add(e.code);
+  if (e.code === 'Space' || e.code === 'ShiftLeft') dash();
+  if (['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) layout(+e.code.slice(5));
+  if (e.code === 'KeyR') resetStats();
+  if (e.code === 'Space') e.preventDefault();
+});
+addEventListener('keyup', (e) => { keys.delete(e.code); if (e.code === 'KeyJ') runner.click(); });
+addEventListener('blur', () => keys.clear());
+renderer.domElement.addEventListener('pointermove', (e) => mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1));
+// 松开鼠标才出招（按下只"上膛"，拖出画布再松开也算）
+let armed = false;
+renderer.domElement.addEventListener('pointerdown', (e) => { if (e.button === 0) armed = true; });
+addEventListener('pointerdown', () => sfx.unlock());
+addEventListener('pointerup', (e) => { if (e.button === 0 && armed) { armed = false; runner.click(); } });
+renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+document.getElementById('bReset').addEventListener('click', resetStats);
+
+// ---------- 音效试听（逐个播放，找出哪个不对） ----------
+const SFX_LIST = [
+  ['通用', [
+    ['挥剑 · 斩一', 'swing', () => sfx.swing({ lead: 0.11 })],
+    ['挥剑 · 斩二', 'swing pitch1.1', () => sfx.swing({ lead: 0.11, pitch: 1.1 })],
+    ['挥剑 · 斩三', 'swing size1.2', () => sfx.swing({ lead: 0.12, pitch: 0.95, size: 1.2 })],
+    ['命中木桩', 'impact', () => sfx.impact()],
+    ['命中 · 重击', 'impact heavy', () => sfx.impact({ heavy: 1 })],
+    ['命中 · 暴击', 'impact crit', () => sfx.impact({ crit: true })],
+    ['木桩击破', 'kill', () => sfx.kill()],
+    ['木桩重生', 'respawn', () => sfx.respawn()],
+    ['闪避', 'dash', () => sfx.dash()],
+    ['节奏 · 快', 'tick F', () => sfx.tick('F')],
+    ['节奏 · 慢', 'tick S', () => sfx.tick('S')],
+  ]],
+  ['招式零件', [
+    ['连刺 · 一刺', 'stab', () => sfx.stab()],
+    ['疾风 · 剑气出手', 'galeRelease', () => sfx.galeRelease()],
+    ['落雷 · 蓄电', 'thunderCharge', () => sfx.thunderCharge(0.42)],
+    ['落雷 · 雷鸣', 'thunderClap', () => sfx.thunderClap()],
+    ['回旋 · 四圈风声', 'spin', () => sfx.spin(0.1)],
+    ['惊鸿 · 突刺', 'pierce', () => sfx.pierce()],
+    ['重劈落地 · 小', 'slam 0', () => sfx.slam(0)],
+    ['重劈落地 · 大', 'slam 1', () => sfx.slam(1)],
+    ['起跳', 'leap', () => sfx.leap(0.42)],
+    ['起跳 + 火焰下落', 'leap fire', () => sfx.leap(0.45, true)],
+    ['流星 · 爆炸', 'explode', () => sfx.explode()],
+  ]],
+  // 整招：按游戏里的时间顺序播（出招 + 每个判定帧），不含命中木桩声
+  ['整招（按实战时序）', Object.values(MOVES).map((m) => [m.name, m.id, () => {
+    MOVE_SFX[m.id]?.start?.(sfx, m, m.hits[0]?.t ?? 0.15);
+    m.hits.forEach((h, i) => setTimeout(() => MOVE_SFX[m.id]?.hit?.(sfx, h, i, m), h.t * 1000));
+  }])],
+];
+{
+  const list = document.getElementById('sfxList'); let n = 0;
+  for (const [group, items] of SFX_LIST) {
+    const h = document.createElement('h3'); h.textContent = group; list.append(h);
+    for (const [name, id, play] of items) {
+      const b = document.createElement('button'), no = ++n;
+      b.innerHTML = `<span>${no}. ${name}</span><span class="id">${id}</span>`;
+      b.addEventListener('click', () => {
+        sfx.unlock();
+        if (!sfx.enabled) { sfx.enabled = opt.sound = true; document.getElementById('bSound').classList.add('on'); saveOpt(); }
+        sfx.ctx?.resume().then(play); b.classList.add('play'); setTimeout(() => b.classList.remove('play'), 250);
+      });
+      list.append(b);
+    }
+  }
+}
+
+// ---------- 面板折叠：点标题收起/展开，状态存在本机。音效试听默认收起，其余默认展开 ----------
+{
+  let fold = { sfxPanel: true };
+  try { Object.assign(fold, JSON.parse(localStorage.getItem('arenaFold') || '{}')); } catch {}
+  const set = (el, min) => { el.classList.toggle('min', min); el.querySelector('.fold').textContent = min ? '+' : '−'; };
+  const toggle = (el) => { fold[el.id] = !el.classList.contains('min'); set(el, fold[el.id]); try { localStorage.setItem('arenaFold', JSON.stringify(fold)); } catch {} };
+  for (const el of document.querySelectorAll('.panel')) {
+    const h = el.querySelector('h2'), b = document.createElement('span');
+    b.className = 'fold'; b.title = '收起 / 展开'; h.append(b);
+    h.addEventListener('click', () => toggle(el));
+    set(el, !!fold[el.id]);
+  }
+  addEventListener('keydown', (e) => { if (e.code === 'KeyM' && !e.repeat) toggle(document.getElementById('sfxPanel')); });
+}
+function resetStats() { stats.kills = 0; stats.total = 0; stats.log.length = 0; stats.chainHits = 0; stats.best = 0; }
+
+const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+function updateAim() { ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); }
+const aimYaw = () => Math.atan2(aim.x - P.pos.x, aim.z - P.pos.z);
+function moveInput() {
+  const v = new THREE.Vector2((keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0), (keys.has('KeyS') ? 1 : 0) - (keys.has('KeyW') ? 1 : 0));
+  if (v.lengthSq() > 0) v.normalize();
+  return v;
+}
+function clampArena(v) { const l = Math.hypot(v.x, v.y); if (l > ARENA_R - 0.6) v.multiplyScalar((ARENA_R - 0.6) / l); }
+
+function dash() {
+  if (P.dashCd > 0) return;
+  const mv = moveInput();
+  P.dashDir = mv.lengthSq() > 0 ? Math.atan2(mv.x, mv.y) : P.yaw;
+  P.dashT = 0.18; P.dashCd = 0.55; P.iframe = Math.max(P.iframe, 0.25);
+  sfx.dash();
+  if (runner.path !== null) { runner.cancel(); showMove(null); }
+}
+
+// ---------- 玩家更新 ----------
+const _v2 = new THREE.Vector2();
+function updatePlayer(dt) {
+  P.iframe -= dt; P.dashCd -= dt;
+  runner.update(dt);
+  const m = runner.move, t = runner.t;
+  const mv = moveInput();
+  let vx = mv.x * 6, vz = mv.y * 6, y = 0;
+
+  if (m) {
+    const spd = m.moveSpd || 0;
+    vx = mv.x * spd; vz = mv.y * spd;
+    if (m.lunge) {
+      const [t0, t1, dist] = m.lunge;
+      if (t > t0 && t - dt < t1) {
+        const k = (Math.min(t, t1) - Math.max(t - dt, t0)) / (t1 - t0) * dist / dt;
+        vx += Math.sin(P.yaw) * k; vz += Math.cos(P.yaw) * k;
+      }
+    }
+    if (m.leap) {
+      const L = m.leap, k = clamp((t - L.t0) / (L.t1 - L.t0), 0, 1), e = k * k * (3 - 2 * k);
+      _v2.lerpVectors(P.leapFrom, P.leapTo, e);
+      P.pos.x = _v2.x; P.pos.z = _v2.y; vx = vz = 0;
+      y = L.h * 4 * k * (1 - k);
+      if (k > 0 && k < 1 && Math.random() < 0.6) fx.mote(P.pos.x, y + 1, P.pos.z, m.color, { life: 0.3, size: 0.9 });
+    }
+    if (m.sweep && t > m.lunge[0] && t - dt < m.lunge[1]) {
+      fx.mote(P.pos.x, 0.8 + Math.random() * 0.6, P.pos.z, '#9ef0ff', { life: 0.35, size: 1.3 });
+      debugCircle(P.pos.x, P.pos.z, m.sweep.w);
+      for (const d of live()) {
+        if (P.sweepHit.has(d) || Math.hypot(d.pos.x - P.pos.x, d.pos.z - P.pos.z) > d.r + m.sweep.w) continue;
+        P.sweepHit.add(d); hitDummy(d, m.sweep.dmg, P.pos.x - Math.sin(P.yaw), P.pos.z - Math.cos(P.yaw), m.sweep.knock, '#9ef0ff');
+        cfx.xslash(d.pos, '#9ef0ff', 0.03);
+        hitFeel(m.sweep);
+      }
+    }
+  }
+  const ghosting = (m && ((m.lunge && m.sweep && t < m.lunge[1]) || (m.leap && t < m.leap.t1))) || P.dashT > 0;
+  if (ghosting) { P.ghostT = (P.ghostT || 0) - dt; if (P.ghostT <= 0) { P.ghostT = 0.035; cfx.ghost(P.c.root, m?.leap ? m.color : '#9ef0ff', 0.28); } }
+  if (P.dashT > 0) {
+    P.dashT -= dt;
+    vx = Math.sin(P.dashDir) * 17; vz = Math.cos(P.dashDir) * 17;
+    fx.mote(P.pos.x, 0.8 + Math.random() * 0.6, P.pos.z, '#9ef0ff', { life: 0.3, size: 1.2 });
+  }
+  P.pos.x += vx * dt; P.pos.z += vz * dt;
+  _v2.set(P.pos.x, P.pos.z); clampArena(_v2); P.pos.x = _v2.x; P.pos.z = _v2.y;
+  const ghost = (m && (m.sweep || m.leap)) || P.dashT > 0;
+  if (!ghost) for (const d of live()) {
+    const dx = P.pos.x - d.pos.x, dz = P.pos.z - d.pos.z, rr = P.r + d.r, d2 = dx * dx + dz * dz;
+    if (d2 < rr * rr && d2 > 1e-6) { const dd = Math.sqrt(d2), k = (rr - dd) / dd; P.pos.x += dx * k; P.pos.z += dz * k; }
+  }
+
+  if (P.dashT > 0) P.yaw = P.dashDir;
+  else if (!m && mv.lengthSq() > 0) P.yaw = lerpAngle(P.yaw, Math.atan2(mv.x, mv.y), 1 - Math.exp(-14 * dt));
+  P.c.root.rotation.y = P.yaw;
+  P.c.root.position.y = y;
+  animate(dt, m, t, Math.min(1, Math.hypot(vx, vz) / 6));
+  P.c.root.visible = !(P.iframe > 0 && !m && Math.floor(realTime * 20) % 2 === 0);
+}
+
+function animate(dt, m, t, moving) {
+  if (!animCombo(P.c, dt, m, t)) animChibi(P.c, dt, { move: P.dashT > 0 ? 0 : moving, attack: -1, combo: 0, cast: 0, dash: P.dashT > 0, spin: 0, work: 0 });
+}
+
+// ---------- 镜头 ----------
+const focus = new THREE.Vector3(1, 0, 0);
+function updateCamera(dt) {
+  focus.lerp(P.pos, 1 - Math.exp(-8 * dt)); focus.y = 0;
+  const dist = 21, pitch = 0.9;
+  camera.position.set(focus.x, Math.sin(pitch) * dist, focus.z + Math.cos(pitch) * dist);
+  if (g.shakeV > 0) {
+    camera.position.x += (Math.random() - 0.5) * g.shakeV * 0.5;
+    camera.position.y += (Math.random() - 0.5) * g.shakeV * 0.5;
+    g.shakeV = Math.max(0, g.shakeV - dt * 3);
+  }
+  camera.lookAt(focus.x, 1, focus.z);
+  sun.position.set(focus.x + 10, 22, focus.z + 8); sun.target.position.copy(focus); sun.target.updateMatrixWorld();
+}
+
+// ---------- 界面 ----------
+const $ = (id) => document.getElementById(id);
+const routeEls = ROUTES.map((r) => {
+  const el = document.createElement('div'); el.className = 'route';
+  let html = `<div class="hd"><span class="nm">${r.name}</span><span class="tg">${r.tag}</span></div><div class="steps"><span class="chip">${MOVES[TREE['']].name}</span>`;
+  for (let i = 0; i < r.seq.length; i++) html += `<span class="arr ${r.seq[i]}">▸${r.seq[i] === 'F' ? '快' : '慢'}</span><span class="chip">${MOVES[TREE[r.seq.slice(0, i + 1)]].name}</span>`;
+  el.innerHTML = html + '</div>';
+  $('routeList').appendChild(el);
+  return { r, el, chips: [...el.querySelectorAll('.chip')] };
+});
+function showMove(m, path) {
+  $('moveName').innerHTML = m ? `${m.name}<small>第${runner.chain}式</small>` : '';
+  for (const { r, el, chips } of routeEls) {
+    const on = path != null && r.seq.startsWith(path);
+    el.classList.toggle('off', path != null && !on);
+    el.classList.toggle('cur', on);
+    el.classList.toggle('done', on && path === r.seq);
+    chips.forEach((c, i) => { c.classList.toggle('lit', on && i < path.length); c.classList.toggle('now', on && i === path.length); });
+  }
+}
+showMove(null, null);
+
+const PRE = 0.3;
+let barSpan = 1;
+const pct = (dt) => clamp((dt + PRE) / barSpan, 0, 1) * 100 + '%';
+function layoutBar() {
+  barSpan = PRE + TUNE.slowWin + 0.3;
+  const z = (id, a, b) => { const el = $(id); el.style.left = pct(a); el.style.width = `calc(${pct(b)} - ${pct(a)})`; };
+  z('zPre', -PRE, 0); z('zFast', 0, TUNE.fastWin); z('zSlow', TUNE.fastWin, TUNE.slowWin); z('zCut', TUNE.slowWin, barSpan - PRE);
+}
+layoutBar();
+let lastShown = null;
+function updateBars(dt) {
+  for (const d of dummies) {
+    d.bar.update(dt);
+    const [x, y, front] = screenOf(camera, d.pos.x, 2.45 + d.model.position.y, d.pos.z);
+    d.bar.place(x, y);
+    if (!front) d.bar.el.style.visibility = 'hidden';
+  }
+  targetBar.update(dt); targetBar.place();
+}
+function updateUI() {
+  const m = runner.move, cur = $('cursor');
+  let dt = null;
+  if (m && runner.t < m.cancel) dt = Math.max(-PRE, runner.t - m.cancel);
+  else if (runner.path !== null && !MOVES[TREE[runner.path]].end) dt = runner.clock - runner.readyAt;
+  cur.hidden = dt === null || dt > barSpan - PRE;
+  if (!cur.hidden) cur.style.left = pct(dt);
+  if (runner.path !== null && !m && !runner.open && $('moveName').textContent) showMove(null, null);
+
+  if (runner.last !== lastShown) {
+    lastShown = runner.last;
+    const l = runner.last, mk = $('mark');
+    mk.hidden = l.type === '起';
+    mk.style.left = pct(l.dt);
+    const lab = { F: ['快', 'var(--fast)'], S: ['慢', 'var(--slow)'], '起': ['起手', 'var(--gold)'] }[l.type];
+    $('lastIn').innerHTML = l.type === '起' ? `<span style="color:${lab[1]}">起手</span>` : `<span style="color:${lab[1]}">${lab[0]}</span> · ${l.dt < 0 ? '预输入 ' + Math.round(-l.dt * 1000) + 'ms' : '收招后 ' + Math.round(l.dt * 1000) + 'ms'}`;
+  }
+
+  while (stats.log.length && stats.log[0].t < realTime - 5) stats.log.shift();
+  $('sTotal').textContent = Math.round(stats.total);
+  $('sDps').textContent = Math.round(stats.log.reduce((s, e) => s + e.amt, 0) / 5);
+  $('sChain').textContent = stats.chainHits;
+  $('sBest').textContent = stats.best;
+  $('sKills').textContent = stats.kills;
+  $('hits').textContent = stats.chainHits > 1 && runner.path !== null ? `${stats.chainHits} Hit` : '';
+}
+
+// ---------- 主循环 ----------
+layout(3);
+let last = performance.now(), realTime = 0, gameTime = 0, hitStop = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const raw = Math.min(0.05, (now - last) / 1000); last = now;
+  realTime += raw;
+  let dt = raw * opt.timeScale;
+  if (hitStop > 0) { hitStop -= raw; dt *= 0.05; }
+  gameTime += dt;
+  updateAim();
+  updatePlayer(dt);
+  updateDummies(dt, gameTime);
+  updateWaves(dt);
+  updateDbg(raw);
+  fx.update(raw * opt.timeScale);
+  cfx.update(raw * opt.timeScale);
+  updateCamera(raw);
+  updateBars(raw);
+  updateUI();
+  composer.render();
+}
+requestAnimationFrame(frame);
+
+// 控制台调试：arena.click(); arena.step(0.3) 按固定步长推进，便于脚本化测试招式
+window.arena = { sfx, cfx,
+  runner, stats, dummies, P,
+  click: () => runner.click(),
+  step(sec, h = 1 / 60) {
+    for (let t = 0; t < sec; t += h) {
+      realTime += h; gameTime += h; hitStop = 0;
+      updateAim(); updatePlayer(h); updateDummies(h, gameTime); updateWaves(h); updateDbg(h); fx.update(h); cfx.update(h);
+    }
+    updateCamera(1); updateBars(sec); updateUI(); composer.render();
+  },
+};
