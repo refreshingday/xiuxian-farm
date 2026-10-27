@@ -234,11 +234,13 @@ function buildWater(b, hAt) {
           a = 0.96;
         } else {
           vec2 v = cell(p * 0.7 + vec2(uTime * 0.05, uTime * 0.03));
-          float crust = smoothstep(0.05, 0.25, v.y - v.x);
-          float pulse = 0.85 + 0.15 * sin(uTime * 2.0 + vn(p) * 6.0);
-          c = mix(cFoam * 2.4, cShallow * 1.6, smoothstep(0.0, 0.2, v.y - v.x));
-          c = mix(c, vec3(0.12, 0.06, 0.06), crust * 0.85 * smoothstep(0.0, 0.25, d)) * pulse;
-          c = mix(c, cDeep * 0.5, smoothstep(0.06, 0.0, d));
+          float e = v.y - v.x, pulse = 0.8 + 0.2 * sin(uTime * 2.0 + vn(p * 0.5) * 6.0);
+          // 裂缝亮黄 → 橙色熔流 → 暗红硬壳
+          c = mix(cFoam * 2.0, cShallow * 1.5, smoothstep(0.0, 0.05, e));
+          c = mix(c, cDeep * 0.9, smoothstep(0.05, 0.12, e));
+          c = mix(c, vec3(0.16, 0.05, 0.04), smoothstep(0.1, 0.22, e) * 0.9);
+          c *= pulse;
+          c = mix(c, vec3(0.1, 0.04, 0.04), smoothstep(0.05, 0.0, d) * 0.8);
           a = 1.0;
         }
         gl_FragColor = vec4(c, a);
