@@ -237,7 +237,7 @@ export const BIOMES = [
       return c;
     },
     water: { level: -0.12, mode: 'water', shallow: '#3ab8d8', deep: '#0a2a58', foam: '#8af0ff', glow: 0.6 },
-    light: { sun: '#8090c0', sunI: 0.25, sky: '#3a3a5a', ground: '#1a1420', hemiI: 0.45, fog: '#0c0a14', top: '#08060c', bottom: '#14101c', exposure: 1.25, bloom: 0.9, fogNear: 30, fogFar: 70, dark: true, warm: 0.5 },
+    light: { sun: '#8a9ad0', sunI: 0.7, sky: '#6a6a9a', ground: '#2a2234', hemiI: 1.0, fog: '#0c0a14', top: '#08060c', bottom: '#14101c', exposure: 1.1, bloom: 0.6, fogNear: 30, fogFar: 70, dark: true, warm: 0.5 },
     particles: [{ type: 'motes', n: 160, color: '#9ad8ff', size: 4, glow: true }],
     scatter: [
       { id: 'cart', n: 2, list: [[-3, 3.6, -0.15], [6, 4.9, -0.15]], pick: [0, 1] },

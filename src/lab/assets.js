@@ -222,7 +222,7 @@ function mushroom(v, cap, seed, glow = false) {
       out.set(cap).multiplyScalar(glow ? 0.55 + 0.45 * n.y : 0.7 + n.y * 0.4);
       const spot = vnoise(p.x * 22 + x * 9, p.z * 22 + p.y * 9, 3);
       if (spot > 0.72 && n.y > 0.2 && v % 2 === 0) out.set(glow ? '#ffffff' : '#fff6e8');
-    }), { at: [x, h, z], kind: glow ? 'glow' : 'solid' });
+    }), { at: [x, h, z], kind: glow ? 'gem' : 'solid' });
   }
   return k.build({ light: glow ? { color: cap, i: 0.6, d: 4, y: 0.4 } : null });
 }
@@ -545,7 +545,7 @@ function crystal(v, color, seed) {
     const body = new THREE.CylinderGeometry(rad * 0.85, rad, h, 6).translate(0, h / 2, 0);
     const tip = new THREE.CylinderGeometry(0, rad * 0.85, rad * 1.6, 6).translate(0, h + rad * 0.8, 0);
     const g = faceted(mergeTwo(body, tip));
-    k.add(g, (geo) => paint(geo, (p, n, out) => out.copy(base).multiplyScalar(0.45 + 0.55 * smooth(0, h + rad, p.y) + 0.2 * Math.max(0, n.x))), { at: [x, -0.05, z], rot: [lean * 0.6, r() * TAU, lean], kind: 'glow' });
+    k.add(g, (geo) => paint(geo, (p, n, out) => out.copy(base).multiplyScalar(0.45 + 0.55 * smooth(0, h + rad, p.y) + 0.2 * Math.max(0, n.x))), { at: [x, -0.05, z], rot: [lean * 0.6, r() * TAU, lean], kind: 'gem' });
   }
   // 底座岩石
   k.add(faceted(lumpy(G.ico(0.45, 0), 0.12, 3, seed)), grad('#4a4458', 0.6, 1, 0.15), { at: [0, 0.05, 0], s: [1.2, 0.45, 1.1] });
@@ -571,7 +571,7 @@ function mineCart(v) {
   k.add(...plank(1.1, 0.5, 0.75, '#6a4a32'), { at: [0, 0.55, 0] });
   for (const s of [-1, 1]) k.add(G.box(1.15, 0.06, 0.06), grad('#5a5e68', 0.8, 1.3), { at: [0, 0.82, s * 0.38] });
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.add(G.cyl(0.16, 0.16, 0.07, 10), grad('#3a3e48', 0.8, 1.2), { at: [sx * 0.35, 0.18, sz * 0.38 + sz * 0.02], rot: [Math.PI / 2, 0, 0] });
-  if (v === 0) for (let i = 0; i < 6; i++) k.add(faceted(G.ico(0.14, 0)), grad(i % 2 ? '#5ab8ff' : '#6a6070'), { at: [(i % 3 - 1) * 0.3, 0.85, (Math.floor(i / 3) - 0.5) * 0.3], kind: i % 2 ? 'glow' : 'solid' });
+  if (v === 0) for (let i = 0; i < 6; i++) k.add(faceted(G.ico(0.14, 0)), grad(i % 2 ? '#5ab8ff' : '#6a6070'), { at: [(i % 3 - 1) * 0.3, 0.85, (Math.floor(i / 3) - 0.5) * 0.3], kind: i % 2 ? 'gem' : 'solid' });
   // 铁轨
   for (const s of [-1, 1]) k.add(G.box(3, 0.06, 0.06), grad('#7a7e88', 0.8, 1.3), { at: [0, 0.03, s * 0.38] });
   for (let i = 0; i < 6; i++) k.add(...plank(0.16, 0.05, 1.0, '#5a3a26', i), { at: [-1.25 + i * 0.5, 0.01, 0] });
@@ -770,7 +770,7 @@ function pavilion(v) {
 }
 function cloud(v, seed) {
   const k = new Kit(), parts = [[[0, 0, 0, 0.7], [0.8, -0.1, 0, 0.55], [-0.75, -0.1, 0.1, 0.5], [0.3, 0.3, 0, 0.45]], [[0, 0, 0, 0.5], [0.6, 0, 0, 0.4]], [[0, 0, 0, 0.6], [0.7, 0.05, 0.2, 0.5], [1.3, -0.05, 0, 0.4], [-0.6, 0, -0.1, 0.45], [-1.1, -0.1, 0, 0.3]]][v % 3];
-  k.add(G.blobs(parts, 2, seed, 0.12), (geo) => paint(geo, (p, n, out) => out.set('#ffffff').lerp(C('#c8d8f0'), clamp(-n.y, 0, 1) * 0.6)), { s: [1, 0.55, 0.7] });
+  k.add(G.blobs(parts, 2, seed, 0.12), (geo) => paint(geo, (p, n, out) => out.set('#e4ecf6').lerp(C('#b0c4e4'), clamp(-n.y * 0.8 + 0.2, 0, 1) * 0.7)), { s: [1, 0.55, 0.7] });
   return k.build({ outline: false });
 }
 function jade(v, seed) {

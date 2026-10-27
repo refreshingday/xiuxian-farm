@@ -59,11 +59,13 @@ export function mats() {
   const plant = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 2.2, 0.02), 'swayP');
   plant.side = THREE.DoubleSide;
   const glowM = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) });
+  // 晶石类：自发光但不过曝，保留颜色
+  const gem = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.15, 1.15, 1.15) });
   const ice = new THREE.MeshToonMaterial({ vertexColors: true, transparent: true, opacity: 0.82, gradientMap: solid.gradientMap });
   ice.emissive.set('#3a6a90'); ice.emissiveIntensity = 0.35;
   MATS = {
-    solid, leaf, bloom, plant, glow: glowM, ice,
-    line: { solid: lineMat('#2b1d14', 0.03), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), ice: lineMat('#1a2a44', 0.025) },
+    solid, leaf, bloom, plant, glow: glowM, gem, ice,
+    line: { solid: lineMat('#2b1d14', 0.03), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), ice: lineMat('#1a2a44', 0.025), gem: lineMat('#1a1428', 0.02) },
   };
   return MATS;
 }
@@ -140,7 +142,7 @@ export class Kit {
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, M[kind]);
       mesh.castShadow = kind !== 'glow' && kind !== 'plant';
-      mesh.receiveShadow = kind !== 'glow';
+      mesh.receiveShadow = kind !== 'glow' && kind !== 'gem';
       if (kind === 'plant') mesh.castShadow = !!o.plantShadow;
       if (kind === 'leaf' || kind === 'bloom') mesh.castShadow = true;
       mesh.userData.kind = kind;
