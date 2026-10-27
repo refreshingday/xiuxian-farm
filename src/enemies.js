@@ -118,6 +118,7 @@ export class Enemies {
 
   remove(e) {
     e.alive = false;
+    this.game.onEnemyGone?.(e);
     this.game.scene.remove(e.root);
     for (const m of e.mats) m.dispose();
     this.list.splice(this.list.indexOf(e), 1);
@@ -128,6 +129,7 @@ export class Enemies {
     if (!e.alive) return;
     e.hp -= amt;
     e.flash = 0.12;
+    this.game.onEnemyHit?.(e, amt, crit);
     const dx = e.pos.x - fromX, dz = e.pos.z - fromZ, d = Math.hypot(dx, dz) || 1;
     const resist = e.type === 'boss' ? 0.08 : e.type === 'golem' ? 0.5 : 1;
     if (e.state !== 'charge') { e.kx += dx / d * knock * resist; e.kz += dz / d * knock * resist; }

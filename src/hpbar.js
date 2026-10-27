@@ -95,7 +95,7 @@ export class HealthBar {
     const show = this.chip >= 1 && this.trail - this.fill > 0.003;
     $.chip.style.opacity = show ? 1 : 0;
     if (show) { $.chip.textContent = '-' + Math.round(this.chip); $.chip.style.left = (this.fill * 100) + '%'; }
-    if ($.num) $.num.textContent = `${Math.ceil(this.hp)} / ${this.max}`;
+    if ($.num) $.num.textContent = `${Math.ceil(this.hp)} / ${Math.round(this.max)}`;
     this.sx = Math.sin(this.shakeT * 70) * this.shakeA;
     this.sy = Math.cos(this.shakeT * 53) * this.shakeA * 0.35;
   }

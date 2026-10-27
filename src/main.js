@@ -15,6 +15,7 @@ import { TUNE, MOVES, TREE, ComboRunner } from './combo.js';
 import { ComboFX, MOVE_FX } from './comboFx.js';
 import { SFX, MOVE_SFX } from './comboSfx.js';
 import { animCombo } from './comboAnim.js';
+import { HealthBar, screenOf } from './hpbar.js';
 
 // ---------- 渲染 ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -432,11 +433,60 @@ function closeDialog() { dialogOpen = false; document.getElementById('dialog').c
 // ---------- 主循环 ----------
 let hitStop = 0, last = performance.now();
 const focus = new THREE.Vector3().copy(P.pos);
-const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'timeText', 'regionText', 'invHerb', 'invCore', 'invStone', 'invHeart', 'prompt', 'bossbar', 'bossFill', 'bossName', 'sk1', 'sk2', 'sk3', 'sk4'].map((k) => [k, document.getElementById(k)]));
+const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'timeText', 'regionText', 'invHerb', 'invCore', 'invStone', 'invHeart', 'prompt', 'sk1', 'sk2', 'sk3', 'sk4'].map((k) => [k, document.getElementById(k)]));
 const SEASONS = ['春', '夏', '秋', '冬'];
 
 world.update(P.pos, 0, 0, g.day * 24 + g.hours, true);
 document.getElementById('loading').classList.add('hidden');
+
+// ---------- 血条：头顶小血条 + 顶部目标大血条（与试炼场同一套 hpbar.js） ----------
+const hpLayer = document.getElementById('hpLayer');
+const targetBar = new HealthBar({ parent: document.body, big: true, max: 1 });
+const BAR_Y = { boar: 1.7, spider: 1.4, golem: 2.7 };
+const fadingBars = [];
+let focusE = null, focusT = 0;
+const enemyName = (e) => e.type === 'boss' ? `赤岩妖王${e.phase === 2 ? ' · 狂暴' : ''}` : e.T.name;
+function focusOn(e, hp) { focusE = e; targetBar.dead = false; targetBar.snap(hp, e.maxHp, enemyName(e)); }
+g.onEnemyHit = (e, amt, crit) => {
+  if (e.type !== 'boss') {
+    e.bar ??= new HealthBar({ parent: hpLayer, max: e.maxHp });
+    e.bar.hp = e.hp + amt; e.bar.damage(amt, crit);
+  }
+  if (enemies.boss && e !== enemies.boss) return;   // 妖王在场时大血条只跟妖王
+  if (focusE !== e) focusOn(e, e.hp + amt);
+  targetBar.damage(amt, crit); focusT = 5;
+};
+g.onEnemyGone = (e) => {
+  const dead = e.hp <= 0;
+  if (e.bar) {
+    if (dead) { e.bar.hp = 0; e.bar.die(); fadingBars.push({ bar: e.bar, x: e.pos.x, y: BAR_Y[e.type] ?? 2, z: e.pos.z, t: 0.9 }); }
+    else e.bar.remove();
+    e.bar = null;
+  }
+  if (focusE === e) { if (dead) { targetBar.die(); focusT = Math.min(focusT, 1.2); } else focusE = null; }
+};
+function placeBar(bar, dt, x, y, z) {
+  bar.update(dt);
+  const [sx, sy, front] = screenOf(camera, x, y, z);
+  bar.place(sx, sy);
+  if (!front) bar.el.style.visibility = 'hidden';
+}
+function updateHpBars(dt) {
+  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, BAR_Y[e.type] ?? 2, e.pos.z);
+  for (let i = fadingBars.length - 1; i >= 0; i--) {
+    const f = fadingBars[i]; f.t -= dt; placeBar(f.bar, dt, f.x, f.y, f.z);
+    f.bar.el.style.opacity = Math.min(1, f.t / 0.4).toFixed(3);
+    if (f.t <= 0) { f.bar.remove(); fadingBars.splice(i, 1); }
+  }
+  const boss = enemies.boss;
+  if (boss && focusE !== boss) focusOn(boss, boss.hp);
+  if (focusE && focusE !== boss) focusT -= dt;
+  const show = focusE && (focusE === boss || focusT > 0);
+  targetBar.el.style.display = show ? '' : 'none';
+  if (!show) { focusE = null; return; }
+  if (focusE === boss) targetBar.$.nm.textContent = enemyName(boss);
+  targetBar.update(dt); targetBar.place();
+}
 
 function frame(now) {
   requestAnimationFrame(frame);
@@ -465,6 +515,7 @@ function frame(now) {
   fx.update(dt);
   cfx.update(dt);
   updateCamera(dt);
+  updateHpBars(dt);
   updateLights(h);
   updateUI();
   composer.render();
@@ -645,9 +696,6 @@ function updateUI() {
   const it = dialogOpen ? null : findInteract();
   ui.prompt.classList.toggle('hidden', !it);
   if (it) ui.prompt.innerHTML = it.kind === 'none' ? it.label : `<kbd>F</kbd> ${it.label}`;
-  const b = enemies.boss;
-  ui.bossbar.classList.toggle('hidden', !b);
-  if (b) { ui.bossFill.style.width = (b.hp / b.maxHp * 100) + '%'; ui.bossName.textContent = `赤岩妖王${b.phase === 2 ? ' · 狂暴' : ''}`; }
   const cd = (el, v, max, ok) => { el.querySelector('.cd').style.height = (clamp(v / max, 0, 1) * 100) + '%'; el.classList.toggle('off', !ok); };
   cd(ui.sk1, P.qiCd, 0.35, P.qi >= 15);
   cd(ui.sk2, P.spinCd, 3, P.qi >= 30);

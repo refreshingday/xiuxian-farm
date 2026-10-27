@@ -11,6 +11,27 @@
   #app canvas { display: block; cursor: crosshair; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px); padding: 10px 12px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18), 0 4px 14px rgba(0,0,0,.25); }
   .hidden { display: none !important; }
+  /* 血条（hpbar.js，与试炼场同款） */
+  #hpLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .hb { position: absolute; left: 0; top: 0; width: 66px; transform-origin: 50% 100%; will-change: transform, opacity; pointer-events: none; }
+  .hb-frame { position: relative; height: 8px; background: rgba(8, 12, 14, .78); border: 1px solid rgba(255, 231, 168, .6); border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.7); overflow: hidden; }
+  .hb-trail, .hb-fill, .hb-flash { position: absolute; inset: 0; transform-origin: 0 50%; }
+  .hb-trail { background: linear-gradient(180deg, #fff2d0, #ff9050); }
+  .hb-trail.heal { background: linear-gradient(180deg, #f0fff4, #8dffb8); }
+  .hb-fill { --c: #5fe08e; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 45%, #fff) 0 30%, var(--c) 30% 78%, color-mix(in srgb, var(--c) 70%, #000) 78%); }
+  .hb-flash { background: #fff; opacity: 0; }
+  .hb-ticks { position: absolute; inset: 0; background-image: linear-gradient(90deg, transparent calc(100% - 1px), rgba(0,0,0,.55) 0); background-repeat: repeat-x; }
+  .hb-chip { position: absolute; bottom: 100%; margin-bottom: 1px; padding-left: 2px; font-size: 11px; font-weight: 700; color: #ffd9a0; text-shadow: 0 1px 0 #000, 0 0 3px #000; white-space: nowrap; transition: opacity .2s; }
+  .hb.low .hb-frame { animation: hbPulse .45s ease-in-out infinite alternate; }
+  @keyframes hbPulse { to { border-color: #ff8a8a; box-shadow: 0 0 8px 2px rgba(255, 60, 60, .85); } }
+  .hb.dead .hb-frame { animation: hbBreak .6s ease-out forwards; }
+  @keyframes hbBreak { 0% { filter: brightness(4); } 100% { filter: brightness(.8) grayscale(1); } }
+  .hb.big { position: fixed; left: 50%; top: 16px; width: clamp(200px, calc(100vw - 800px), 440px); transform-origin: 50% 0; z-index: 2; }
+  .hb.big .hb-frame { height: 14px; border-radius: 3px; border-color: var(--line); box-shadow: inset 0 0 0 1px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.5); }
+  .hb-hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; text-shadow: 0 1px 3px #000; }
+  .hb-nm { font-family: "STKaiti", "KaiTi", serif; font-size: 17px; letter-spacing: 3px; color: #ffe7a8; }
+  .hb-num { font-size: 12px; font-variant-numeric: tabular-nums; opacity: .85; }
+  .hb.big .hb-chip { bottom: auto; top: 100%; margin-top: 2px; font-size: 14px; }
   #status { position: fixed; left: 16px; top: 16px; width: 280px; }
   .name { font-family: "STKaiti", "KaiTi", serif; font-size: 20px; letter-spacing: 2px; }
   .name .tag { display: block; font-family: inherit; font-size: 11px; letter-spacing: 0; opacity: .7; margin-top: 2px; }
@@ -25,9 +46,6 @@
   #timeText { font-size: 14px; } #regionText { font-family: "STKaiti", "KaiTi", serif; font-size: 18px; margin-top: 2px; color: #ffe7a8; letter-spacing: 1px; }
   #inv { position: fixed; right: 16px; top: 92px; font-size: 13px; }
   #inv b { color: #ffe7a8; margin-right: 6px; }
-  #bossbar { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); width: min(520px, 60vw); text-align: center; }
-  .bname { font-family: "STKaiti", "KaiTi", serif; font-size: 20px; letter-spacing: 4px; color: #ffb0a0; text-shadow: 0 0 8px #ff3a1a; }
-  .boss { height: 12px; border: 1px solid rgba(255,120,90,.5); } .boss > div { background: linear-gradient(90deg, #ff3a1a, #ffa04a); }
   #skills { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; }
   .slot { position: relative; width: 78px; height: 58px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18); display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; font-size: 12px; }
   .slot.off { opacity: .45; }
@@ -82,7 +100,7 @@
 
 <div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
 <div id="inv" class="panel">灵草 <b id="invHerb">0</b>妖丹 <b id="invCore">0</b>灵石 <b id="invStone">0</b>赤岩之心 <b id="invHeart">0</b></div>
-<div id="bossbar" class="hidden"><div class="bname" id="bossName"></div><div class="bar boss"><div id="bossFill"></div></div></div>
+<div id="hpLayer"></div>
 
 <div id="prompt" class="hidden"></div>
 <div id="dialog" class="hidden">
