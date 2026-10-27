@@ -341,7 +341,7 @@ function buildCatalog(ids) {
       const g = getAsset(id, v), box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3());
       items.push({ g, v, w: Math.max(1.4, size.x, size.z), h: size.y, box });
     }
-    return { id, name: A.name, items, w: items.reduce((s, it) => s + it.w + 0.9, 0), d: Math.max(...items.map((it) => it.w)) };
+    return { id, name: A.name, items, w: items.reduce((s, it) => s + it.w + 0.9, 0), d: Math.max(...items.map((it) => it.w)), hgt: Math.max(...items.map((it) => it.h)) };
   });
   const perCol = ids.length > 16 ? Math.ceil(ids.length / Math.ceil(ids.length / 14)) : ids.length;
   const cols = [];
@@ -349,10 +349,10 @@ function buildCatalog(ids) {
   const colW = cols.map((c) => Math.max(...c.map((r) => r.w)));
   let x0 = -colW.reduce((s, w) => s + w + 4, -4) / 2, maxZ = 0;
   cols.forEach((col, ci) => {
-    const depth = col.reduce((s, r) => s + r.d + 1.6, 0);
+    const depth = col.reduce((s, r) => s + r.d + 1.6 + r.hgt * 0.45, 0);
     let z = -depth / 2;
     for (const row of col) {
-      z += row.d / 2;
+      z += row.d / 2 + row.hgt * 0.45; // 高的素材多留一点前后距离，斜俯视时不互相遮挡
       let x = x0;
       const lbl = mkLabel(`${row.name} <i>×${row.items.length}</i>`, 'row');
       lbl.pos = new THREE.Vector3(x0 - 0.4, 0.05, z + row.d / 2 + 0.2);
@@ -529,7 +529,7 @@ function countAssets() {
 function frame(reset = true) {
   if (!reset) return;
   if (S.mode === 'scene') { camera.position.set(0, 26, 40); controls.target.set(0, 0.5, 0); }
-  else { const d = span * 1.6; camera.position.set(0, d * 0.75, d * 0.9); controls.target.set(0, 0.5, 0); }
+  else { const d = span * 1.35; camera.position.set(0, d * 1.05, d * 0.7); controls.target.set(0, 0.5, 0); }
 }
 
 // ---------- 时间 / 光照 ----------
