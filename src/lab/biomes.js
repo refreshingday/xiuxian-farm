@@ -299,18 +299,18 @@ export const BIOMES = [
     terrain(x, z) {
       const lava = Math.min(Math.hypot(x - 6, z + 4) - 3.5, seg(x, z, 6, -4, -10, 10) - 1.1) - (vnoise(x * 0.5, z * 0.5, 2) - 0.5) * 1.2;
       let h = (n2(x, z, 9, 0.1) - 0.5) * 0.7 + smooth(13, 24, Math.hypot(x, z)) * 2.2;
-      if (lava < 0) h = Math.max(-0.8, lava * 0.4);
+      if (lava < 0) h = Math.max(-0.9, lava * 0.9 - 0.15);
       return { h, k: lava < 0.6 ? 'crust' : n2(x, z, 9, 0.07) > 0.55 ? 'red' : 'ash', lava };
     },
     color(x, z, t) {
       const n = vnoise(x * 5, z * 5, 9);
       if (t.k === 'crust') return mix([40, 30, 34], [70, 40, 34], n);
-      if (t.k === 'red') return mix([190, 96, 60], [150, 70, 48], vnoise(x * 1.4, z * 1.4, 5) * 0.7 + n * 0.2);
-      return mix([96, 80, 76], [70, 58, 58], smooth(0.4, 0.7, n2(x, z, 9, 0.3)));
+      if (t.k === 'red') return mix([176, 104, 74], [140, 80, 60], vnoise(x * 1.4, z * 1.4, 5) * 0.7 + n * 0.2);
+      return mix([104, 94, 92], [76, 68, 70], smooth(0.4, 0.7, n2(x, z, 9, 0.3)));
     },
     water: { level: -0.1, mode: 'lava', shallow: '#ffb02a', deep: '#e83a10', foam: '#ffe890' },
-    light: { sun: '#ffb080', sunI: 2.0, sky: '#e8a080', ground: '#4a2a20', hemiI: 0.85, fog: '#a86050', top: '#5a2a2a', bottom: '#c87a5a', exposure: 1.1, bloom: 0.85, fogNear: 34, fogFar: 85, warm: 1.5 },
-    particles: [{ type: 'embers', n: 260, color: '#ff8a3a', size: 4, glow: true }, { type: 'ash', n: 120, color: '#5a4a48', size: 3 }],
+    light: { sun: '#ffd0b0', sunI: 2.2, sky: '#d8b0a0', ground: '#4a3030', hemiI: 0.9, fog: '#7a5a58', top: '#3a2430', bottom: '#a0705a', exposure: 1.05, bloom: 0.7, fogNear: 34, fogFar: 85, warm: 0.8 },
+    particles: [{ type: 'embers', n: 180, color: '#ff8a3a', size: 4, glow: true }, { type: 'ash', n: 120, color: '#5a4a48', size: 3 }],
     scatter: [
       { id: 'vent', n: 4, k: ['ash', 'red'], s: [0.9, 1.2], gap: 4 },
       { id: 'lavaRock', n: 18, k: ['crust', 'ash'], s: [0.5, 1.5], gap: 1.4 },
