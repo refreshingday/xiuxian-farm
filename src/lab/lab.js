@@ -566,14 +566,14 @@ function applyLight() {
 
 // ---------- 点光源池：给离镜头焦点最近的光源 ----------
 function updateLights(time) {
-  const focus = controls.target, dark = BIOMES[S.biome].light.dark, boost = dark ? 1.6 : lerp(0.25, 1.4, nightK);
+  const focus = controls.target, dark = BIOMES[S.biome].light.dark, boost = dark ? 2.2 : lerp(0.4, 1.6, nightK);
   const list = emitters.filter((e) => !e.lava).map((e) => ({ e, d: e.p.distanceToSquared(focus) - e.i * 30 })).sort((a, b) => a.d - b.d);
   pool.forEach((l, i) => {
     const it = list[i];
     if (!it) { l.intensity = 0; return; }
     const e = it.e; l.position.copy(e.p); l.color.set(e.color);
     l.distance = e.d * 1.4;
-    l.intensity = e.i * boost * 2.2 * (e.flicker ? 0.85 + Math.sin(time * 13 + e.k) * 0.08 + Math.sin(time * 7.3 + e.k * 2) * 0.07 : 1);
+    l.intensity = e.i * boost * 5 * (e.flicker ? 0.85 + Math.sin(time * 13 + e.k) * 0.08 + Math.sin(time * 7.3 + e.k * 2) * 0.07 : 1);
   });
 }
 

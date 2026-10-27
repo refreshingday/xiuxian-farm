@@ -554,7 +554,7 @@ function crystal(v, color, seed) {
 function oreRock(v, color, seed) {
   const gem = new THREE.Color(color);
   return rock(v % 4, (geo) => paint(geo, (p, n, out) => {
-    out.set('#5a5468').multiplyScalar(0.65 + 0.35 * n.y);
+    out.set('#7a7088').multiplyScalar(0.65 + 0.35 * n.y);
     if (vnoise(p.x * 7 + seed, p.z * 7 + p.y * 7, seed) > 0.78) out.copy(gem).multiplyScalar(1.4);
   }), seed);
 }
@@ -562,7 +562,7 @@ function stalagmite(v, seed) {
   const k = new Kit(), r = rnd(seed + v), list = [[[0, 0, 1.6, 0.35]], [[0, 0, 1.1, 0.28], [0.35, 0.1, 0.6, 0.18]], [[0, 0, 2.4, 0.42], [-0.35, 0.2, 0.9, 0.2], [0.3, -0.25, 0.7, 0.18]], [[0, 0, 0.7, 0.32]]][v % 4];
   for (const [x, z, h, rad] of list) {
     const g = lumpy(new THREE.ConeGeometry(rad, h, 8, 4).translate(0, h / 2, 0), rad * 0.3, 3, seed + x * 10, 0.3);
-    k.add(faceted(g), (geo) => paint(geo, (p, n, out) => out.set('#6a6070').multiplyScalar((0.65 + 0.4 * smooth(0, h, p.y)) * (Math.floor(p.y * 6) % 2 ? 0.92 : 1.02))), { at: [x, 0, z] });
+    k.add(faceted(g), (geo) => paint(geo, (p, n, out) => out.set('#8a7e90').multiplyScalar((0.65 + 0.4 * smooth(0, h, p.y)) * (Math.floor(p.y * 6) % 2 ? 0.92 : 1.02))), { at: [x, 0, z] });
   }
   return k.build();
 }
@@ -894,7 +894,7 @@ export const ASSETS = {
   beam:      { name: '支撑木架', n: 2, make: (v) => support(v) },
   torch:     { name: '火把', n: 2, make: (v) => torch(v) },
   glowShroom:{ name: '荧光菇', n: 4, make: (v) => mushroom(v, ['#5ad8ff', '#b07aff', '#5affa8', '#ffd25a'][v], 421, true) },
-  caveRock:  { name: '洞岩', n: 5, make: (v) => rock(v, (g) => paint(g, (p, n, out) => out.set('#4a4458').multiplyScalar(0.6 + 0.45 * n.y)), 431) },
+  caveRock:  { name: '洞岩', n: 5, make: (v) => rock(v, (g) => paint(g, (p, n, out) => out.set('#6a6280').multiplyScalar(0.6 + 0.45 * n.y)), 431) },
   // ---- 仙山灵境 ----
   karst:     { name: '石峰', n: 4, make: (v) => karst(v, 441) },
   bonsai:    { name: '迎客松', n: 3, make: (v) => bonsaiPine(v, 451) },

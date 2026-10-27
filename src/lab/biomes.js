@@ -230,21 +230,21 @@ export const BIOMES = [
     },
     color(x, z, t) {
       const n = vnoise(x * 5, z * 5, 7);
-      if (t.k === 'wall') return mix([70, 62, 80], [44, 40, 52], n);
-      if (t.k === 'gravel') return mix([96, 86, 92], [70, 64, 72], vnoise(x * 8, z * 8, 2));
-      let c = mix([84, 76, 92], [60, 54, 68], smooth(0.4, 0.7, n2(x, z, 7, 0.3)));
+      if (t.k === 'wall') return mix([96, 86, 108], [66, 60, 78], n);
+      if (t.k === 'gravel') return mix([130, 116, 112], [98, 88, 90], vnoise(x * 8, z * 8, 2));
+      let c = mix([116, 106, 124], [88, 80, 98], smooth(0.4, 0.7, n2(x, z, 7, 0.3)));
       if (vnoise(x * 2.4, z * 2.4, 11) > 0.8) c = mix(c, [90, 80, 140], 0.6);
       return c;
     },
     water: { level: -0.12, mode: 'water', shallow: '#3ab8d8', deep: '#0a2a58', foam: '#8af0ff', glow: 0.6 },
-    light: { sun: '#8a9ad0', sunI: 0.7, sky: '#6a6a9a', ground: '#2a2234', hemiI: 1.0, fog: '#0c0a14', top: '#08060c', bottom: '#14101c', exposure: 1.1, bloom: 0.6, fogNear: 30, fogFar: 70, dark: true, warm: 0.5 },
+    light: { sun: '#8a9ad0', sunI: 0.7, sky: '#9a9ad0', ground: '#4a3a5a', hemiI: 1.5, fog: '#0c0a14', top: '#08060c', bottom: '#14101c', exposure: 1.2, bloom: 0.6, fogNear: 30, fogFar: 70, dark: true, warm: 0.5 },
     particles: [{ type: 'motes', n: 160, color: '#9ad8ff', size: 4, glow: true }],
     scatter: [
       { id: 'cart', n: 2, list: [[-3, 3.6, -0.15], [6, 4.9, -0.15]], pick: [0, 1] },
       { id: 'beam', n: 3, list: [[-11, 1, 1.4], [12, 6, -1.3], [2, -12, 0.1]] },
       { id: 'torch', n: 6, list: [[-10.5, -1.5, 0], [11, 3.8, 0], [4, -11.5, 0], [-5, 10, 0], [-0.5, 1.6, 0], [9, -4, 0]] },
       { id: 'crystal', n: 18, k: ['rock'], s: [0.7, 1.5], gap: 2.2 },
-      { id: 'crystal', n: 14, k: ['wall'], s: [1.0, 2.0], gap: 2.5 },
+      { id: 'crystal', n: 10, k: ['wall'], r: [14, 19], s: [1.0, 2.0], gap: 2.5 },
       { id: 'ore', n: 10, k: ['rock'], s: [0.6, 1.1], gap: 1.5 },
       { id: 'stalag', n: 18, k: ['rock', 'wall'], s: [0.8, 1.6], gap: 1.8 },
       { id: 'caveRock', n: 16, k: ['rock', 'wall'], s: [0.6, 1.8], gap: 1.5 },
