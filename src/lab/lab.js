@@ -436,7 +436,7 @@ function particles(cfg, area = R) {
         p.y += 0.1;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = uSize * (0.6 + aRnd.w * 0.8) * uPR * (60.0 / -mv.z);
+        gl_PointSize = min(uSize * (0.6 + aRnd.w * 0.8) * uPR * (60.0 / -mv.z), 18.0 * uPR);
         float e = p.y / uH;
         vA = smoothstep(0.0, 0.08, e) * smoothstep(1.0, 0.85, e) * step(length(p.xz), uR * 1.05);
         if (uBlink > 0.5) vA *= smoothstep(0.3, 1.0, sin(uTime * (1.5 + aRnd.x * 2.0) + aRnd.y * 30.0));
@@ -468,7 +468,7 @@ function smoke(list) {
       void main() { float t = fract(aRnd.x + uTime * (0.12 + aRnd.y * 0.08));
         vec3 p = position + vec3(sin(t * 6.0 + aRnd.z * 9.0) * 0.25 * t + t * 0.6, t * 3.2, cos(t * 5.0 + aRnd.w * 9.0) * 0.2 * t);
         vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
-        gl_PointSize = (10.0 + t * 40.0) * (30.0 / -mv.z); vA = smoothstep(0.0, 0.1, t) * (1.0 - t) * 0.45; }`,
+        gl_PointSize = min((10.0 + t * 40.0) * (30.0 / -mv.z), 90.0); vA = smoothstep(0.0, 0.1, t) * (1.0 - t) * 0.45; }`,
     fragmentShader: `varying float vA; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vec3(0.82, 0.8, 0.78), smoothstep(0.5, 0.2, d) * vA); }`,
   });
   const pts = new THREE.Points(g, mat); pts.frustumCulled = false;

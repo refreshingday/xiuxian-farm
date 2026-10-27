@@ -85,7 +85,8 @@ function pine(v, color, seed, snow = false) {
     const p = g.attributes.position;
     for (let j = 0; j < p.count; j++) if (p.getY(j) < 0.05) { const a = Math.atan2(p.getZ(j), p.getX(j)); p.setY(j, p.getY(j) - (Math.sin(a * 9) * 0.5 + 0.5) * 0.12); }
     g.computeVertexNormals();
-    k.add(g, snow ? snowCap(color, 0.45) : crownPaint(color, null, seed + i), { at: [0, y, 0], rot: [0, r() * TAU, 0], kind: 'leaf' });
+    // 雪松不用叶贴图（白雪乘上绿叶纹理会发蓝发花）
+    k.add(g, snow ? snowCap(color, 0.45) : crownPaint(color, null, seed + i), { at: [0, y, 0], rot: [0, r() * TAU, 0], kind: snow ? 'solid' : 'leaf' });
   }
   return k.build();
 }
@@ -488,7 +489,7 @@ function snowDrift(v, seed) {
   for (let i = 0; i < p.count; i++) p.setY(i, Math.max(0, p.getY(i)) * 0.45);
   g.computeVertexNormals();
   k.add(g, (geo) => paint(geo, (q, n, out) => out.set('#eef4ff').multiplyScalar(0.8 + 0.25 * n.y).lerp(C('#b8cce8'), clamp(-n.x * 0.4, 0, 0.4))));
-  return k.build();
+  return k.build({ outline: false });
 }
 function iceCrystal(v, seed) {
   const k = new Kit(), r = rnd(seed + v), n = [3, 5, 1][v % 3];
