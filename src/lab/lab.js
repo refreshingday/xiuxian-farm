@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { loadTextures, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
+import { loadTextures, PNG, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
 import { createChibi, animChibi } from '../chibi.js';
 import { TouchControls } from '../touch.js';
 import { U, instance } from './kit.js';
@@ -111,41 +111,82 @@ let emitters = [], bobbers = [], labels = [], waterMat = null, particleSys = [];
 // ======================================================================
 // 地面：圆形小岛（像素贴图顶面 + 分层土壁）
 // ======================================================================
-const NR = MOBILE ? 52 : 70, NS = MOBILE ? 128 : 168;
+// 地面网格：台地需要细网格（断崖才够陡），普通地形粗一些
+const NS = MOBILE ? 128 : 168;
+let groundTex = null;
+const ROCK = { winter: '#7a8090', cave: '#5a5468', volcano: '#4a3a3a', desert: '#c8a070', tribulation: '#5a5668', battlefield: '#6a625a' };
+const _white = new THREE.DataTexture(new Uint8Array([200, 200, 200, 255]), 1, 1); _white.needsUpdate = true;
 function buildIsland(b) {
-  const T = (x, z) => b.terrain(x, z);
-  const hAt = (x, z) => {
-    const r = Math.hypot(x, z), t = T(x, z), th = t.h + 0.35; // 陆地整体抬高，避免噪声低洼处露出水面
+  const T = (x, z) => b.terrain(x, z), TR = !!b.terrace;
+  const hRaw = (x, z) => {
+    const r = Math.hypot(x, z), th = T(x, z).h + 0.35; // 陆地整体抬高，避免噪声低洼处露出水面
+    if (TR) return th - smooth(R - 0.5, R, r) * 0.25;
     return th * (1 - smooth(R - 1.2, R, r)) + smooth(R - 1.2, R, r) * Math.min(th, 0.5) - smooth(R - 0.5, R, r) * 0.25;
   };
-  // 顶面
-  const pos = [], uv = [], idx = [];
-  pos.push(0, hAt(0, 0), 0); uv.push(0.5, 0.5);
-  for (let i = 1; i <= NR; i++) for (let j = 0; j < NS; j++) {
-    const a = j / NS * Math.PI * 2, r = R * i / NR, x = Math.cos(a) * r, z = Math.sin(a) * r;
-    pos.push(x, hAt(x, z), z); uv.push((x + R) / (2 * R), 1 - (z + R) / (2 * R));
+  // 高度网格（地形函数很贵，先采样一次）；hAt 用双线性插值查表
+  const HN = TR ? (MOBILE ? 170 : 250) : (MOBILE ? 110 : 140), cs = 2 * R / HN, W1 = HN + 1;
+  const H = new Float32Array(W1 * W1), PX = new Float32Array(W1 * W1), PZ = new Float32Array(W1 * W1);
+  for (let j = 0; j <= HN; j++) for (let i = 0; i <= HN; i++) {
+    let x = -R + i * cs, z = -R + j * cs; const r = Math.hypot(x, z);
+    if (r > R) { x *= R / r; z *= R / r; } // 圆外的点收到圆边上
+    const k = j * W1 + i; PX[k] = x; PZ[k] = z; H[k] = hRaw(x, z);
   }
-  const V = (i, j) => (i === 0 ? 0 : 1 + (i - 1) * NS + (j % NS));
-  for (let j = 0; j < NS; j++) idx.push(0, V(1, j + 1), V(1, j));
-  for (let i = 1; i < NR; i++) for (let j = 0; j < NS; j++) idx.push(V(i, j), V(i, j + 1), V(i + 1, j), V(i, j + 1), V(i + 1, j + 1), V(i + 1, j));
+  const hAt = (x, z) => {
+    const fx = clamp((x + R) / cs, 0, HN - 1e-4), fz = clamp((z + R) / cs, 0, HN - 1e-4), i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * W1 + i;
+    return (H[k] * (1 - u) + H[k + 1] * u) * (1 - v) + (H[k + W1] * (1 - u) + H[k + W1 + 1] * u) * v;
+  };
+  // 顶面
+  const pos = new Float32Array(W1 * W1 * 3), uv = new Float32Array(W1 * W1 * 2), idx = [];
+  for (let k = 0; k < W1 * W1; k++) { pos[k * 3] = PX[k]; pos[k * 3 + 1] = H[k]; pos[k * 3 + 2] = PZ[k]; uv[k * 2] = (PX[k] + R) / (2 * R); uv[k * 2 + 1] = 1 - (PZ[k] + R) / (2 * R); }
+  const out = (i, j) => Math.hypot(-R + i * cs, -R + j * cs) > R;
+  for (let j = 0; j < HN; j++) for (let i = 0; i < HN; i++) {
+    if (out(i, j) && out(i + 1, j) && out(i, j + 1) && out(i + 1, j + 1)) continue;
+    const a = j * W1 + i, bb = a + 1, c = a + W1, d = c + 1;
+    // 对角线顺着高度差小的方向切，断崖边更平整
+    if (Math.abs(H[a] - H[d]) < Math.abs(H[bb] - H[c])) idx.push(a, c, d, a, d, bb); else idx.push(a, c, bb, bb, c, d);
+  }
   const top = new THREE.BufferGeometry();
-  top.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  top.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  top.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  top.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   top.setIndex(idx); top.computeVertexNormals();
-  // 像素贴图：每单位约 10 像素
-  const N = 512;
+  // 像素贴图：每单位约 10 像素；烘进环境光遮蔽（坡脚、崖底变暗）和高处提亮
+  const N = 512, AO_R = 0.8, dirs = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [Math.cos(k / 8 * Math.PI * 2) * AO_R, Math.sin(k / 8 * Math.PI * 2) * AO_R]);
   const tex = canvasTex(N, N, (ctx) => {
     const img = ctx.createImageData(N, N), D = img.data;
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       const x = -R + (i + 0.5) / N * 2 * R, z = -R + (j + 0.5) / N * 2 * R;
-      const t = T(x, z), c = b.color(x, z, t), d = 0.95 + hash01(i, j, 3) * 0.1;
+      const t = T(x, z), c = b.color(x, z, t), h = hAt(x, z);
+      let occ = 0; for (const [dx, dz] of dirs) occ += clamp((hAt(x + dx, z + dz) - h) / 0.9, 0, 1);
+      const d = (0.95 + hash01(i, j, 3) * 0.1) * (1 - 0.42 * occ / 8) * (1 + clamp(h - 0.35, 0, 4) * 0.035);
       const k = (j * N + i) * 4;
       D[k] = c[0] * d; D[k + 1] = c[1] * d; D[k + 2] = c[2] * d; D[k + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
   }, { repeat: false });
-  const topM = new THREE.Mesh(top, toon('#ffffff', { map: tex, unique: true }));
-  topM.receiveShadow = true;
+  groundTex = tex;
+  // 陡坡（断崖）改用三向投影岩壁贴图 + 横向岩层；坡顶坡底各压一道暗边
+  const gm = toon('#ffffff', { map: tex, unique: true });
+  const rockC = new THREE.Color(b.terrace?.rock || ROCK[b.id] || '#8a8478');
+  gm.onBeforeCompile = (sh) => {
+    sh.uniforms.tCliff = { value: PNG.cliff_rock || _white }; sh.uniforms.uRock = { value: rockC };
+    sh.vertexShader = 'varying vec3 vGW;\nvarying vec3 vGN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = (modelMatrix * vec4(transformed, 1.0)).xyz; vGN = normalize(mat3(modelMatrix) * objectNormal);');
+    sh.fragmentShader = 'uniform sampler2D tCliff;\nuniform vec3 uRock;\nvarying vec3 vGW;\nvarying vec3 vGN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+  {
+    vec3 gn = normalize(vGN);
+    float steep = 1.0 - smoothstep(0.42, 0.74, gn.y);
+    if (steep > 0.001) {
+      vec3 bw = pow(abs(gn), vec3(4.0)); bw /= bw.x + bw.y + bw.z;
+      vec3 q = vGW * 0.3;
+      vec3 tx = texture2D(tCliff, q.zy).rgb * bw.x + texture2D(tCliff, q.xy).rgb * bw.z + texture2D(tCliff, q.xz).rgb * bw.y;
+      float strata = 0.86 + 0.14 * step(0.5, fract(vGW.y * 2.2 + tx.r * 0.6));
+      diffuseColor.rgb = mix(diffuseColor.rgb, uRock * tx * 1.15 * strata, steep);
+    }
+    diffuseColor.rgb *= 1.0 - 0.28 * smoothstep(0.08, 0.3, steep) * (1.0 - smoothstep(0.45, 0.8, steep));
+  }`);
+  };
+  gm.customProgramCacheKey = () => 'labGround';
+  const topM = new THREE.Mesh(top, gm);
+  topM.receiveShadow = true; topM.castShadow = TR;
   root.add(topM);
   // 侧壁：草皮边 → 土 → 岩层
   const wall = [], wcol = [], widx = [], layers = [[0, '#ffffff'], [-0.35, b.id === 'winter' ? '#e8f0fa' : '#6a9a3a'], [-0.5, '#8a6040'], [-1.6, '#7a5236'], [-2.4, '#6a6070'], [-4, '#4a4458']];
@@ -156,7 +197,7 @@ function buildIsland(b) {
     const a = j / NS * Math.PI * 2, x = Math.cos(a) * R, z = Math.sin(a) * R, h = hAt(x, z);
     layers.forEach(([dy, c], li) => {
       const wob = li > 1 ? (hash01(j, li, 5) - 0.5) * 0.25 : 0, rr = R - (li > 2 ? (li - 2) * 0.35 : 0) + wob * 0.6;
-      wall.push(Math.cos(a) * rr, li === 0 ? h : Math.min(h, 0.5) + dy + wob, Math.sin(a) * rr);
+      wall.push(Math.cos(a) * rr, li === 0 ? h : (TR ? h : Math.min(h, 0.5)) + dy + wob, Math.sin(a) * rr);
       if (li === 0) { const t = T(x, z); const cc = b.color(x, z, t); col.setRGB(cc[0] / 255, cc[1] / 255, cc[2] / 255, THREE.SRGBColorSpace); }
       else col.set(c).multiplyScalar(0.9 + hash01(j, li, 2) * 0.15);
       wcol.push(col.r, col.g, col.b);
@@ -185,18 +226,25 @@ function buildIsland(b) {
 // ======================================================================
 function buildWater(b, hAt) {
   const W = b.water; if (!W) return;
-  const N = 192, data = new Uint8Array(N * N * 4);
+  waterMat = makeWater(W, hAt, { x: 0, z: 0, r: R - 0.6 });
+  // 台地上的高处水潭：同一种水，只是单独一层水面，用遮罩裁掉崖外部分
+  for (const p of b.terrace?.pools || []) makeWater({ ...W, level: p.level }, hAt, p, true);
+  for (const f of b.terrace?.falls || []) waterfall(f, W);
+}
+function makeWater(W, hAt, area, masked = false) {
+  const N = masked ? 64 : 192, data = new Uint8Array(N * N * 4), x0 = area.x - area.r, z0 = area.z - area.r, sz = area.r * 2;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const x = -R + (i + 0.5) / N * 2 * R, z = -R + (j + 0.5) / N * 2 * R;
-    const d = clamp((W.level - hAt(x, z)) / 0.9, 0, 1);
-    data[(j * N + i) * 4] = d * 255; data[(j * N + i) * 4 + 3] = 255;
+    const x = x0 + (i + 0.5) / N * sz, z = z0 + (j + 0.5) / N * sz, dep = W.level - hAt(x, z);
+    data[(j * N + i) * 4] = clamp(dep / 0.9, 0, 1) * 255;
+    data[(j * N + i) * 4 + 1] = dep < 1.0 ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
+    data[(j * N + i) * 4 + 3] = 255;
   }
   const dt = new THREE.DataTexture(data, N, N); dt.magFilter = dt.minFilter = THREE.LinearFilter; dt.needsUpdate = true;
   const mode = { water: 0, ice: 1, lava: 2 }[W.mode];
-  waterMat = new THREE.ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     transparent: mode !== 2, fog: true,
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-      tDepth: { value: dt }, uTime: U.time, uR: { value: R }, uMode: { value: mode },
+      tDepth: { value: dt }, uTime: U.time, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: sz }, uMask: { value: masked ? 1 : 0 }, uMode: { value: mode },
       cShallow: { value: new THREE.Color(W.shallow) }, cDeep: { value: new THREE.Color(W.deep) }, cFoam: { value: new THREE.Color(W.foam) },
       uSky: { value: new THREE.Color() }, uGlow: { value: W.glow || 0 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
     }]),
@@ -205,7 +253,7 @@ function buildWater(b, hAt) {
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uR, uMode, uGlow; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
+    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -216,8 +264,10 @@ function buildWater(b, hAt) {
           if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
         return vec2(sqrt(d1), sqrt(d2)); }
       void main() {
-        vec2 uv = (vXZ + uR) / (2.0 * uR);
-        float d = texture2D(tDepth, uv).r;
+        vec2 uv = (vXZ - uOrigin) / uSize;
+        vec4 dm = texture2D(tDepth, uv);
+        if (uMask > 0.5 && (dm.g < 0.5 || length(uv - 0.5) > 0.5)) discard;
+        float d = dm.r;
         vec2 p = floor(vXZ * 10.0) / 10.0; // 像素化采样，和地面一致
         vec3 c; float a = 0.9;
         if (uMode < 0.5) {
@@ -255,10 +305,70 @@ function buildWater(b, hAt) {
         #include <fog_fragment>
       }`,
   });
-  const m = new THREE.Mesh(new THREE.CircleGeometry(R - 0.6, 96).rotateX(-Math.PI / 2), waterMat);
-  m.position.y = W.level; m.renderOrder = 1;
+  const m = new THREE.Mesh(new THREE.CircleGeometry(area.r, masked ? 32 : 96).rotateX(-Math.PI / 2), mat);
+  m.position.set(area.x, W.level, area.z); m.renderOrder = 1;
   root.add(m);
   if (mode === 2) emitters.push({ p: new THREE.Vector3(0, 0, 0), color: '#ff6a2a', i: 0, d: 0, lava: true });
+  return mat;
+}
+
+// 瀑布：从崖顶水道口垂下的一片弯曲水幕（流动条纹）+ 落水处的白沫圈 + 水雾
+function waterfall(f, W) {
+  const Hh = f.top - f.bottom, seg = 14, g = new THREE.PlaneGeometry(f.w, 1, 4, seg), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const t = 0.5 - p.getY(i); // 0 顶 → 1 底
+    p.setXYZ(i, p.getX(i) * (1 + t * 0.25), f.top - t * Hh, f.z - 0.25 + Math.pow(t, 0.55) * 0.9 - (1 - t) * (1 - t) * 0.0);
+  }
+  g.computeVertexNormals();
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }]),
+    vertexShader: `varying vec2 vUv;
+      #include <fog_pars_vertex>
+      void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;
+      #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform float uTime; uniform vec3 cA, cB; varying vec2 vUv;
+      #include <fog_pars_fragment>
+      float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+      void main() {
+        vec2 q = vec2(floor(vUv.x * 14.0) / 14.0, vUv.y);
+        float s = vn(vec2(q.x * 9.0, q.y * 4.0 + uTime * 3.2)) * 0.6 + vn(vec2(q.x * 21.0, q.y * 9.0 + uTime * 5.0)) * 0.4;
+        vec3 c = mix(cA * 1.1, cB, smoothstep(0.45, 0.75, s));
+        c = mix(c, cB, smoothstep(0.85, 1.0, vUv.y) * 0.7 + smoothstep(0.2, 0.0, vUv.y) * 0.8);
+        float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
+        gl_FragColor = vec4(c * 1.15, (0.78 + 0.2 * s) * edge);
+        #include <fog_fragment>
+      }`,
+  });
+  const m = new THREE.Mesh(g, mat); m.position.x = f.x; m.renderOrder = 2;
+  root.add(m);
+  // 落水白沫：一圈向外扩散的波纹
+  const foam = new THREE.Mesh(new THREE.CircleGeometry(f.w * 1.1, 24).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uTime: U.time },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float uTime; varying vec2 vUv;
+      void main() { float r = length(vUv - 0.5) * 2.0; float w = fract(r * 2.5 - uTime * 1.2);
+        float a = smoothstep(1.0, 0.55, r) * (0.35 + 0.65 * step(0.6, w)) * 0.85; gl_FragColor = vec4(vec3(0.95, 0.98, 1.0) * 1.3, a); }`,
+  }));
+  foam.position.set(f.x, f.bottom + 0.02, f.z + 0.75); foam.renderOrder = 2;
+  root.add(foam);
+  // 水雾：落水点附近缓慢上升的白点
+  const n = 60, pp = new Float32Array(n * 3), rnd = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) { pp.set([f.x, f.bottom, f.z + 0.75], i * 3); for (let c = 0; c < 4; c++) rnd[i * 4 + c] = Math.random(); }
+  const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); mg.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 4));
+  const mist = new THREE.Points(mg, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uW: { value: f.w } },
+    vertexShader: `attribute vec4 aRnd; uniform float uTime, uW; varying float vA;
+      void main() { float t = fract(aRnd.x + uTime * (0.35 + aRnd.y * 0.3));
+        vec3 p = position + vec3((aRnd.z - 0.5) * uW * 1.3, t * 1.4, (aRnd.w - 0.3) * 1.2 + t * 0.3);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+        gl_PointSize = min((6.0 + t * 22.0) * (30.0 / -mv.z), 60.0); vA = (1.0 - t) * smoothstep(0.0, 0.15, t) * 0.5; }`,
+    fragmentShader: 'varying float vA; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(1.0, 1.0, 1.0, smoothstep(0.5, 0.1, d) * vA); }',
+  }));
+  mist.frustumCulled = false; root.add(mist); particleSys.push(mist);
 }
 
 // ======================================================================
@@ -281,7 +391,7 @@ function placeAll(b, hAt) {
     if (rule.list) {
       rule.list.forEach(([x, z, rot], i) => {
         const v = rule.pick ? rule.pick[i % rule.pick.length] : Math.floor(rng() * A.n);
-        const o = { x, z, y: rule.y ?? hAt(x, z), rot, s: 1 };
+        const o = { x, z, y: rule.y ?? hAt(x, z) + (rule.dy || 0), rot, s: 1 };
         add(rule.id, v, o); taken.push([x, z, 1.4, rule.id]);
       });
       continue;
@@ -319,6 +429,9 @@ function placeAll(b, hAt) {
       const t = b.terrain(x, z), h = hAt(x, z);
       if (rule.water) { if (h > level - 0.12) continue; }
       else if (h < level + 0.02 || (rule.k && !rule.k.includes(t.k))) continue;
+      // 不放在断崖坡面上（高处水潭里也不放陆地物件）
+      if (!rule.water && Math.max(Math.abs(hAt(x + 0.35, z) - hAt(x - 0.35, z)), Math.abs(hAt(x, z + 0.35) - hAt(x, z - 0.35))) > 0.3) continue;
+      if (!rule.water && (b.terrace?.pools || []).some((p) => h < p.level + 0.05 && h > p.level - 1.2 && Math.hypot(x - p.x, z - p.z) < p.r)) continue;
       const s = lerp(rule.s[0], rule.s[1], rng());
       if (!free(x, z, gap * s * 0.5)) continue;
       const o = { x, z, y: rule.water ? level + 0.01 : h - 0.03, rot: rng() * Math.PI * 2, s, sy: s * (0.9 + rng() * 0.2) };
@@ -340,6 +453,24 @@ function placeAll(b, hAt) {
     } else root.add(instance(proto, list));
     if (light) for (const o of list) emitters.push({ p: new THREE.Vector3(o.x, o.y + light.y * (o.sy ?? o.s), o.z), color: light.color, i: light.i, d: light.d * o.s, flicker: light.flicker, smoke: light.smoke, k: Math.random() * 9 });
   }
+  contactShadows(taken);
+}
+
+// 物件脚下的柔和接触阴影：直接画进地面贴图（正片叠底），比实时阴影更"贴地"
+function contactShadows(taken) {
+  if (!groundTex) return;
+  const cv = groundTex.image, ctx = cv.getContext('2d'), N = cv.width;
+  ctx.save(); ctx.globalCompositeOperation = 'multiply';
+  const flat = new Set(['stairs', 'bridge', 'dock', 'crop', 'fence', 'formation', 'cloud', 'floatRock', 'lily', 'lotus', 'steps']);
+  for (const [x, z, r, id] of taken) {
+    if (r < 0.45 || flat.has(id)) continue; // 草、花太小；平铺类物件不需要
+    const px = (x + R) / (2 * R) * N, pz = (z + R) / (2 * R) * N, pr = Math.min(r, 2.2) * 1.1 / (2 * R) * N;
+    const gr = ctx.createRadialGradient(px, pz, 0, px, pz, pr);
+    gr.addColorStop(0, 'rgba(70,60,50,0.55)'); gr.addColorStop(0.6, 'rgba(120,110,100,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gr; ctx.fillRect(px - pr, pz - pr, pr * 2, pr * 2);
+  }
+  ctx.restore();
+  groundTex.needsUpdate = true;
 }
 
 // ======================================================================
@@ -496,7 +627,7 @@ function clear() {
   scene.remove(root);
   root.traverse((o) => { if (o.material && o.material.map && o.material.map.isCanvasTexture && o.material.userData.own) o.material.map.dispose(); });
   root = new THREE.Group(); scene.add(root);
-  emitters = []; bobbers = []; particleSys = []; waterMat = null;
+  emitters = []; bobbers = []; particleSys = []; waterMat = null; groundTex = null;
   labels = []; $('#labels').innerHTML = '';
 }
 function build() {
@@ -694,7 +825,9 @@ function walk(dt) {
     const sp = 5 * mag * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
     const b = BIOMES[S.biome], deep = b.water ? b.water.level - 0.3 : -99;
     // 不走出小岛、不走进深水
-    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > deep) {
+    // 断崖：坡度太陡（>~50°）走不上去也跳不下去，台阶坡道可以走
+    const slope = Math.abs(hAtCur(nx + _d.x * 0.25, nz + _d.z * 0.25) - hAtCur(P.x, P.z)) / (sp + 0.25);
+    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > deep && slope < 1.2) {
       const dx = nx - P.x, dz = nz - P.z;
       P.x = nx; P.z = nz;
       camera.position.x += dx; camera.position.z += dz;
@@ -736,7 +869,7 @@ function storm(dt) {
 }
 
 status('加载贴图…', 25);
-await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 } });
+await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 } });
 status('生成地形与素材…', 55);
 await nextFrame();
 setupUI();

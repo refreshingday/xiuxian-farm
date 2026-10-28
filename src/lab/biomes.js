@@ -21,17 +21,50 @@ function grassy(base, dark, light, x, z, seed) {
   return c;
 }
 
+
+// ---------- 台地（梯田式断崖）----------
+// F(x,z) 是"到台地边缘的有向距离"（米，内部为正）；step() 把它变成 0→1 的陡坎，坎宽约 0.45 米
+export const LH = 1.5; // 每级台地高度
+const step = (f, e = 0.22) => smooth(-e, e, f);
+// 沿 z 方向找台地边缘（F 过零点），用来自动摆放台阶和瀑布
+function edgeZ(F, x, z0, z1) {
+  let a = z0, b = z1, fa = F(x, a);
+  for (let i = 0; i < 40; i++) { const m = (a + b) / 2, fm = F(x, m); if (Math.sign(fm) === Math.sign(fa)) { a = m; fa = fm; } else b = m; }
+  return (a + b) / 2;
+}
+// 台阶坡道：在 [x±w/2] 的条带里，把陡坎换成长 run 的斜坡（朝 -z 上坡）
+function makeRamp(F, x, z0, z1, w = 2.2, run = 3) {
+  const zc = edgeZ(F, x, z0, z1);
+  return { x, zBot: zc + run / 2, zTop: zc - run / 2, w, run, zc };
+}
+function rampStep(r, x, z, s) {
+  const m = smooth(r.w / 2 + 0.35, r.w / 2, Math.abs(x - r.x)) * smooth(r.run / 2 + 1.2, r.run / 2 + 0.4, Math.abs(z - r.zc));
+  if (m <= 0) return s;
+  return s + (clamp((r.zBot - z) / r.run, 0, 1) - s) * m;
+}
+
+// 青竹村：北面一级台地，西北角再高一级小山；两处石阶
+const M_F1 = (x, z) => (-5 + 3 * Math.sin(x * 0.2) + (vnoise(x * 0.3, 0.5, 41) - 0.5) * 3) - z;
+const M_F2 = (x, z) => 4.8 - Math.hypot(x + 11, z + 15) + (vnoise(x * 0.5, z * 0.5, 42) - 0.5) * 1.5;
+const M_R1 = makeRamp(M_F1, 2.5, -12, 4), M_R2 = makeRamp(M_F2, -11, -16, -6);
+// 赤枫林：北面台地，台上小潭经断崖瀑布落入下面的池塘
+const A_F1 = (x, z) => (0.5 + 2 * Math.sin(x * 0.25) + (vnoise(x * 0.3, 1.5, 43) - 0.5) * 1.5) - z;
+const A_FX = -7, A_EDGE = edgeZ(A_F1, A_FX, -10, 8), A_R1 = makeRamp(A_F1, 4, -10, 8);
+const A_POOL = [A_FX, A_EDGE - 2.6, 1.7], A_POND = [A_FX + 0.3, A_EDGE + 3.6, 2.6];
+
 export const BIOMES = [
   // ================================================================ 春野
   {
-    id: 'meadow', name: '青竹村', sub: '新手村 · 灵田 · 果树 · 荷塘 · 铁矿', gdd: true,
+    id: 'meadow', name: '青竹村', sub: '新手村 · 灵田 · 果树 · 荷塘 · 台地 · 石阶', gdd: true,
+    terrace: { rock: '#9a948a', ramps: [M_R1, M_R2] },
     terrain(x, z) {
-      const pond = Math.hypot(x - 9, z + 7) - 4.2 - (vnoise(x * 0.5, z * 0.5, 2) - 0.5) * 1.6;
-      let h = (n2(x, z, 1, 0.08) - 0.5) * 0.6 + smooth(14, 24, Math.hypot(x, z)) * 1.2;
-      if (pond < 0) h = Math.max(-1.2, pond * 0.4);
-      const path = wavyPath(x, z, 3, 0.15, 1);
+      const pond = Math.hypot(x - 10, z - 7) - 3.6 - (vnoise(x * 0.5, z * 0.5, 2) - 0.5) * 1.4;
+      const s1 = rampStep(M_R1, x, z, step(M_F1(x, z))), s2 = rampStep(M_R2, x, z, step(M_F2(x, z))) * s1;
+      let h = (n2(x, z, 1, 0.08) - 0.5) * 0.25 + LH * (s1 + s2);
+      if (pond < 0) h = Math.max(-1.2, pond * 0.45);
+      const path = Math.min(wavyPath(x, z, 3, 0.15, 1), Math.abs(x - M_R1.x) + Math.max(0, z - M_R1.zBot) + Math.max(0, M_R1.zTop - 2 - z) - 0.2);
       const farm = x > -14 && x < -4 && z > 3 && z < 11;
-      return { h: farm ? 0.02 : h, k: pond < 0.6 ? 'sand' : farm ? 'till' : path < 1.2 ? 'dirt' : 'grass', path };
+      return { h: farm ? 0.02 : h, k: pond < 0.6 ? 'sand' : farm ? 'till' : path < 1.2 ? 'dirt' : 'grass', path, lv: s1 + s2 };
     },
     color(x, z, t) {
       const n = vnoise(x * 6, z * 6, 1);
@@ -45,6 +78,7 @@ export const BIOMES = [
     light: { sun: '#fff0d8', sunI: 2.8, sky: '#d8ecff', ground: '#9a8a50', hemiI: 1.1, fog: '#cfe6f0', top: '#7ab8ec', bottom: '#d8eef4', exposure: 1.12, bloom: 0.45 },
     particles: [{ type: 'petals', n: 120, color: '#ffc0d8', size: 5 }, { type: 'fireflies', n: 40, color: '#e8ff9a', size: 6, night: true }],
     scatter: [
+      { id: 'stairs', n: 2, list: [[M_R1.x, M_R1.zc, 0], [M_R2.x, M_R2.zc, 0]], dy: -LH / 2 },
       { id: 'crop', grid: [-12.4, 4.6, 2, 5, 4] },
       { id: 'fence', n: 6, list: [[-9, 2.5, 0], [-6.5, 2.5, 0], [-11.5, 2.5, 0], [-14.6, 5.2, Math.PI / 2], [-14.6, 8.2, Math.PI / 2], [-9, 11.6, 0]] },
       { id: 'scarecrow', n: 1, list: [[-2.6, 7.2, -0.5]] },
@@ -150,13 +184,24 @@ export const BIOMES = [
   },
   // ================================================================ 赤枫林
   {
-    id: 'autumn', name: '赤枫林', sub: '赤枫狼王领地 · 枫树 · 银杏 · 落叶', gdd: true,
+    id: 'autumn', name: '赤枫林', sub: '赤枫狼王领地 · 枫树 · 台地断崖 · 瀑布', gdd: true,
+    terrace: {
+      rock: '#a08a70', ramps: [A_R1],
+      // 台上小潭（单独一层水面）+ 断崖瀑布
+      pools: [{ x: A_POOL[0], z: A_POOL[1], r: 3.2, level: LH + 0.12 }],
+      falls: [{ x: A_FX, z: A_EDGE, w: 1.5, top: LH + 0.12, bottom: -0.1 }],
+    },
     terrain(x, z) {
-      const pond = Math.hypot(x + 7, z - 6) - 3.2 - (vnoise(x * 0.6, z * 0.6, 7) - 0.5) * 1.4;
-      let h = (n2(x, z, 4, 0.08) - 0.5) * 0.7 + smooth(13, 24, Math.hypot(x, z)) * 1.4;
-      if (pond < 0) h = Math.max(-1, pond * 0.4);
-      const path = wavyPath(z, x, 2.5, 0.2, 2);
-      return { h, k: pond < 0.4 ? 'mud' : path < 1.1 ? 'dirt' : 'grass', path };
+      const s1 = rampStep(A_R1, x, z, step(A_F1(x, z)));
+      let h = (n2(x, z, 4, 0.08) - 0.5) * 0.3 + LH * s1;
+      // 下面的池塘 + 瀑布落水处到池塘的小溪
+      const pond = Math.min(Math.hypot(x - A_POND[0], z - A_POND[1]) - A_POND[2], Math.abs(x - A_FX) - 0.8 + Math.max(0, A_EDGE - 0.6 - z) * 3 + Math.max(0, z - A_POND[1]) * 3) - (vnoise(x * 0.6, z * 0.6, 7) - 0.5) * 0.8;
+      if (pond < 0 && s1 < 0.5) h = Math.max(-1, pond * 0.5 - 0.25);
+      // 台上的小潭 + 通往崖边的水道
+      const pool = Math.min(Math.hypot(x - A_POOL[0], z - A_POOL[1]) - A_POOL[2], Math.abs(x - A_FX) - 0.75 + Math.max(0, A_POOL[1] - z) * 3);
+      if (pool < 0 && s1 > 0.5) h = Math.min(h, LH - 0.2 + pool * 0.5);
+      const path = Math.min(wavyPath(z, x, 2.5, 0.2, 2), Math.abs(x - A_R1.x) + Math.max(0, z - A_R1.zBot - 1) + Math.max(0, A_R1.zTop - 2 - z) - 0.2);
+      return { h, k: (pond < 0.4 && s1 < 0.5) || (pool < 0.35 && s1 > 0.5) ? 'mud' : path < 1.1 ? 'dirt' : 'grass', path, lv: s1 };
     },
     color(x, z, t) {
       const n = vnoise(x * 6, z * 6, 4);
@@ -177,9 +222,10 @@ export const BIOMES = [
       { id: 'ginkgo', n: 5, k: ['grass'], r: [5, 22], s: [0.9, 1.2], gap: 3 },
       { id: 'autumnBush', n: 16, k: ['grass'], s: [0.7, 1.2], gap: 1.2 },
       { id: 'leafPile', n: 14, k: ['grass', 'dirt'], s: [0.8, 1.5], gap: 1 },
-      { id: 'pumpkin', n: 12, zone: (x, z) => x > 4 && x < 12 && z > 2 && z < 9, s: [0.8, 1.3], gap: 0.9 },
-      { id: 'fence', n: 3, list: [[8, 1.3, 0], [3.2, 5.5, Math.PI / 2], [12.8, 5.5, Math.PI / 2]] },
-      { id: 'scarecrow', n: 1, list: [[8, 5.6, -0.4]], pick: [1] },
+      { id: 'stairs', n: 1, list: [[A_R1.x, A_R1.zc, 0]], dy: -LH / 2 },
+      { id: 'pumpkin', n: 12, zone: (x, z) => x > 5 && x < 13 && z > 6 && z < 12, s: [0.8, 1.3], gap: 0.9 },
+      { id: 'fence', n: 3, list: [[9, 5.2, 0], [4.2, 8.5, Math.PI / 2], [13.8, 8.5, Math.PI / 2]] },
+      { id: 'scarecrow', n: 1, list: [[9, 9, -0.4]], pick: [1] },
       { id: 'mossRock', n: 12, k: ['grass', 'mud'], s: [0.4, 1.2], gap: 1 },
       { id: 'stump', n: 5, k: ['grass'], s: [0.8, 1.1], gap: 1.5 },
       { id: 'mushroom', n: 12, k: ['grass'], s: [0.8, 1.3], gap: 0.4, near: 'maple' },

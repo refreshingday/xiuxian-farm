@@ -1119,6 +1119,27 @@ function formation(v, seed) {
   return k.build({ light: { color: '#8ad0ff', i: 1.0, d: 8, y: 1.2 } });
 }
 
+
+// ======================================================================
+// 台地：石阶（与 biomes.js 的坡道一致：宽 2.2、水平 3、高 1.5，朝 -z 上坡，原点在坡道中点的底部高度）
+// ======================================================================
+function stairs(v, seed, W = 2.2, RUN = 3, RISE = 1.5) {
+  const k = new Kit(), n = 7, stone = (g) => faceted(lumpy(g, 0.025, 5, seed));
+  for (let i = 0; i < n; i++) {
+    const h = (i + 1) * RISE / n, d = RUN / n;
+    k.add(stone(G.box(W, h, d + 0.02)), grad(v ? '#a89a88' : '#b4aea8', 0.72, 1.06, 0.12, i), { at: [0, h / 2, RUN / 2 - d * (i + 0.5)] });
+  }
+  // 两侧矮墙 + 墙头小石柱
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < n; i++) {
+      const h = (i + 1) * RISE / n + 0.3, d = RUN / n;
+      k.add(stone(G.box(0.28, h, d + 0.02)), grad('#9a948e', 0.65, 1.0, 0.15, i + 9), { at: [sx * (W / 2 + 0.14), h / 2, RUN / 2 - d * (i + 0.5)] });
+    }
+    k.add(stone(G.box(0.36, 0.5, 0.36)), grad('#8a847e', 0.7, 1.05), { at: [sx * (W / 2 + 0.14), 0.25 + 0.3 + RISE / n, RUN / 2 - RUN / n / 2] });
+  }
+  return k.build();
+}
+
 // ======================================================================
 // 素材登记：按区域分组（同一素材可出现在多个区域）
 // ======================================================================
@@ -1224,6 +1245,8 @@ export const ASSETS = {
   floatRock: { name: '浮空石', n: 4, make: (v) => floatRock(v, 791) },
   formation: { name: '渡劫法阵', n: 2, make: (v) => formation(v, 801) },
   stormPine: { name: '雷击松', n: 3, make: (v) => deadTree(v, 811, '#3a3440') },
+  // ---- 台地 ----
+  stairs:    { name: '石阶', n: 2, make: (v) => stairs(v, 821) },
   // ---- 赤岩荒原 ----
   lavaRock:  { name: '熔岩石', n: 5, make: (v) => lavaRock(v, 511) },
   redRock:   { name: '赤砂岩', n: 5, make: (v) => redRock(v, 521) },
