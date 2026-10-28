@@ -408,7 +408,7 @@ export const BIOMES = [
     terrain(x, z) {
       let h = (n2(x, z, 41, 0.1) - 0.5) * 0.6 + smooth(14, 24, Math.hypot(x, z)) * 1.3;
       const trench = Math.abs(z - 4 - Math.sin(x * 0.3) * 2) - 0.9;
-      if (trench < 0) h += trench * 0.5;
+      if (trench < 0) h += trench * 0.22; // 浅壕沟，不积水
       let crater = 9;
       for (const [cx, cz, cr] of [[-8, -6, 2.2], [7, -9, 2.8], [10, 9, 1.8], [-12, 10, 2.4]]) crater = Math.min(crater, Math.hypot(x - cx, z - cz) - cr);
       if (crater < 0) h = Math.min(h, crater * 0.35 - 0.1); else if (crater < 0.8) h += (0.8 - crater) * 0.25;
@@ -425,7 +425,7 @@ export const BIOMES = [
       return c;
     },
     water: { level: -0.12, mode: 'water', shallow: '#6a6a5a', deep: '#2a2a2a', foam: '#a8a898' },
-    light: { sun: '#c8c8d8', sunI: 1.5, sky: '#9aa0b0', ground: '#4a4440', hemiI: 1.15, fog: '#8a8a94', top: '#5a6070', bottom: '#a0a4ac', exposure: 1.05, bloom: 0.65, fogNear: 26, fogFar: 72, warm: 0.3 },
+    light: { sun: '#c8c8d8', sunI: 1.5, sky: '#9aa0b0', ground: '#4a4440', hemiI: 1.15, fog: '#8a8a94', top: '#5a6070', bottom: '#a0a4ac', exposure: 1.05, bloom: 0.65, fogNear: 40, fogFar: 100, warm: 0.3 },
     particles: [{ type: 'motes', n: 90, color: '#8ab0ff', size: 6, glow: true }, { type: 'ash', n: 110, color: '#3a3434', size: 3 }],
     scatter: [
       { id: 'wreck', n: 3, k: ['dirt', 'grass'], pick: [0, 1], s: [0.9, 1.1], gap: 4 },
