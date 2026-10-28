@@ -424,7 +424,7 @@ export const BIOMES = [
       if (vnoise(x * 1.5, z * 1.5, 44) > 0.78) c = mix(c, [44, 38, 38], 0.7); // 焦痕
       return c;
     },
-    water: { level: -0.12, mode: 'water', shallow: '#6a6a5a', deep: '#2a2a2a', foam: '#a8a898' },
+    water: { level: -0.12, mode: 'water', shallow: '#6a6a5a', deep: '#2a2a2a', foam: '#7a7a6a' },
     light: { sun: '#c8c8d8', sunI: 1.5, sky: '#9aa0b0', ground: '#4a4440', hemiI: 1.15, fog: '#8a8a94', top: '#5a6070', bottom: '#a0a4ac', exposure: 1.05, bloom: 0.65, fogNear: 40, fogFar: 100, warm: 0.3 },
     particles: [{ type: 'motes', n: 90, color: '#8ab0ff', size: 6, glow: true }, { type: 'ash', n: 110, color: '#3a3434', size: 3 }],
     scatter: [
@@ -502,7 +502,7 @@ export const BIOMES = [
       if (t.k === 'scorch') return mix([40, 36, 44], [70, 50, 90], vnoise(x * 5, z * 5, 66) > 0.7 ? 1 : 0);
       return mix([96, 92, 106], [70, 66, 80], smooth(0.4, 0.7, n2(x, z, 67, 0.35)));
     },
-    water: { level: -0.1, mode: 'water', shallow: '#5a6a8a', deep: '#22283e', foam: '#a8b4d8' },
+    water: { level: -0.1, mode: 'water', shallow: '#5a6a8a', deep: '#22283e', foam: '#6a7a9a' }, // 雨水坑：泡沫色接近水色，不出白圈
     light: { sun: '#a8b0ff', sunI: 0.9, sky: '#7a7aa8', ground: '#2a2834', hemiI: 1.25, fog: '#3a3a52', top: '#14142a', bottom: '#46466a', exposure: 1.15, bloom: 0.8, fogNear: 28, fogFar: 76, warm: 0, fx: 'storm' },
     particles: [{ type: 'rain', n: 1000, color: '#b8c4ff', size: 6 }, { type: 'motes', n: 60, color: '#8ad0ff', size: 5, glow: true }],
     scatter: [
