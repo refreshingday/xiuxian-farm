@@ -184,14 +184,15 @@ export class ComboFX {
   }
 
   // 回旋剑舞：三道刀光绕身旋转，跟随角色
-  whirl(getPos, color, dur) {
+  // getY：可选，返回离地高度（空中回旋用）
+  whirl(getPos, color, dur, getY) {
     const g = new THREE.Group(), mats = [];
     for (let i = 0; i < 3; i++) {
       const m = this.mat(i ? color : '#ffffff', 2); mats.push(m);
       const a = new THREE.Mesh(i ? this.geo('arcWide') : this.geo('arcEdge'), m); a.rotation.y = i * Math.PI * 2 / 3; g.add(a);
     }
     return this.spawn(g, dur, (k, dt) => {
-      const p = getPos(); g.position.set(p.x, 0.9 + Math.sin(k * 20) * 0.08, p.z);
+      const p = getPos(); g.position.set(p.x, 0.9 + (getY?.() ?? 0) + Math.sin(k * 20) * 0.08, p.z);
       g.rotation.y += dt * 22;
       const f = Math.min(1, k * 6) * (1 - Math.max(0, k - 0.75) / 0.25);
       mats.forEach((m, i) => { m.opacity = (i ? 0.5 : 0.9) * f; });
