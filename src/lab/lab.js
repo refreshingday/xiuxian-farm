@@ -46,6 +46,7 @@ controls.target.set(0, 0.5, 0);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.5, 0.9);
+bloom.highPassUniforms.smoothWidth.value = 0.25; // 软阈值：亮度接近阈值的小物件不会一闪一闪
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 const grade = new ShaderPass({
@@ -100,7 +101,7 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', time: 10, seed: 1,
-  outline: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {},
+  outline: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
@@ -753,6 +754,11 @@ function applyLight() {
   bloom.strength = bBase + nightK * 0.25;
   $('#bloomS').value = bBase;
   $('#bloomV').textContent = `${bBase.toFixed(2)}${bk == null ? '（默认）' : `（默认 ${L.bloom}）`}${nightK > 0.01 ? ` 夜 +${(nightK * 0.25).toFixed(2)}` : ''}`;
+  // 泛光阈值：亮度超过它的像素才发光，越低越多东西发光
+  const bt = S.bloomT[BIOMES[S.biome].id], tDef = L.bloomT ?? 0.9;
+  bloom.threshold = bt ?? tDef;
+  $('#bloomT').value = bloom.threshold;
+  $('#bloomTV').textContent = `${bloom.threshold.toFixed(2)}${bt == null ? '（默认）' : `（默认 ${tDef}）`}`;
   grade.uniforms.uWarm.value = L.warm ?? 1;
   for (const m of waterMats) m.uniforms.uSky.value.copy(skyU.top.value);
   $('#timeV').textContent = `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.floor((t % 1) * 60)).padStart(2, '0')}`;
@@ -807,6 +813,8 @@ function setupUI() {
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
   $('#bloomS').oninput = (e) => { S.bloomK[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
   $('#bloomReset').onclick = () => { delete S.bloomK[BIOMES[S.biome].id]; save(); applyLight(); };
+  $('#bloomT').oninput = (e) => { S.bloomT[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
+  $('#bloomTReset').onclick = () => { delete S.bloomT[BIOMES[S.biome].id]; save(); applyLight(); };
   $('#line').oninput = (e) => { U.line.value = +e.target.value; };
   $('#reseed').onclick = () => { S.seed++; save(); rebuild(false); };
   $('#shot').onclick = () => { composer.render(); const a = document.createElement('a'); a.download = `lab-${BIOMES[S.biome].id}.png`; a.href = renderer.domElement.toDataURL('image/png'); a.click(); };

@@ -58,9 +58,11 @@ export function mats() {
   const bloom = chain(toon('#ffffff', { vc: true, leaf: true, unique: true, leafTex: PNG.peach_foliage || PNG.foliage }), (s) => swayPatch(s, 1, 0.8), 'swayB');
   const plant = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 2.2, 0.02), 'swayP');
   plant.side = THREE.DoubleSide;
-  const glowM = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) });
+  // 发光物只吃一部分雾：洞穴里雾几乎是黑的，全吃雾的话远处的灯 / 晶石就暗到不发光，只有走近才亮
+  const lightFog = (m) => { m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', '#ifdef USE_FOG\n float fogF = smoothstep(fogNear, fogFar, vFogDepth) * 0.3;\n gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogF);\n#endif'); }; m.customProgramCacheKey = () => 'lightFog'; return m; };
+  const glowM = lightFog(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) }));
   // 晶石类：自发光但不过曝，保留颜色
-  const gem = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.15, 1.15, 1.15) });
+  const gem = lightFog(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.15, 1.15, 1.15) }));
   const ice = new THREE.MeshToonMaterial({ vertexColors: true, transparent: true, opacity: 0.82, gradientMap: solid.gradientMap });
   ice.emissive.set('#3a6a90'); ice.emissiveIntensity = 0.35;
   // 树叶：真正一片片的叶子几何（同花草做法），双面但不翻法线（法线是从树冠中心向外的球面法线，整冠明暗连贯）
