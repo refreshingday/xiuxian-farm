@@ -829,7 +829,8 @@ function walk(dt) {
     // 不走出小岛、不走进深水
     // 断崖：坡度太陡（>~50°）走不上去也跳不下去，台阶坡道可以走
     const slope = Math.abs(hAtCur(nx + _d.x * 0.25, nz + _d.z * 0.25) - hAtCur(P.x, P.z)) / (sp + 0.25);
-    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > deep && slope < 1.2) {
+    const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r); // 梯子处可以爬崖
+    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > deep && (slope < 1.2 || onLadder)) {
       const dx = nx - P.x, dz = nz - P.z;
       P.x = nx; P.z = nz;
       camera.position.x += dx; camera.position.z += dz;

@@ -41,17 +41,28 @@ function sampleLine(pts, F, d = 0.08) {
 }
 export function makeTerrace(o) {
   const T = { ...o, stairs: [], pools: [], falls: [] };
-  // 台阶：路径穿过 k+0.5 级的地方放一段，朝上坡方向，按这一级的进深拉伸
-  for (const path of o.paths || []) {
-    const S = sampleLine(path, o.F);
+  // 连接方式（每条路一种）：
+  //   stairs 石阶 / logs 木桩台阶：路上是连续坡，穿过 k+0.5 级处摆一段（朝上坡、按进深拉伸）
+  //   trail 土路：只有坡，不摆东西（之字形绕上去坡就缓）
+  //   ladder 木梯：不改地形，崖还是崖，在每道坎脚下靠一架梯子
+  T.paths = (o.paths || []).map((p) => (Array.isArray(p) ? { pts: p, kind: 'stairs' } : p));
+  T.placed = { stairs: [], logs: [], ladder: [] };
+  T.ladders = [];
+  for (const path of T.paths) {
+    const S = sampleLine(path.pts, o.F), ladder = path.kind === 'ladder';
+    if (path.kind === 'trail') continue;
     for (let i = 1; i < S.length; i++) for (let k = 0; k < LEVELS - 1; k++) {
-      const c = k + 0.5;
-      if ((S[i - 1].F - c) * (S[i].F - c) < 0) {
-        const { x, z } = S[i], [gx, gz] = gradF(o.F, x, z), g = Math.hypot(gx, gz) || 1;
-        T.stairs.push([x, z, Math.atan2(-gx, -gz), clamp(1 / g / 3, 0.5, 1.6)]);
-      }
+      const c = ladder ? k + 1 - CLIFF / 2 : k + 0.5;
+      if ((S[i - 1].F - c) * (S[i].F - c) >= 0) continue;
+      const { x, z } = S[i], [gx, gz] = gradF(o.F, x, z), g = Math.hypot(gx, gz) || 1, rot = Math.atan2(-gx, -gz);
+      if (ladder) {
+        // 梯脚放在坎下面一点（顺着下坡方向退 0.35 米）
+        const bx = x + gx / g * 0.35, bz = z + gz / g * 0.35;
+        T.placed.ladder.push([bx, bz, rot]); T.ladders.push({ x, z, r: 0.9 });
+      } else T.placed[path.kind].push([x, z, rot, clamp(1 / g / 3, 0.5, 1.6)]);
     }
   }
+  T.stairs = T.placed.stairs;
   // 溪流：按所在级数切段；k≥1 的每段一块水面，每次掉级一挂瀑布
   if (o.stream) {
     const S = sampleLine(o.stream, o.F);
@@ -77,12 +88,18 @@ export function makeTerrace(o) {
   }
   return T;
 }
+const HALF = { stairs: [1.1, 1.5], logs: [1.0, 1.5], trail: [1.1, 2.2] }; // 路半宽：内沿、外沿（土路边缘更软）
 export function terraceAt(T, x, z) {
-  const F = T.F(x, z);
-  let lv = quant(F), pd = 9, sd = 9, chan = 0;
-  for (const p of T.paths || []) pd = Math.min(pd, polyDist(x, z, p));
-  const m = smooth(1.5, 1.1, pd); // 台阶路宽 2.2：路上是连续坡（石阶盖在上面）
-  if (m > 0) lv += (clamp(F, 0, LEVELS - 1) - lv) * m;
+  const F = T.F(x, z), Fc = clamp(F, 0, LEVELS - 1);
+  let lv = quant(F), pd = 9, sd = 9, chan = 0, m = 0;
+  for (const p of T.paths) {
+    if (p.kind === 'ladder') continue;
+    const d = polyDist(x, z, p.pts), [h0, h1] = HALF[p.kind];
+    pd = Math.min(pd, d); m = Math.max(m, smooth(h1, h0, d));
+  }
+  // 塌方：崖在几处被冲成缓坡，自然连通上下两级（噪声决定位置，溪边不塌）
+  if (T.erode) m = Math.max(m, T.erode(x, z));
+  if (m > 0) lv += (Fc - lv) * m;
   if (T.stream) { sd = polyDist(x, z, T.stream); if (sd < 0.95) chan = smooth(0.95, 0.5, sd) * (lv < 0.6 ? 1.1 : 0.5); }
   return { lv, F, pd, sd, chan };
 }
@@ -90,21 +107,33 @@ export function terraceAt(T, x, z) {
 // 青竹村：北面六级梯台（村子在最低一级），南面一座两级小丘；溪水从最高处一级级跌进荷塘
 const M_T = makeTerrace({
   F: (x, z) => Math.max((-z - 3 + 2.5 * Math.sin(x * 0.18) + (vnoise(x * 0.25, 3.3, 41) - 0.5) * 3) / 2.6, 2.4 - Math.hypot(x + 1, z - 16) / 1.7),
-  paths: [[[2.5, 1], [2.5, -23]], [[-1, 10], [-1, 17]]],
+  paths: [
+    { kind: 'stairs', pts: [[2.5, 1], [2.5, -8.5]] },                              // 村口石阶上两级
+    { kind: 'trail', pts: [[2.5, -8.5], [7.5, -11], [-0.5, -14], [5.5, -17.5], [1, -21]] }, // 之字形土路继续往上
+    { kind: 'ladder', pts: [[-7, -7], [-7, -22]] },                                 // 西侧一溜木梯直上
+    { kind: 'logs', pts: [[-1, 10], [-1, 17]] },                                    // 南面小丘的木桩台阶
+  ],
+  erode: (x, z) => smooth(0.66, 0.74, fbm(x * 0.09 + 3, z * 0.09, 44, 2)) * smooth(2.5, 4, Math.abs(x - 10.8)),
   stream: [[11, -21], [11, -14], [10.5, -6], [10, 4]],
 });
 // 赤枫林：东北缓升的梯台 + 西边一座窄阶高台（像层层叠的塔），溪水跌进西南的池塘
 const A_T = makeTerrace({
   F: (x, z) => Math.max((1 - z + 2 * Math.sin(x * 0.25) + (vnoise(x * 0.3, 1.5, 43) - 0.5) * 2) / 2.4 + x * 0.05, 6.4 - Math.hypot(x + 14, z + 4) / 0.85),
-  paths: [[[4.5, 4], [5, -23]]],
+  paths: [
+    { kind: 'logs', pts: [[4.5, 4], [5, -5]] },                                   // 木桩台阶上三级
+    { kind: 'trail', pts: [[5, -5], [11, -8.5], [3, -12], [9, -16], [5, -22]] },   // 之字形土路
+    { kind: 'stairs', pts: [[-1, 2], [-2.5, -16]] },                               // 一条直上的石阶
+    { kind: 'ladder', pts: [[-7.5, -5], [-14, -4]] },                               // 叠塔高台靠木梯一层层爬
+  ],
+  erode: (x, z) => smooth(0.66, 0.74, fbm(x * 0.09 + 7, z * 0.09, 45, 2)) * smooth(2.5, 4, Math.abs(x + 6.3)) * smooth(6.5, 8, Math.hypot(x + 14, z + 4)),
   stream: [[-5, -21], [-6, -12], [-7, -3], [-7, 5]],
 });
 
 export const BIOMES = [
   // ================================================================ 春野
   {
-    id: 'meadow', name: '青竹村', sub: '新手村 · 灵田 · 七级梯台 · 石阶 · 梯级瀑布', gdd: true,
-    terrace: { rock: '#9a948a', pools: M_T.pools, falls: M_T.falls },
+    id: 'meadow', name: '青竹村', sub: '新手村 · 七级梯台 · 石阶 / 之字土路 / 木梯 / 木桩台阶 / 塌方缓坡 · 梯级瀑布', gdd: true,
+    terrace: { rock: '#9a948a', pools: M_T.pools, falls: M_T.falls, ladders: M_T.ladders },
     terrain(x, z) {
       const t = terraceAt(M_T, x, z);
       const pond = Math.hypot(x - 10, z - 7) - 3.6 - (vnoise(x * 0.5, z * 0.5, 2) - 0.5) * 1.4;
@@ -126,7 +155,9 @@ export const BIOMES = [
     light: { sun: '#fff0d8', sunI: 2.8, sky: '#d8ecff', ground: '#9a8a50', hemiI: 1.1, fog: '#cfe6f0', top: '#7ab8ec', bottom: '#d8eef4', exposure: 1.12, bloom: 0.45 },
     particles: [{ type: 'petals', n: 120, color: '#ffc0d8', size: 5 }, { type: 'fireflies', n: 40, color: '#e8ff9a', size: 6, night: true }],
     scatter: [
-      { id: 'stairs', n: 8, list: M_T.stairs, dy: -LH / 2 },
+      { id: 'stairs', n: 8, list: M_T.placed.stairs, dy: -LH / 2 },
+      { id: 'logSteps', n: 8, list: M_T.placed.logs, dy: -LH / 2 },
+      { id: 'ladder', n: 8, list: M_T.placed.ladder },
       { id: 'crop', grid: [-12.4, 4.6, 2, 5, 4] },
       { id: 'fence', n: 6, list: [[-9, 2.5, 0], [-6.5, 2.5, 0], [-11.5, 2.5, 0], [-14.6, 5.2, Math.PI / 2], [-14.6, 8.2, Math.PI / 2], [-9, 11.6, 0]] },
       { id: 'scarecrow', n: 1, list: [[-2.6, 7.2, -0.5]] },
@@ -232,8 +263,8 @@ export const BIOMES = [
   },
   // ================================================================ 赤枫林
   {
-    id: 'autumn', name: '赤枫林', sub: '赤枫狼王领地 · 枫树 · 七级梯台 · 叠塔高台 · 瀑布', gdd: true,
-    terrace: { rock: '#a08a70', pools: A_T.pools, falls: A_T.falls },
+    id: 'autumn', name: '赤枫林', sub: '赤枫狼王领地 · 七级梯台 · 叠塔高台（木梯）· 之字土路 · 瀑布', gdd: true,
+    terrace: { rock: '#a08a70', pools: A_T.pools, falls: A_T.falls, ladders: A_T.ladders },
     terrain(x, z) {
       const t = terraceAt(A_T, x, z);
       let h = (n2(x, z, 4, 0.08) - 0.5) * 0.25 + LH * t.lv - t.chan;
@@ -261,7 +292,9 @@ export const BIOMES = [
       { id: 'ginkgo', n: 5, k: ['grass'], r: [5, 22], s: [0.9, 1.2], gap: 3 },
       { id: 'autumnBush', n: 16, k: ['grass'], s: [0.7, 1.2], gap: 1.2 },
       { id: 'leafPile', n: 14, k: ['grass', 'dirt'], s: [0.8, 1.5], gap: 1 },
-      { id: 'stairs', n: 6, list: A_T.stairs, dy: -LH / 2 },
+      { id: 'stairs', n: 8, list: A_T.placed.stairs, dy: -LH / 2 },
+      { id: 'logSteps', n: 8, list: A_T.placed.logs, dy: -LH / 2 },
+      { id: 'ladder', n: 8, list: A_T.placed.ladder },
       { id: 'pumpkin', n: 12, zone: (x, z) => x > 5 && x < 13 && z > 6 && z < 12, s: [0.8, 1.3], gap: 0.9 },
       { id: 'fence', n: 3, list: [[9, 5.2, 0], [4.2, 8.5, Math.PI / 2], [13.8, 8.5, Math.PI / 2]] },
       { id: 'scarecrow', n: 1, list: [[9, 9, -0.4]], pick: [1] },

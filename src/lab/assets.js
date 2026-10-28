@@ -1141,6 +1141,27 @@ function stairs(v, seed, W = 2.2, RUN = 3, RISE = LH) {
   return k.build();
 }
 
+
+// 木桩台阶：半埋的横木一级级往上（和石阶同一套摆放：进深 3，高一级 LH，朝 -z 上坡）
+function logSteps(v, seed, W = 1.9, RUN = 3, RISE = LH) {
+  const k = new Kit(), r = rnd(seed + v), n = 5, bark = '#6a4a32';
+  for (let i = 0; i < n; i++) {
+    const y = (i + 0.5) * RISE / n, z = RUN / 2 - (i + 0.5) * RUN / n, L = W * (0.85 + r() * 0.2);
+    k.add(new THREE.CylinderGeometry(0.13, 0.14, L, 8).rotateZ(Math.PI / 2), (g) => paint(g, (p, nn, out) => out.set(Math.abs(p.x) > L / 2 - 0.02 ? '#d8b078' : bark).multiplyScalar(0.7 + 0.35 * Math.max(0, nn.y + 0.3))), { at: [(r() - 0.5) * 0.15, y - 0.02, z], rot: [0, (r() - 0.5) * 0.12, 0] });
+    for (const sx of [-1, 1]) k.add(G.cyl(0.04, 0.05, 0.35, 5), grad('#5a3a26'), { at: [sx * (L / 2 - 0.1), y - 0.25, z + 0.16] });
+  }
+  return k.build();
+}
+// 木梯：靠在崖上的两根竖杆 + 横档，原点在梯脚，朝 -z 靠墙
+function ladder(v, seed) {
+  const k = new Kit(), H = LH + 0.55, lean = 0.45;
+  for (const sx of [-1, 1]) k.add(G.tube([[sx * 0.32, 0, 0], [sx * 0.3, H, -lean]], 0.05, 0.045, 5), grad('#8a5a34', 0.7, 1.1, 0.1));
+  const n = Math.round(H / 0.32);
+  for (let i = 1; i < n; i++) { const t = i / n; k.add(G.cyl(0.028, 0.028, 0.62, 5), grad('#a8743f'), { at: [-0.31, t * H, -lean * t], rot: [0, 0, -Math.PI / 2] }); }
+  if (v) for (const sx of [-1, 1]) k.add(G.tor(0.06, 0.02, 4, 8), grad('#c8b080'), { at: [sx * 0.31, H * 0.5, -lean * 0.5] }); // 绑绳
+  return k.build();
+}
+
 // ======================================================================
 // 素材登记：按区域分组（同一素材可出现在多个区域）
 // ======================================================================
@@ -1248,6 +1269,8 @@ export const ASSETS = {
   stormPine: { name: '雷击松', n: 3, make: (v) => deadTree(v, 811, '#3a3440') },
   // ---- 台地 ----
   stairs:    { name: '石阶', n: 2, make: (v) => stairs(v, 821) },
+  logSteps:  { name: '木桩台阶', n: 2, make: (v) => logSteps(v, 831) },
+  ladder:    { name: '木梯', n: 2, make: (v) => ladder(v, 841) },
   // ---- 赤岩荒原 ----
   lavaRock:  { name: '熔岩石', n: 5, make: (v) => lavaRock(v, 511) },
   redRock:   { name: '赤砂岩', n: 5, make: (v) => redRock(v, 521) },
