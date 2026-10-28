@@ -100,9 +100,13 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', time: 10, seed: 1,
-  outline: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false,
+  outline: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {},
 };
-try { Object.assign(S, JSON.parse(localStorage.getItem('xxlab') || '{}')); } catch { /* 无痕模式等 */ }
+try {
+  const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
+  if ((saved.v || 1) < 2) delete saved.outline; // v2：描边默认关闭，旧存档里的描边开关作废
+  Object.assign(S, saved, { v: 2 });
+} catch { /* 无痕模式等 */ }
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
 
 let root = new THREE.Group(); scene.add(root);
@@ -744,7 +748,11 @@ function applyLight() {
   if (S.mode === 'scene') { scene.fog.near = L.fogNear || 55; scene.fog.far = L.fogFar || 120; }
   else { scene.fog.near = span * 2.2; scene.fog.far = span * 5; }
   renderer.toneMappingExposure = L.exposure;
-  bloom.strength = L.bloom + nightK * 0.25;
+  // 泛光强度：每个区域可单独调（存档 S.bloomK[区域id]），夜里额外 +0.25
+  const bk = S.bloomK[BIOMES[S.biome].id], bBase = bk ?? L.bloom;
+  bloom.strength = bBase + nightK * 0.25;
+  $('#bloomS').value = bBase;
+  $('#bloomV').textContent = `${bBase.toFixed(2)}${bk == null ? '（默认）' : `（默认 ${L.bloom}）`}${nightK > 0.01 ? ` 夜 +${(nightK * 0.25).toFixed(2)}` : ''}`;
   grade.uniforms.uWarm.value = L.warm ?? 1;
   for (const m of waterMats) m.uniforms.uSky.value.copy(skyU.top.value);
   $('#timeV').textContent = `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.floor((t % 1) * 60)).padStart(2, '0')}`;
@@ -797,6 +805,8 @@ function setupUI() {
   document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { S[el.dataset.t] = !S[el.dataset.t]; save(); applyToggles(); ui(); });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
+  $('#bloomS').oninput = (e) => { S.bloomK[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
+  $('#bloomReset').onclick = () => { delete S.bloomK[BIOMES[S.biome].id]; save(); applyLight(); };
   $('#line').oninput = (e) => { U.line.value = +e.target.value; };
   $('#reseed').onclick = () => { S.seed++; save(); rebuild(false); };
   $('#shot').onclick = () => { composer.render(); const a = document.createElement('a'); a.download = `lab-${BIOMES[S.biome].id}.png`; a.href = renderer.domElement.toDataURL('image/png'); a.click(); };

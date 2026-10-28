@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage, LEAF_D } from './kit.js';
+import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage } from './kit.js';
 import { vnoise, smooth, clamp } from '../util.js';
 import { LH } from './biomes.js';
 
@@ -87,7 +87,7 @@ function pine(v, color, seed, snow = false) {
     for (let j = 0; j < p.count; j++) if (p.getY(j) < 0.05) { const a = Math.atan2(p.getZ(j), p.getX(j)); p.setY(j, p.getY(j) - (Math.sin(a * 9) * 0.5 + 0.5) * 0.12); }
     g.computeVertexNormals();
     // 雪松不用叶贴图（白雪乘上绿叶纹理会发蓝发花）
-    k.add(g, snow ? snowCap(color, 0.45) : crownPaint(color, null, seed + i), { at: [0, y, 0], rot: [0, r() * TAU, 0], kind: snow ? 'solid' : 'pine' });
+    k.add(g, snow ? snowCap(color, 0.45) : crownPaint(color, null, seed + i), { at: [0, y, 0], rot: [0, r() * TAU, 0], kind: snow ? 'solid' : 'sway' });
   }
   return k.build();
 }
@@ -100,21 +100,12 @@ function bamboo(v, seed) {
     const col = r() < 0.6 ? '#7cae3a' : r() < 0.5 ? '#9ac04a' : '#5e9a34';
     for (let s = 0; s < segs; s++) {
       const y = s * sh;
-      k.add(G.cyl(rad * 0.95, rad, sh * 0.96, 6), grad(col, 0.8, 1.1), { at: [x + lean * y, y, z + lean * y * 0.5], kind: 'sway' });
-      k.add(G.cyl(rad * 1.25, rad * 1.25, 0.05, 6), grad('#4e7a2a', 0.9, 1), { at: [x + lean * (y + sh), y + sh * 0.97, z + lean * (y + sh) * 0.5], kind: 'sway' });
-      // 竹节处的细枝 + 一簇簇细长竹叶（上半截每节都有，越往上越密）
-      if (s >= Math.floor(segs * 0.3)) {
-        const nx = x + lean * (y + sh), ny = y + sh, nz = z + lean * (y + sh) * 0.5;
-        for (let b = 0; b < 3 + (s >= segs - 2 ? 1 : 0); b++) {
-          const ba = r() * TAU, bl = 0.35 + r() * 0.35, tx = nx + Math.cos(ba) * bl, ty = ny + 0.12 + r() * 0.15, tz = nz + Math.sin(ba) * bl;
-          k.add(G.tube([[nx, ny, nz], [tx, ty, tz]], 0.012, 0.006, 3), grad('#6a9a34'), { kind: 'sway' });
-          const nl = Math.round(7 * LEAF_D);
-          for (let l = 0; l < nl; l++) {
-            const t = 0.25 + l / nl * 0.8, px = nx + (tx - nx) * t, py = ny + (ty - ny) * t, pz = nz + (tz - nz) * t;
-            const la = ba + (l % 2 ? 1 : -1) * (0.6 + r() * 0.5) + Math.PI / 2;
-            k.add(G.blade(0.06, 0.5 + r() * 0.22, 0.1), grad(r() < 0.3 ? '#8ac04a' : '#5fa83a', 0.7, 1.15), { at: [px, py, pz], rot: [Math.PI / 2 + 0.35 + r() * 0.6, la, 0], kind: 'foli' });
-          }
-        }
+      k.add(G.cyl(rad * 0.95, rad, sh * 0.96, 6), grad(col, 0.8, 1.1), { at: [x + lean * y, y, z + lean * y * 0.5] });
+      k.add(G.cyl(rad * 1.25, rad * 1.25, 0.05, 6), grad('#4e7a2a', 0.9, 1), { at: [x + lean * (y + sh), y + sh * 0.97, z + lean * (y + sh) * 0.5] });
+      // 竹节处的细枝叶
+      if (s >= segs - 3 && r() < 0.8) for (let l = 0; l < 9; l++) {
+        const la = r() * TAU;
+        k.add(G.blade(0.07, 0.55, 0.1), grad('#5fa83a', 0.7, 1.15), { at: [x + lean * (y + sh), y + sh, z + lean * (y + sh) * 0.5], rot: [Math.PI / 2 - 0.5 + r() * 0.4, la, 0], kind: 'plant' });
       }
     }
   }
@@ -770,7 +761,8 @@ function pavilion(v) {
   for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; k.add(G.cyl(0.1, 0.11, 2.2, 8), red, { at: [Math.cos(a) * R, 0.3, Math.sin(a) * R] }); }
   for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + TAU / 12; k.add(G.box(R * 1.0, 0.18, 0.12), red, { at: [Math.cos(a) * R * 0.87, 2.4, Math.sin(a) * R * 0.87], rot: [0, -a + Math.PI / 2, 0] }); }
   // 六角攒尖顶：向上凹的曲面 + 翘角
-  const roof = new THREE.LatheGeometry([[0, 1.5], [0.3, 1.25], [0.9, 0.7], [1.6, 0.25], [2.2, 0.0], [2.35, 0.08]].map(([x, y]) => new THREE.Vector2(x, y)), 6);
+  // 轮廓从檐口往顶点走，面才朝外（反过来会被背面剔除，从上面看不到屋顶）
+  const roof = new THREE.LatheGeometry([[2.35, 0.08], [2.2, 0.0], [1.6, 0.25], [0.9, 0.7], [0.3, 1.25], [0, 1.5]].map(([x, y]) => new THREE.Vector2(x, y)), 6);
   k.add(faceted(roof), (geo) => paint(geo, (p, n, out) => out.set(v ? '#3a7a6a' : '#5a6070').multiplyScalar((0.75 + 0.35 * n.y) * (Math.floor(Math.atan2(p.z, p.x) * 8) % 2 ? 0.92 : 1))), { at: [0, 2.45, 0] });
   for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; k.add(G.cone(0.08, 0.6, 5), grad('#3a3e48'), { at: [Math.cos(a) * 2.25, 2.5, Math.sin(a) * 2.25], rot: [Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9] }); }
   k.add(G.sph(0.18, 8, 6), grad('#e8c25a', 0.8, 1.3), { at: [0, 4.0, 0] });

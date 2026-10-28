@@ -267,7 +267,7 @@ function pineNeedleTex() {
 }
 // 树冠：在每个树冠球体里撒一片片真实叶子（带中脊折角的菱形叶），没有实心团块。
 // 叶面大致贴着球面朝外、略微下垂；法线取球面法线，越靠里的叶子越暗（假环境光遮蔽）
-export const LEAF_D = matchMedia('(pointer: coarse)').matches ? 0.7 : 1;
+const LEAF_D = matchMedia('(pointer: coarse)').matches ? 0.7 : 1;
 const _lf = { d: new THREE.Vector3(), t: new THREE.Vector3(), X: new THREE.Vector3(), Y: new THREE.Vector3(), Z: new THREE.Vector3(), q: new THREE.Vector3(), n: new THREE.Vector3() };
 export function leafCrown(parts, color, accent, seed = 1, o = {}) {
   const r = mulberry32(seed * 7 + 3), pos = [], nor = [], col = [], dens = (o.dens ?? 1) * LEAF_D;
