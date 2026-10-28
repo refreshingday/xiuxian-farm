@@ -20,6 +20,8 @@
   #title { font-family: "STKaiti", "KaiTi", serif; font-size: 24px; letter-spacing: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
   #title small { font-family: "Microsoft YaHei", sans-serif; font-size: 12px; letter-spacing: 0; color: var(--dim); margin-left: 8px; }
   #biomes { display: flex; flex-wrap: wrap; gap: 5px; max-width: 760px; }
+  #biomes button { background: rgba(14, 22, 24, .62); backdrop-filter: blur(4px); }
+  #biomes button.on { background: rgba(120, 92, 30, .85); }
   #side { position: fixed; right: 12px; top: 12px; width: 214px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
   #side .row { display: flex; flex-wrap: wrap; gap: 4px; }
   #side label { display: flex; justify-content: space-between; color: var(--dim); margin-top: 2px; }
@@ -55,7 +57,7 @@
   body.mobile.panel-open #side { transform: none; }
   body.mobile #side button { padding: 8px 10px; font-size: 13px; }
   body.mobile #side input[type=range] { height: 28px; }
-  body.mobile #stats { bottom: max(14px, env(safe-area-inset-bottom)); left: 10px; font-size: 10px; max-width: 60vw; }
+  body.mobile #stats { bottom: max(14px, env(safe-area-inset-bottom)); left: 10px; font-size: 10px; max-width: 62vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   body.mobile .lbl.row { font-size: 11px; }
   body.mobile .lbl.var { font-size: 9px; }
   body.clean #gear { opacity: .35; }
