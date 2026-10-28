@@ -180,7 +180,7 @@ const okSpawn = (x, z) => Math.hypot(x, z) > VILLAGE_R + 8 && Math.hypot(x - MIN
 world.onSpawn = (cx, cz, rng) => {
   if (g.time < 1) return;
   const x0 = cx * CHUNK, z0 = cz * CHUNK;
-  const n = Math.floor(rng() * 2 + g.nightK * 1.5 + dangerAt(x0 + 16, z0 + 16) * 0.3);
+  const n = Math.floor(1 + rng() * 2 + g.nightK * 2 + dangerAt(x0 + 16, z0 + 16) * 0.3);
   for (let i = 0; i < n; i++) {
     const x = x0 + 4 + rng() * 24, z = z0 + 4 + rng() * 24;
     if (!okSpawn(x, z) || Math.hypot(x - P.pos.x, z - P.pos.z) < 16) continue;
@@ -192,8 +192,8 @@ function ambientSpawns(dt) {
   spawnT -= dt; golemT -= dt;
   const near = enemies.list.filter((e) => e.type !== 'golem' && e.type !== 'boss' && e.pos.distanceTo(P.pos) < 35).length;
   if (spawnT <= 0) {
-    spawnT = 8 - g.nightK * 4;
-    if (near < 4 + g.nightK * 4 && !P.dead) {
+    spawnT = 4 - g.nightK * 2;
+    if (near < 7 + g.nightK * 5 && !P.dead) {
       const a = Math.random() * 6.28, r = 24 + Math.random() * 6;
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
       if (okSpawn(x, z)) enemies.spawn(Math.random() < 0.6 ? 'boar' : 'spider', x, z, Math.floor(dangerAt(x, z)));
@@ -201,9 +201,9 @@ function ambientSpawns(dt) {
   }
   const dm = Math.hypot(P.pos.x - MINE.x, P.pos.z - MINE.y);
   if (golemT <= 0 && dm < MINE_R + 25) {
-    golemT = 12;
+    golemT = 7;
     const golems = enemies.list.filter((e) => e.type === 'golem').length;
-    if (golems < 6) {
+    if (golems < 9) {
       for (let k = 0; k < 10; k++) {
         const a = Math.random() * 6.28, r = 3 + Math.random() * (MINE_R - 6);
         const x = MINE.x + Math.cos(a) * r, z = MINE.y + Math.sin(a) * r;
