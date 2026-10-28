@@ -24,7 +24,7 @@ function grassy(base, dark, light, x, z, seed) {
 export const BIOMES = [
   // ================================================================ 春野
   {
-    id: 'meadow', name: '春野农庄', sub: '草地 · 果树 · 农田 · 小池塘',
+    id: 'meadow', name: '青竹村', sub: '新手村 · 灵田 · 果树 · 荷塘 · 铁矿', gdd: true,
     terrain(x, z) {
       const pond = Math.hypot(x - 9, z + 7) - 4.2 - (vnoise(x * 0.5, z * 0.5, 2) - 0.5) * 1.6;
       let h = (n2(x, z, 1, 0.08) - 0.5) * 0.6 + smooth(14, 24, Math.hypot(x, z)) * 1.2;
@@ -60,13 +60,14 @@ export const BIOMES = [
       { id: 'flower', n: 70, k: ['grass'], s: [0.8, 1.3], gap: 0.5 },
       { id: 'grass', n: 260, k: ['grass'], s: [0.7, 1.4], gap: 0.25 },
       { id: 'reeds', n: 8, k: ['sand'], s: [0.7, 1], gap: 0.5 },
+      { id: 'vein', n: 3, k: ['grass'], r: [14, 22], pick: [0], s: [0.8, 1.1], gap: 2 },
       { id: 'lily', n: 5, water: true, s: [0.8, 1.2], gap: 1 },
     ],
-    catalog: ['tree', 'fruitTree', 'peach', 'bush', 'berryBush', 'rock', 'flower', 'grass', 'mushroom', 'stump', 'fence', 'crop', 'scarecrow', 'well'],
+    catalog: ['tree', 'fruitTree', 'peach', 'bush', 'berryBush', 'rock', 'flower', 'grass', 'mushroom', 'stump', 'fence', 'crop', 'scarecrow', 'well', 'vein'],
   },
   // ================================================================ 竹林村落
   {
-    id: 'bamboo', name: '竹林小径', sub: '竹海 · 石灯笼 · 小溪拱桥 · 杂物',
+    id: 'bamboo', name: '竹海', sub: '东北扇区 · 副矿 青铜 · 石灯笼 · 小溪拱桥', gdd: true,
     terrain(x, z) {
       const sx = Math.sin(z * 0.2) * 2.5 + 3;
       const stream = Math.abs(x - sx) - 1.6 - (vnoise(z * 0.4, 1, 3) - 0.5);
@@ -105,12 +106,13 @@ export const BIOMES = [
       { id: 'grass', n: 220, k: ['grass'], s: [0.8, 1.5], gap: 0.25 },
       { id: 'reeds', n: 10, k: ['pebble'], s: [0.6, 0.9], gap: 0.6 },
       { id: 'mushroom', n: 8, k: ['grass'], s: [0.8, 1.2], gap: 0.4, near: 'bamboo' },
+      { id: 'vein', n: 4, k: ['grass'], r: [12, 22], pick: [2], s: [0.8, 1.1], gap: 2 },
     ],
     catalog: ['bamboo', 'stoneLan', 'lanPost', 'barrel', 'crate', 'jar', 'sign', 'steps', 'bridge', 'fence'],
   },
   // ================================================================ 湖畔沙滩
   {
-    id: 'lake', name: '碧水湖畔', sub: '沙滩 · 椰林 · 码头 · 荷塘',
+    id: 'lake', name: '碧水湖畔', sub: '参考图场景（world_map 未列出）· 沙滩 · 椰林 · 码头',
     terrain(x, z) {
       const shore = z + 2 + Math.sin(x * 0.25) * 2.5 + (vnoise(x * 0.3, 0, 4) - 0.5) * 2;
       let h = shore > 0 ? -Math.min(1.4, shore * 0.22) : (n2(x, z, 3, 0.1) - 0.5) * 0.4 + smooth(-2, -12, shore) * 0.6 + smooth(16, 24, Math.hypot(x, z)) * 1;
@@ -148,7 +150,7 @@ export const BIOMES = [
   },
   // ================================================================ 赤枫林
   {
-    id: 'autumn', name: '赤枫林', sub: '枫树 · 银杏 · 落叶 · 南瓜地',
+    id: 'autumn', name: '赤枫林', sub: '赤枫狼王领地 · 枫树 · 银杏 · 落叶', gdd: true,
     terrain(x, z) {
       const pond = Math.hypot(x + 7, z - 6) - 3.2 - (vnoise(x * 0.6, z * 0.6, 7) - 0.5) * 1.4;
       let h = (n2(x, z, 4, 0.08) - 0.5) * 0.7 + smooth(13, 24, Math.hypot(x, z)) * 1.4;
@@ -188,7 +190,7 @@ export const BIOMES = [
   },
   // ================================================================ 雪原
   {
-    id: 'winter', name: '雪原冰湖', sub: '雪松 · 冰湖 · 冰晶 · 雪人',
+    id: 'winter', name: '雪峰', sub: '北扇区 · 副矿 寒玉 · 雪松 · 冰湖 · 冰晶', gdd: true,
     terrain(x, z) {
       const lake = Math.hypot(x - 3, z - 2) - 5.5 - (vnoise(x * 0.4, z * 0.4, 8) - 0.5) * 2.4;
       let h = (n2(x, z, 5, 0.08) - 0.5) * 0.7 + smooth(12, 24, Math.hypot(x, z)) * 1.8;
@@ -213,13 +215,14 @@ export const BIOMES = [
       { id: 'drift', n: 16, k: ['snow'], s: [0.8, 1.6], gap: 1.5 },
       { id: 'ice', n: 6, k: ['shore', 'snow'], s: [0.7, 1.2], gap: 2 },
       { id: 'bareBush', n: 8, k: ['snow'], s: [0.4, 0.6], gap: 1.5 },
+      { id: 'vein', n: 5, k: ['snow'], pick: [1], s: [0.8, 1.2], gap: 2 },
       { id: 'stoneLan', n: 2, list: [[-8, -8, 0.3], [-1, -9.4, 0]], pick: [1, 1] },
     ],
     catalog: ['snowPine', 'pineTree', 'snowRock', 'drift', 'ice', 'snowman', 'bareBush'],
   },
   // ================================================================ 矿洞
   {
-    id: 'cave', name: '玄晶矿洞', sub: '灵晶 · 矿车 · 石笋 · 火把（暗光测试）',
+    id: 'cave', name: '玄晶矿洞', sub: '唯一地点 · 灯火机制 · 灵晶 · 矿车 · 石笋', gdd: true,
     terrain(x, z) {
       const r = Math.hypot(x, z), wall = smooth(15, 21, r + (vnoise(Math.atan2(z, x) * 3, 0, 9) - 0.5) * 5);
       const pool = Math.hypot(x + 6, z + 5) - 2.6 - (vnoise(x * 0.6, z * 0.6, 3) - 0.5);
@@ -249,12 +252,13 @@ export const BIOMES = [
       { id: 'stalag', n: 18, k: ['rock', 'wall'], s: [0.8, 1.6], gap: 1.8 },
       { id: 'caveRock', n: 16, k: ['rock', 'wall'], s: [0.6, 1.8], gap: 1.5 },
       { id: 'glowShroom', n: 18, k: ['rock'], s: [0.8, 1.4], gap: 0.6 },
+      { id: 'vein', n: 5, k: ['rock'], pick: [0], s: [0.8, 1.2], gap: 2 },
     ],
     catalog: ['crystal', 'ore', 'stalag', 'cart', 'beam', 'torch', 'glowShroom', 'caveRock'],
   },
   // ================================================================ 仙山
   {
-    id: 'xian', name: '仙山灵境', sub: '石峰 · 迎客松 · 亭台 · 灵草 · 莲池',
+    id: 'xian', name: '仙山', sub: '青竹村北的石峰群 · 迎客松 · 亭台 · 莲池', gdd: true,
     terrain(x, z) {
       const pond = Math.hypot(x + 2, z - 6) - 4.5 - Math.sin(Math.atan2(z - 6, x + 2) * 3) * 0.8;
       let h = (n2(x, z, 8, 0.1) - 0.5) * 0.5 + smooth(14, 24, Math.hypot(x, z)) * 1.4;
@@ -295,7 +299,7 @@ export const BIOMES = [
   },
   // ================================================================ 赤岩荒原
   {
-    id: 'volcano', name: '赤岩荒原', sub: '熔岩 · 黑曜石 · 枯树 · 兽骨',
+    id: 'volcano', name: '火山', sub: '南扇区 · 副矿 火铜 · 熔岩 · 黑曜石 · 地火', gdd: true,
     terrain(x, z) {
       const lava = Math.min(Math.hypot(x - 6, z + 4) - 3.5, seg(x, z, 6, -4, -10, 10) - 1.1) - (vnoise(x * 0.5, z * 0.5, 2) - 0.5) * 1.2;
       let h = (n2(x, z, 9, 0.1) - 0.5) * 0.7 + smooth(13, 24, Math.hypot(x, z)) * 2.2;
@@ -320,7 +324,202 @@ export const BIOMES = [
       { id: 'bones', n: 3, k: ['ash', 'red'], s: [0.9, 1.2], gap: 4 },
       { id: 'fireFlower', n: 14, k: ['ash'], s: [0.9, 1.3], gap: 0.8 },
       { id: 'ashGrass', n: 90, k: ['ash', 'red'], s: [0.7, 1.2], gap: 0.4 },
+      { id: 'vein', n: 5, k: ['ash', 'red'], pick: [4], s: [0.8, 1.2], gap: 2 },
     ],
     catalog: ['lavaRock', 'redRock', 'obsidian', 'deadTree', 'bones', 'fireFlower', 'vent', 'ashGrass'],
   },
+  // ================================================================ 沼泽
+  {
+    id: 'swamp', name: '沼泽', sub: '东南扇区 · 副矿 毒晶 · 气根树 · 毒菇 · 浑水', gdd: true,
+    terrain(x, z) {
+      const n = n2(x, z, 21, 0.09), pool = n - 0.43 - (vnoise(x * 0.5, z * 0.5, 3) - 0.5) * 0.12;
+      let h = (n2(x, z, 22, 0.15) - 0.5) * 0.3 + smooth(15, 24, Math.hypot(x, z)) * 1.0;
+      if (pool < 0) h = Math.max(-0.9, pool * 4 - 0.2);
+      return { h, k: pool < 0.035 ? 'mud' : n2(x, z, 23, 0.2) > 0.56 ? 'moss' : 'grass' };
+    },
+    color(x, z, t) {
+      const n = vnoise(x * 6, z * 6, 21);
+      if (t.k === 'mud') return mix([92, 80, 56], [70, 62, 46], n);
+      if (t.k === 'moss') return mix([100, 134, 54], [78, 110, 44], n);
+      return mix(mix([88, 118, 62], [66, 94, 50], smooth(0.4, 0.7, n2(x, z, 24, 0.3))), [110, 100, 70], vnoise(x * 0.7, z * 0.7, 5) * 0.3);
+    },
+    water: { level: -0.1, mode: 'water', shallow: '#7a8a4a', deep: '#2a3a28', foam: '#c8d0a0' },
+    light: { sun: '#e8f0c8', sunI: 1.9, sky: '#b8c8a0', ground: '#4a5030', hemiI: 1.05, fog: '#a8b890', top: '#7a9a80', bottom: '#c0ccaa', exposure: 1.05, bloom: 0.6, fogNear: 26, fogFar: 72, warm: 0.6 },
+    particles: [{ type: 'motes', n: 110, color: '#c8ff6a', size: 5, glow: true }, { type: 'fireflies', n: 60, color: '#e8ff9a', size: 6, night: true }],
+    scatter: [
+      { id: 'swampTree', n: 14, k: ['grass', 'moss'], r: [4, 22], s: [0.9, 1.3], gap: 3.4 },
+      { id: 'deadTree', n: 4, k: ['grass', 'moss'], s: [0.8, 1.1], gap: 3 },
+      { id: 'stump', n: 5, k: ['grass', 'moss', 'mud'], pick: [1, 2], s: [0.8, 1.1], gap: 1.6 },
+      { id: 'bogRock', n: 10, k: ['moss', 'mud'], s: [0.5, 1.2], gap: 1.2 },
+      { id: 'vein', n: 5, k: ['moss', 'grass'], pick: [3], s: [0.8, 1.2], gap: 2 },
+      { id: 'bogShroom', n: 18, k: ['grass', 'moss'], s: [0.9, 1.4], gap: 0.5, near: 'swampTree' },
+      { id: 'bogPlant', n: 22, k: ['mud', 'moss'], s: [0.8, 1.3], gap: 0.7 },
+      { id: 'reeds', n: 30, k: ['mud'], s: [0.7, 1.1], gap: 0.6 },
+      { id: 'lily', n: 18, water: true, s: [0.8, 1.2], gap: 1.1 },
+      { id: 'swampGrass', n: 170, k: ['grass', 'moss'], s: [0.8, 1.3], gap: 0.25 },
+    ],
+    catalog: ['swampTree', 'bogPlant', 'bogShroom', 'bogRock', 'swampGrass', 'reeds', 'lily', 'vein'],
+  },
+  // ================================================================ 沙漠遗迹
+  {
+    id: 'desert', name: '沙漠遗迹', sub: '西南扇区 · 副矿 沙金 · 石柱 · 残墙 · 石像 · 绿洲', gdd: true,
+    terrain(x, z) {
+      const plaza = Math.hypot(x + 3, z + 3) - 6.5 - (vnoise(x * 0.4, z * 0.4, 7) - 0.5) * 2;
+      const oasis = Math.hypot(x - 10, z - 9) - 3.2 - (vnoise(x * 0.6, z * 0.6, 2) - 0.5) * 1.2;
+      const dune = (Math.sin(x * 0.32 + Math.sin(z * 0.18) * 2.2) * 0.5 + 0.5) * 0.9 + (n2(x, z, 31, 0.1) - 0.5) * 0.4;
+      let h = dune * smooth(-1, 4, plaza) * smooth(0, 3, oasis) + smooth(15, 24, Math.hypot(x, z)) * 1.2;
+      if (oasis < 0) h = Math.max(-0.9, oasis * 0.45 - 0.25);
+      return { h, k: oasis < 1.6 ? 'oasis' : plaza < 0 ? 'tiles' : 'sand' };
+    },
+    color(x, z, t) {
+      const n = vnoise(x * 6, z * 6, 31), rip = Math.sin(x * 2.6 + z * 1.1 + vnoise(x * 0.5, z * 0.5, 4) * 4) * 0.5 + 0.5;
+      const sand = mix([236, 204, 144], [214, 178, 118], rip * 0.55 + n * 0.2);
+      if (t.k === 'oasis') return mix([118, 170, 70], [214, 196, 130], smooth(0.4, 1.6, Math.hypot(x - 10, z - 9) - 3.2) * 0.8);
+      if (t.k === 'tiles') {
+        const cx = Math.floor(x * 0.9), cz = Math.floor(z * 0.9), fx = x * 0.9 - cx, fz = z * 0.9 - cz, v = 0.86 + vnoise(cx, cz, 3) * 0.18;
+        const tile = fx < 0.07 || fz < 0.07 ? [150, 126, 92] : [206 * v, 180 * v, 134 * v];
+        return mix(tile, sand, smooth(0.45, 0.7, n2(x, z, 32, 0.25)));
+      }
+      return sand;
+    },
+    water: { level: -0.1, mode: 'water', shallow: '#5ad0c0', deep: '#1a7a90', foam: '#ffffff' },
+    light: { sun: '#fff0d0', sunI: 3.0, sky: '#f0e0c0', ground: '#c8a070', hemiI: 1.1, fog: '#f0dcb8', top: '#6aa8e8', bottom: '#f4e4c8', exposure: 1.08, bloom: 0.45, warm: 1.2, fogNear: 50, fogFar: 120 },
+    particles: [{ type: 'ash', n: 160, color: '#e8d0a0', size: 3 }],
+    scatter: [
+      { id: 'pillar', n: 8, list: [[-8, -6, 0], [-8, 0, 0], [2, -6, 0.2], [2, 0, 0], [-3, -9.5, 0.3], [-10.5, -3, 1.2], [4.5, -3, 0.6], [-3, 3.6, 0]], pick: [0, 1, 0, 1, 3, 2, 2, 0] },
+      { id: 'ruinWall', n: 3, list: [[-3, -10.8, 0], [-11.5, 2, 1.2], [5, 3.5, -0.6]], pick: [0, 1, 1] },
+      { id: 'ruinWall', n: 1, list: [[-3, -3, 0]], pick: [2] },
+      { id: 'statue', n: 2, list: [[9, -8, -0.5], [-14, -10, 0.8]] },
+      { id: 'jar', n: 4, list: [[-6.5, -1.5, 0], [-6, -2.2, 0], [0.5, -7.5, 0], [-1.5, 1, 0]] },
+      { id: 'palm', n: 5, k: ['oasis'], s: [0.85, 1.1], gap: 2.6 },
+      { id: 'reeds', n: 8, k: ['oasis'], s: [0.6, 0.9], gap: 0.6 },
+      { id: 'cactus', n: 16, k: ['sand'], r: [7, 22], s: [0.8, 1.3], gap: 2 },
+      { id: 'sandRock', n: 14, k: ['sand'], s: [0.5, 1.8], gap: 1.6 },
+      { id: 'vein', n: 5, k: ['sand'], pick: [5], s: [0.8, 1.2], gap: 2 },
+      { id: 'bones', n: 2, k: ['sand'], s: [0.9, 1.2], gap: 4 },
+      { id: 'dryShrub', n: 8, k: ['sand'], s: [0.35, 0.55], gap: 1.6 },
+      { id: 'desertGrass', n: 70, k: ['sand', 'oasis'], s: [0.7, 1.2], gap: 0.5 },
+    ],
+    catalog: ['pillar', 'ruinWall', 'statue', 'cactus', 'sandRock', 'dryShrub', 'desertGrass', 'jar', 'vein'],
+  },
+  // ================================================================ 古战场
+  {
+    id: 'battlefield', name: '古战场', sub: '西北扇区 · 副矿 阴魂石 · 残剑 · 残旗 · 坟冢 · 鬼火', gdd: true,
+    terrain(x, z) {
+      let h = (n2(x, z, 41, 0.1) - 0.5) * 0.6 + smooth(14, 24, Math.hypot(x, z)) * 1.3;
+      const trench = Math.abs(z - 4 - Math.sin(x * 0.3) * 2) - 0.9;
+      if (trench < 0) h += trench * 0.5;
+      let crater = 9;
+      for (const [cx, cz, cr] of [[-8, -6, 2.2], [7, -9, 2.8], [10, 9, 1.8], [-12, 10, 2.4]]) crater = Math.min(crater, Math.hypot(x - cx, z - cz) - cr);
+      if (crater < 0) h = Math.min(h, crater * 0.35 - 0.1); else if (crater < 0.8) h += (0.8 - crater) * 0.25;
+      const road = Math.abs(x + 2 - Math.sin(z * 0.15) * 3) - 1.0;
+      return { h, k: crater < 0.6 || trench < 0.2 ? 'mud' : road < 0 ? 'road' : n2(x, z, 42, 0.18) > 0.58 ? 'grass' : 'dirt' };
+    },
+    color(x, z, t) {
+      const n = vnoise(x * 6, z * 6, 41);
+      if (t.k === 'mud') return mix([70, 60, 54], [52, 46, 44], n);
+      if (t.k === 'road') return mix([132, 118, 98], [108, 96, 82], vnoise(x * 2, z * 2, 5) * 0.7);
+      if (t.k === 'grass') return mix([112, 112, 70], [90, 92, 58], n);
+      let c = mix([104, 92, 80], [82, 72, 64], smooth(0.4, 0.7, n2(x, z, 43, 0.3)));
+      if (vnoise(x * 1.5, z * 1.5, 44) > 0.78) c = mix(c, [44, 38, 38], 0.7); // 焦痕
+      return c;
+    },
+    water: { level: -0.12, mode: 'water', shallow: '#6a6a5a', deep: '#2a2a2a', foam: '#a8a898' },
+    light: { sun: '#c8c8d8', sunI: 1.5, sky: '#9aa0b0', ground: '#4a4440', hemiI: 1.15, fog: '#8a8a94', top: '#5a6070', bottom: '#a0a4ac', exposure: 1.05, bloom: 0.65, fogNear: 26, fogFar: 72, warm: 0.3 },
+    particles: [{ type: 'motes', n: 90, color: '#8ab0ff', size: 6, glow: true }, { type: 'ash', n: 110, color: '#3a3434', size: 3 }],
+    scatter: [
+      { id: 'wreck', n: 3, k: ['dirt', 'grass'], pick: [0, 1], s: [0.9, 1.1], gap: 4 },
+      { id: 'banner', n: 9, k: ['dirt', 'grass', 'road'], s: [0.9, 1.1], gap: 2.4 },
+      { id: 'grave', n: 9, k: ['dirt', 'grass'], s: [0.8, 1.1], gap: 2.4 },
+      { id: 'sword', n: 34, k: ['dirt', 'grass', 'mud'], s: [0.8, 1.2], gap: 1.1 },
+      { id: 'shield', n: 16, k: ['dirt', 'grass', 'mud'], s: [0.9, 1.2], gap: 1 },
+      { id: 'bones', n: 6, k: ['dirt', 'mud'], s: [0.8, 1.1], gap: 3 },
+      { id: 'deadTree', n: 9, k: ['dirt', 'grass'], r: [8, 22], s: [0.9, 1.3], gap: 3 },
+      { id: 'caveRock', n: 8, k: ['dirt', 'grass'], s: [0.5, 1.2], gap: 1.4 },
+      { id: 'vein', n: 5, k: ['dirt', 'grass'], pick: [6], s: [0.8, 1.2], gap: 2 },
+      { id: 'ashGrass', n: 130, k: ['grass', 'dirt'], s: [0.8, 1.3], gap: 0.35 },
+    ],
+    catalog: ['sword', 'banner', 'shield', 'grave', 'wreck', 'bones', 'deadTree', 'vein'],
+  },
+  // ================================================================ 百花谷
+  {
+    id: 'flowers', name: '百花谷', sub: '唯一地点 · 花期 / 百花会 · 紫藤 · 花圃 · 晒药架', gdd: true,
+    terrain(x, z) {
+      const sx = Math.sin(z * 0.17) * 3 - 1;
+      const stream = Math.abs(x - sx) - 1.3 - (vnoise(z * 0.4, 2, 6) - 0.5) * 0.6;
+      let h = (n2(x, z, 51, 0.1) - 0.5) * 0.4 + smooth(9, 24, Math.hypot(x, z)) * 2.4;
+      if (stream < 0) h = Math.max(-0.8, stream * 0.6 - 0.15);
+      const path = Math.abs(z + 1 - Math.sin(x * 0.2) * 1.5) - 0.8;
+      return { h, k: stream < 0.45 ? 'pebble' : path < 0 ? 'path' : n2(x, z, 52, 0.16) > 0.55 ? 'bloom' : 'grass' };
+    },
+    color(x, z, t) {
+      const n = vnoise(x * 6, z * 6, 51);
+      if (t.k === 'pebble') return mix([196, 190, 172], [156, 152, 140], vnoise(x * 3, z * 3, 6));
+      if (t.k === 'path') return mix([206, 196, 176], [176, 168, 150], n);
+      const c = grassy([116, 196, 90], [86, 166, 74], [170, 220, 110], x, z, 51);
+      // 地面花斑：越进花区越密
+      const dens = t.k === 'bloom' ? 0.86 : 0.95, f = vnoise(x * 9, z * 9, 53);
+      if (f > dens) { const pick = Math.floor(vnoise(x * 2.3, z * 2.3, 54) * 4); return [[255, 170, 200], [255, 250, 245], [255, 220, 90], [190, 160, 250]][pick]; }
+      return c;
+    },
+    water: { level: -0.12, mode: 'water', shallow: '#8ae8e0', deep: '#3a9ac0', foam: '#ffffff' },
+    light: { sun: '#fff4e0', sunI: 2.8, sky: '#e8f4ff', ground: '#a0b070', hemiI: 1.2, fog: '#f0f0ec', top: '#a8d0f8', bottom: '#f4f4f0', exposure: 1.12, bloom: 0.55 },
+    particles: [{ type: 'petals', n: 160, color: '#ffb8d8', size: 5 }, { type: 'petals', n: 70, color: '#ffffff', size: 4 }, { type: 'motes', n: 40, color: '#fff4b0', size: 4 }],
+    scatter: [
+      { id: 'pavilion', n: 1, list: [[-9, -6, 0.2]] },
+      { id: 'bridge', n: 1, list: [[-1.2, -1.2, Math.PI / 2 - 0.15]], y: 0 },
+      { id: 'herbRack', n: 2, list: [[-12, 2, 0.3], [-7, 3.4, -0.2]], pick: [0, 1] },
+      { id: 'jar', n: 3, list: [[-10, 3.5, 0], [-9.4, 4.1, 0], [-13.4, 0.6, 0]] },
+      { id: 'wisteria', n: 6, k: ['grass', 'bloom'], r: [5, 18], s: [0.9, 1.2], gap: 3.4 },
+      { id: 'flowerTree', n: 8, k: ['grass', 'bloom'], r: [6, 22], s: [0.9, 1.2], gap: 3 },
+      { id: 'peach', n: 3, k: ['grass'], r: [10, 22], s: [0.9, 1.1], gap: 3 },
+      { id: 'flowerBed', n: 22, k: ['bloom', 'grass'], s: [0.8, 1.3], gap: 1.6 },
+      { id: 'herb', n: 10, k: ['grass', 'bloom'], s: [0.9, 1.2], gap: 0.8 },
+      { id: 'flower', n: 130, k: ['bloom', 'grass'], s: [0.8, 1.3], gap: 0.45 },
+      { id: 'bush', n: 8, k: ['grass'], s: [0.7, 1.1], gap: 1.2 },
+      { id: 'lily', n: 6, water: true, s: [0.7, 1.1], gap: 1 },
+      { id: 'reeds', n: 8, k: ['pebble'], s: [0.6, 0.9], gap: 0.6 },
+      { id: 'grass', n: 160, k: ['grass', 'bloom'], s: [0.8, 1.3], gap: 0.25 },
+    ],
+    catalog: ['wisteria', 'flowerTree', 'flowerBed', 'herbRack', 'flower', 'herb'],
+  },
+  // ================================================================ 天劫峰
+  {
+    id: 'tribulation', name: '天劫峰', sub: '唯一地点 · 化神 · 渡劫法阵 · 浮空石 · 雷暴 · 仙晶', gdd: true,
+    terrain(x, z) {
+      const plat = Math.hypot(x, z + 2) - 4.2;
+      let h = (n2(x, z, 61, 0.12) - 0.5) * 0.9 + Math.abs(vnoise(x * 0.25, z * 0.25, 62) - 0.5) * 1.2 + smooth(12, 24, Math.hypot(x, z)) * 2.2;
+      if (plat < 1.5) h = h * smooth(-0.5, 1.5, plat) + 0.1 * (1 - smooth(-0.5, 1.5, plat));
+      const pud = n2(x, z, 63, 0.2) - 0.32;
+      if (pud < 0 && plat > 2) h = Math.min(h, pud * 3 - 0.3);
+      return { h, k: plat < 0.5 ? 'plaza' : pud < 0.05 && plat > 2 ? 'wet' : n2(x, z, 64, 0.2) > 0.6 ? 'moss' : vnoise(x * 1.2, z * 1.2, 65) > 0.8 ? 'scorch' : 'rock' };
+    },
+    color(x, z, t) {
+      const n = vnoise(x * 6, z * 6, 61);
+      if (t.k === 'plaza') return mix([120, 118, 130], [96, 94, 106], n);
+      if (t.k === 'wet') return mix([60, 60, 74], [44, 44, 56], n);
+      if (t.k === 'moss') return mix([72, 98, 76], [56, 80, 62], n);
+      if (t.k === 'scorch') return mix([40, 36, 44], [70, 50, 90], vnoise(x * 5, z * 5, 66) > 0.7 ? 1 : 0);
+      return mix([96, 92, 106], [70, 66, 80], smooth(0.4, 0.7, n2(x, z, 67, 0.35)));
+    },
+    water: { level: -0.1, mode: 'water', shallow: '#5a6a8a', deep: '#22283e', foam: '#a8b4d8' },
+    light: { sun: '#a8b0ff', sunI: 0.9, sky: '#7a7aa8', ground: '#2a2834', hemiI: 1.25, fog: '#3a3a52', top: '#14142a', bottom: '#46466a', exposure: 1.15, bloom: 0.8, fogNear: 28, fogFar: 76, warm: 0, fx: 'storm' },
+    particles: [{ type: 'rain', n: 1000, color: '#b8c4ff', size: 6 }, { type: 'motes', n: 60, color: '#8ad0ff', size: 5, glow: true }],
+    scatter: [
+      { id: 'formation', n: 1, list: [[0, -2, 0]], pick: [0] },
+      { id: 'stele', n: 3, list: [[-7, -8, 0.5], [7, -7, -0.4], [0, -9.5, 0]], pick: [0, 0, 2] },
+      { id: 'floatRock', n: 9, cloud: true, s: [0.8, 1.4] },
+      { id: 'stormPine', n: 10, k: ['rock', 'moss'], r: [7, 22], s: [0.9, 1.3], gap: 3 },
+      { id: 'bonsai', n: 3, k: ['moss'], r: [8, 22], s: [0.9, 1.1], gap: 3 },
+      { id: 'crystal', n: 8, k: ['rock', 'scorch'], pick: [1, 0], s: [0.8, 1.4], gap: 2.2 },
+      { id: 'vein', n: 5, k: ['rock', 'moss'], pick: [7], s: [0.8, 1.2], gap: 2 },
+      { id: 'caveRock', n: 14, k: ['rock', 'moss', 'scorch'], s: [0.5, 1.6], gap: 1.4 },
+      { id: 'ashGrass', n: 70, k: ['moss', 'rock'], s: [0.7, 1.1], gap: 0.4 },
+    ],
+    catalog: ['formation', 'floatRock', 'stormPine', 'stele', 'crystal', 'vein'],
+  },
 ];
+
+// 按 world_map.json 的顺序排：村子 → 近处 → 各扇区 → 唯一地点，参考图场景放最后
+const ORDER = ['meadow', 'xian', 'bamboo', 'autumn', 'cave', 'flowers', 'winter', 'swamp', 'volcano', 'desert', 'battlefield', 'tribulation', 'lake'];
+BIOMES.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));

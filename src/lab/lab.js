@@ -7,6 +7,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
 import { createChibi, animChibi } from '../chibi.js';
+import { TouchControls } from '../touch.js';
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
 import { BIOMES, R } from './biomes.js';
@@ -276,6 +277,7 @@ function placeAll(b, hAt) {
   };
   for (const rule of b.scatter) {
     const A = ASSETS[rule.id], gap = rule.gap ?? 1;
+    const variant = () => (rule.pick ? rule.pick[Math.floor(rng() * rule.pick.length)] : Math.floor(rng() * A.n));
     if (rule.list) {
       rule.list.forEach(([x, z, rot], i) => {
         const v = rule.pick ? rule.pick[i % rule.pick.length] : Math.floor(rng() * A.n);
@@ -299,7 +301,7 @@ function placeAll(b, hAt) {
         const a = rng() * Math.PI * 2, r = 4 + rng() * (R - 4);
         x = Math.cos(a) * r; z = Math.sin(a) * r;
         const o = { x, z, y: 6 + rng() * 5, rot: rng() * 6, s: lerp(rule.s[0], rule.s[1], rng()), bob: rng() * 6 };
-        add(rule.id, Math.floor(rng() * A.n), o); placed++; continue;
+        add(rule.id, variant(), o); placed++; continue;
       }
       if (rule.near) {
         const ref = taken.filter((t) => t[3] === rule.near);
@@ -321,7 +323,7 @@ function placeAll(b, hAt) {
       if (!free(x, z, gap * s * 0.5)) continue;
       const o = { x, z, y: rule.water ? level + 0.01 : h - 0.03, rot: rng() * Math.PI * 2, s, sy: s * (0.9 + rng() * 0.2) };
       if (rule.float) o.bob = rng() * 6;
-      add(rule.id, Math.floor(rng() * A.n), o);
+      add(rule.id, variant(), o);
       taken.push([x, z, gap * s * 0.5, rule.id]);
       placed++;
     }
@@ -424,6 +426,7 @@ const PT = {
   snow: { vy: -1.2, sway: 0.8, h: 14, shape: 0 }, leaves: { vy: -0.9, sway: 1.4, h: 12, shape: 1 }, petals: { vy: -0.6, sway: 1.6, h: 10, shape: 1 },
   fireflies: { vy: 0.15, sway: 1.2, h: 3, shape: 2, blink: 1 }, motes: { vy: 0.25, sway: 0.9, h: 7, shape: 2 },
   embers: { vy: 1.6, sway: 0.7, h: 10, shape: 2, flick: 1 }, ash: { vy: -0.4, sway: 1.2, h: 10, shape: 0 },
+  rain: { vy: -16, sway: 0.15, h: 16, shape: 3 },
 };
 function particles(cfg, area = R) {
   const T = PT[cfg.type], n = MOBILE ? Math.ceil(cfg.n * 0.5) : cfg.n, rnd = new Float32Array(n * 4), pos = new Float32Array(n * 3);
@@ -456,7 +459,8 @@ function particles(cfg, area = R) {
         vec2 q = gl_PointCoord - 0.5; float a;
         if (uShape < 0.5) a = step(max(abs(q.x), abs(q.y)), 0.32);
         else if (uShape < 1.5) { float c = cos(vRot), s = sin(vRot); q = mat2(c, s, -s, c) * q; a = step(abs(q.x) / 0.42 + abs(q.y) / 0.22, 1.0); }
-        else a = smoothstep(0.5, 0.0, length(q));
+        else if (uShape < 2.5) a = smoothstep(0.5, 0.0, length(q));
+        else a = step(abs(q.x + q.y * 0.15), 0.035) * 0.55; // 雨丝
         gl_FragColor = vec4(uColor * (uShape > 0.5 && uShape < 1.5 ? 0.8 + 0.4 * step(0.0, q.y) : 1.0), a * vA * uAlpha);
       }`,
   });
@@ -589,6 +593,7 @@ function updateLights(time) {
 
 // ---------- 开关 ----------
 function applyToggles() {
+  document.body.classList.toggle('noWalk', S.mode !== 'scene' || !S.chibi);
   root.traverse((o) => { if (o.userData.isLine) o.visible = S.outline; });
   sun.castShadow = S.shadows;
   bloom.enabled = S.bloom; grade.enabled = S.grade;
@@ -629,7 +634,7 @@ function setupUI() {
   renderer.domElement.addEventListener('pointerdown', () => document.body.classList.remove('panel-open'));
   addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
-    const n = +e.key; if (n >= 1 && n <= BIOMES.length) { S.biome = n - 1; if (S.mode === 'all') S.mode = 'catalog'; save(); rebuild(true); }
+    const n = e.key === '0' ? 10 : +e.key; if (n >= 1 && n <= BIOMES.length) { S.biome = n - 1; if (S.mode === 'all') S.mode = 'catalog'; save(); rebuild(true); }
     if (e.key === 'c' || e.key === 'C') { S.mode = S.mode === 'scene' ? 'catalog' : 'scene'; save(); rebuild(true); }
     if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
     if (e.key === 'r' || e.key === 'R') { S.seed++; save(); rebuild(false); }
@@ -663,6 +668,73 @@ async function rebuild(reframe) {
   document.body.classList.remove('busy'); building = false;
 }
 
+// ======================================================================
+// 行走：手机左下虚拟摇杆（与主游戏同一套 touch.js），电脑 WASD / 方向键；镜头跟随
+// ======================================================================
+const touch = new TouchControls();
+const keys = new Set();
+addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT') keys.add(e.code); });
+addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3();
+let walkYaw = 0, moveK = 0;
+function walk(dt) {
+  if (!chibi || !chibi.root.visible) return;
+  let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+  let iy = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
+  if (touch.on && (touch.stick.x || touch.stick.y)) { ix = touch.stick.x; iy = touch.stick.y; }
+  const mag = Math.min(1, Math.hypot(ix, iy));
+  moveK = lerp(moveK, mag, 1 - Math.exp(-10 * dt));
+  const P = chibi.root.position;
+  if (mag > 0.01) {
+    // 相对镜头方向：前 = 镜头看向的水平方向
+    _f.subVectors(controls.target, camera.position).setY(0).normalize();
+    _r.set(-_f.z, 0, _f.x);
+    _d.copy(_r).multiplyScalar(ix).addScaledVector(_f, iy).normalize();
+    const sp = 5 * mag * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
+    const b = BIOMES[S.biome], deep = b.water ? b.water.level - 0.3 : -99;
+    // 不走出小岛、不走进深水
+    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > deep) {
+      const dx = nx - P.x, dz = nz - P.z;
+      P.x = nx; P.z = nz;
+      camera.position.x += dx; camera.position.z += dz;
+      controls.target.x += dx; controls.target.z += dz;
+    }
+    walkYaw = Math.atan2(_d.x, _d.z);
+  }
+  const y = hAtCur(P.x, P.z), dy = y - P.y;
+  P.y = y; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
+  chibi.root.rotation.y += Math.atan2(Math.sin(walkYaw - chibi.root.rotation.y), Math.cos(walkYaw - chibi.root.rotation.y)) * (1 - Math.exp(-12 * dt));
+  animChibi(chibi, dt, { move: moveK, attack: -1, cast: 0, work: 0 });
+}
+
+// ======================================================================
+// 天劫峰：雷暴（闪光 + 随机落雷）
+// ======================================================================
+const boltMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 3.4, 4.5), transparent: true, depthWrite: false, fog: false });
+let bolt = null, boltT = 0, nextStrike = 2, flash = 0;
+function storm(dt) {
+  const on = S.mode === 'scene' && BIOMES[S.biome].light.fx === 'storm';
+  if (!on) { if (bolt) { scene.remove(bolt); bolt = null; } flash = 0; return; }
+  nextStrike -= dt;
+  if (nextStrike < 0) {
+    nextStrike = 2.5 + Math.random() * 5;
+    if (bolt) { scene.remove(bolt); bolt.geometry.dispose(); }
+    // 折线闪电：从高空到地面随机一点，每段左右抖
+    const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * (R - 6), ex = Math.cos(a) * r, ez = Math.sin(a) * r;
+    const pts = [], N = 12;
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, j = i === 0 || i === N ? 0 : 1.2;
+      pts.push(new THREE.Vector3(ex + (Math.random() - 0.5) * j * 2 + (1 - t) * 3, 28 * (1 - t) + hAtCur(ex, ez) * t, ez + (Math.random() - 0.5) * j * 2));
+    }
+    bolt = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.1), 48, 0.09, 4), boltMat);
+    scene.add(bolt); boltT = 0.35; flash = 1;
+  }
+  if (bolt) { boltT -= dt; boltMat.opacity = Math.max(0, boltT / 0.35) * (0.6 + Math.random() * 0.4); if (boltT <= 0) { scene.remove(bolt); bolt.geometry.dispose(); bolt = null; } }
+  flash = Math.max(0, flash - dt * 4);
+  hemi.intensity = lerp(BIOMES[S.biome].light.hemiI, 0.55, nightK) + flash * 2.5;
+}
+
 status('加载贴图…', 25);
 await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 } });
 status('生成地形与素材…', 55);
@@ -684,7 +756,8 @@ renderer.setAnimationLoop(() => {
     if (p.material.uniforms.uPR) p.material.uniforms.uPR.value = pixelRatio * innerHeight / 900;
     if (p.userData.night) p.material.uniforms.uAlpha.value = nightK;
   }
-  if (chibi && chibi.root.visible) { animChibi(chibi, dt, { move: 0, attack: -1, cast: 0, work: 0 }); chibi.root.rotation.y = Math.sin(t * 0.3) * 0.6; }
+  walk(dt);
+  storm(dt);
   updateLights(t);
   composer.render();
   updateStats(dt);

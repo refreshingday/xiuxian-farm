@@ -57,10 +57,17 @@
   body.mobile.panel-open #side { transform: none; }
   body.mobile #side button { padding: 8px 10px; font-size: 13px; }
   body.mobile #side input[type=range] { height: 28px; }
-  body.mobile #stats { bottom: max(14px, env(safe-area-inset-bottom)); left: 10px; font-size: 10px; max-width: 62vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.mobile #stats { bottom: calc(max(10px, env(safe-area-inset-bottom)) + 52px); left: auto; right: 10px; font-size: 10px; max-width: 55vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
   body.mobile .lbl.row { font-size: 11px; }
   body.mobile .lbl.var { font-size: 9px; }
   body.clean #gear { opacity: .35; }
+  /* 虚拟摇杆（与主游戏 index.html 同款，touch.js 创建元素） */
+  #stickZone, #stick { display: none; }
+  body.mobile #stickZone { display: block; position: fixed; left: 0; bottom: 0; width: 45vw; height: 55vh; z-index: 3; touch-action: none; }
+  body.mobile #stick { display: block; position: fixed; left: calc(90px + env(safe-area-inset-left)); top: calc(100% - 120px - env(safe-area-inset-bottom)); width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(14, 22, 24, .35); border: 2px solid rgba(214, 182, 112, .4); pointer-events: none; z-index: 3; opacity: .55; transition: opacity .15s; }
+  body.mobile #stick.live { opacity: 1; }
+  #stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, rgba(255, 240, 200, .8), rgba(214, 182, 112, .55)); box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+  body.noWalk #stickZone, body.noWalk #stick, body.clean #stick { display: none !important; }
 </style>
 <!-- 加载失败时把原因显示在加载画面上，而不是一直转圈 -->
 <script>
@@ -133,7 +140,7 @@
 <div id="stats"></div>
 <div id="help">
   拖动旋转 · 右键平移 · 滚轮缩放<br>
-  <b>1–8</b> 切换区域 · <b>C</b> 场景/图鉴 · <b>R</b> 重新撒点<br>
+  <b>WASD</b> 走路 · <b>1–9 0</b> 切换区域 · <b>C</b> 场景/图鉴 · <b>R</b> 重新撒点<br>
   <b>O</b> 描边 · <b>P</b> 像素化 · <b>H</b> 隐藏界面<br>
   <a href="index.html" style="color:var(--gold)">← 返回游戏</a>
 </div>

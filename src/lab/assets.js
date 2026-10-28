@@ -833,6 +833,292 @@ function vent(v, seed) {
 }
 
 // ======================================================================
+// 矿脉（world_map.json 每个扇区的副矿 + 通用铁矿）
+// ======================================================================
+export const VEINS = [
+  { name: '铁', rock: '#6a6058', gem: '#b8b0a8', glow: false },
+  { name: '寒玉', rock: '#7a8494', gem: '#bff4ff', glow: true },
+  { name: '青铜', rock: '#6a6a50', gem: '#5aa888', glow: false },
+  { name: '毒晶', rock: '#4a4a3a', gem: '#9aff4a', glow: true },
+  { name: '火铜', rock: '#5a3a32', gem: '#ff7a3a', glow: true },
+  { name: '沙金', rock: '#a8885a', gem: '#ffd84a', glow: false },
+  { name: '阴魂石', rock: '#3a3442', gem: '#a87aff', glow: true },
+  { name: '仙晶', rock: '#8a8698', gem: '#fff4c8', glow: true },
+];
+function vein(v, seed) {
+  const V = VEINS[v], gem = new THREE.Color(V.gem), r = rnd(seed + v);
+  const g = rock(v % 4, (geo) => paint(geo, (p, n, out) => {
+    out.set(V.rock).multiplyScalar(0.62 + 0.4 * n.y);
+    if (vnoise(p.x * 6 + seed, p.z * 6 + p.y * 6, seed + v) > 0.74) out.copy(gem).multiplyScalar(V.glow ? 1.5 : 1.15);
+  }), seed);
+  if (!V.glow) return g;
+  // 发光矿再插几根小晶
+  const k = new Kit();
+  for (let i = 0; i < 3; i++) {
+    const h = 0.25 + r() * 0.25, a = r() * TAU;
+    k.add(faceted(mergeTwo(new THREE.CylinderGeometry(0.06, 0.07, h, 5).translate(0, h / 2, 0), new THREE.CylinderGeometry(0, 0.06, 0.1, 5).translate(0, h + 0.05, 0))), grad(V.gem, 0.6, 1.1), { at: [Math.cos(a) * 0.35, 0.35, Math.sin(a) * 0.35], rot: [Math.cos(a) * 0.5, 0, -Math.sin(a) * 0.5], kind: 'gem' });
+  }
+  const extra = k.build({ light: { color: V.gem, i: 0.5, d: 4, y: 0.6 } });
+  g.add(...extra.children); g.userData.light = extra.userData.light;
+  return g;
+}
+
+// ======================================================================
+// 沼泽
+// ======================================================================
+function swampTree(v, seed) {
+  const k = new Kit(), r = rnd(seed + v), H = [3.2, 2.4, 3.8][v % 3];
+  // 拱起的气根
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * TAU + r() * 0.4, d = 0.7 + r() * 0.5;
+    k.add(G.tube([[Math.cos(a) * d, 0, Math.sin(a) * d], [Math.cos(a) * d * 0.6, 0.55 + r() * 0.2, Math.sin(a) * d * 0.6], [0, 0.9, 0]], 0.09, 0.14, 5), grad('#4a4234', 0.6, 0.95, 0.15));
+  }
+  const bend = (r() - 0.5) * 0.8;
+  k.add(G.tube([[0, 0.8, 0], [bend * 0.5, H * 0.55, 0.1], [bend, H, 0]], 0.2, 0.1, 7), grad('#4a4234', 0.6, 1, 0.15));
+  const crown = [[bend, H + 0.2, 0, 1.0], [bend + 0.9, H - 0.05, 0.2, 0.75], [bend - 0.85, H, -0.1, 0.8], [bend, H, 0.8, 0.7]];
+  k.add(G.blobs(crown, 2, seed + v), crownPaint('#5a6a34', '#7a8a40', seed + v, 0.08), { s: [1, 0.55, 1], kind: 'leaf' });
+  // 垂挂的苔藓
+  for (let i = 0; i < 16; i++) {
+    const c = crown[i % crown.length], a = r() * TAU, d = c[3] * (0.5 + r() * 0.5), L = 0.5 + r() * 0.9;
+    k.add(G.cone(0.05, L, 4).rotateX(Math.PI).translate(0, L, 0), grad('#8a9a5a', 0.7, 1.1), { at: [c[0] + Math.cos(a) * d, c[1] - c[3] * 0.4 - L, c[2] + Math.sin(a) * d], kind: 'leaf' }); // 与树冠同一摇摆，不会脱节
+  }
+  return k.build();
+}
+function bogPlant(v, seed) {
+  // 猪笼草 / 水芋 / 臭菘
+  const k = new Kit(), r = rnd(seed + v);
+  if (v === 0) {
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * TAU + r(), x = Math.cos(a) * 0.2, z = Math.sin(a) * 0.2, h = 0.3 + r() * 0.2;
+      k.add(G.lathe([[0, 0], [0.06, 0.02], [0.09, 0.15], [0.07, 0.28], [0.08, 0.3]], 7), (g) => paint(g, (p, n, out) => out.set('#8ab040').lerp(C('#b0403a'), smooth(0.1, 0.3, p.y)).multiplyScalar(0.8 + 0.3 * n.y)), { at: [x, h * 0.2, z], rot: [Math.cos(a) * 0.4, 0, -Math.sin(a) * 0.4] });
+      k.add(G.blade(0.08, 0.35, 0.1), grad('#5a8a34'), { at: [x * 0.5, 0, z * 0.5], rot: [0.6, a, 0], kind: 'plant' });
+    }
+  } else if (v === 1) {
+    for (let i = 0; i < 6; i++) k.add(G.blade(0.22, 0.7 + r() * 0.3, 0.25), grad('#3a7a3a', 0.6, 1.15), { rot: [0.5 + r() * 0.3, i / 6 * TAU, 0], kind: 'plant' });
+  } else {
+    for (let i = 0; i < 5; i++) k.add(G.blade(0.14, 0.45, 0.2), grad('#4a8a3a', 0.6, 1.1), { rot: [0.7, i / 5 * TAU, 0], kind: 'plant' });
+    k.add(G.lathe([[0, 0], [0.08, 0.05], [0.1, 0.2], [0.04, 0.38], [0, 0.42]], 7), grad('#c8a8e0', 0.7, 1.1), { at: [0, 0.05, 0] });
+  }
+  return k.build();
+}
+
+// ======================================================================
+// 沙漠遗迹
+// ======================================================================
+function cactus(v, seed) {
+  const k = new Kit(), r = rnd(seed + v), skin = (g) => paint(g, (p, n, out) => { const a = Math.atan2(p.z, p.x); out.set('#5a9a4a').multiplyScalar((0.72 + 0.3 * Math.max(0, n.y + 0.4)) * (Math.floor(a / TAU * 16 + 8) % 2 ? 0.88 : 1.04)); });
+  const limb = (pts, rad) => { k.add(G.tube(pts, rad, rad * 0.92, 10), skin); const e = pts[pts.length - 1]; k.add(G.sph(rad * 0.92, 10, 6), skin, { at: e, s: [1, 0.8, 1] }); };
+  if (v === 0) { // 树形仙人掌
+    limb([[0, 0, 0], [0, 1.4, 0], [0, 2.6, 0]], 0.22);
+    limb([[0, 1.0, 0], [0.45, 1.05, 0], [0.55, 1.35, 0], [0.55, 1.9, 0]], 0.13);
+    limb([[0, 1.4, 0], [-0.4, 1.45, 0.05], [-0.48, 1.7, 0.05], [-0.48, 2.1, 0.05]], 0.12);
+  } else if (v === 1) { // 圆桶
+    const g = G.sph(0.42, 16, 10).scale(1, 1.15, 1); k.add(g, skin, { at: [0, 0.42, 0] });
+    for (let i = 0; i < 6; i++) k.add(G.sph(0.06, 6, 4), grad('#ff6a8a'), { at: [Math.cos(i) * 0.14, 0.92, Math.sin(i) * 0.14] });
+  } else if (v === 2) { // 仙人掌掌片
+    const pads = [[0, 0.3, 0, 0], [0.25, 0.75, 0, 0.5], [-0.22, 0.8, 0.05, -0.4], [0.05, 1.15, 0, 0.1]];
+    for (const [x, y, z, rz] of pads) k.add(G.sph(0.28, 10, 8).scale(1, 1.25, 0.32), grad('#6aa84a', 0.75, 1.1, 0.12), { at: [x, y, z], rot: [0, r() * 0.6, rz] });
+    k.add(G.sph(0.05, 6, 4), grad('#ff5a5a'), { at: [0.05, 1.5, 0] });
+  } else { // 一丛小柱
+    for (let i = 0; i < 5; i++) { const a = i * 1.3, d = i ? 0.3 : 0, h = 0.5 + r() * 0.7; limb([[Math.cos(a) * d, 0, Math.sin(a) * d], [Math.cos(a) * d, h, Math.sin(a) * d]], 0.1 + r() * 0.04); }
+  }
+  return k.build();
+}
+const SANDSTONE = (g) => paint(g, (p, n, out) => { out.set('#d8b888').multiplyScalar((0.7 + 0.35 * Math.max(0, n.y * 0.5 + 0.5)) * (0.9 + (vnoise(p.x * 3, p.y * 3 + p.z * 3, 2) - 0.5) * 0.25)); });
+function ruinPillar(v, seed) {
+  const k = new Kit(), r = rnd(seed + v), S = (g) => faceted(lumpy(g, 0.04, 4, seed + v));
+  const col = (x, z, H, broken) => {
+    k.add(S(G.box(0.8, 0.25, 0.8)), SANDSTONE, { at: [x, 0.12, z] });
+    const g = new THREE.CylinderGeometry(0.28, 0.32, H, 12, 3);
+    const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getZ(i), p.getX(i)); const f = 1 - 0.07 * (Math.cos(a * 12) * 0.5 + 0.5); p.setX(i, p.getX(i) * f); p.setZ(i, p.getZ(i) * f); if (broken && p.getY(i) > H / 2 - 0.01) p.setY(i, p.getY(i) - (Math.sin(a * 3 + seed) * 0.5 + 0.5) * 0.4); }
+    k.add(faceted(g.translate(0, H / 2 + 0.25, 0)), SANDSTONE, { at: [x, 0, z] });
+    if (!broken) { k.add(S(G.box(0.75, 0.22, 0.75)), SANDSTONE, { at: [x, H + 0.36, z] }); }
+  };
+  if (v === 0) col(0, 0, 3.2, false);
+  else if (v === 1) { col(0, 0, 1.6, true); for (let i = 0; i < 3; i++) k.add(S(G.dodec(0.2)), SANDSTONE, { at: [0.5 + r() * 0.5, 0.15, (r() - 0.5) * 0.8] }); }
+  else if (v === 2) { // 倒地的柱子（分段）
+    for (let i = 0; i < 3; i++) k.add(faceted(new THREE.CylinderGeometry(0.3, 0.3, 0.9, 12).rotateZ(Math.PI / 2)), SANDSTONE, { at: [i * 0.95 - 0.9, 0.3, (i - 1) * 0.12], rot: [0, (r() - 0.5) * 0.3, 0] });
+  } else { col(-1, 0, 2.8, false); col(1, 0, 2.8, false); k.add(S(G.box(2.9, 0.4, 0.8)), SANDSTONE, { at: [0, 3.25, 0] }); }
+  return k.build();
+}
+function ruinWall(v, seed) {
+  const k = new Kit(), r = rnd(seed + v);
+  const brick = (x, y, z, w, h, d) => k.add(faceted(lumpy(G.box(w, h, d), 0.03, 5, seed + x * 7 + y * 3)), SANDSTONE, { at: [x, y, z] });
+  if (v === 0) { // 拱门
+    for (let y = 0; y < 5; y++) for (const s of [-1, 1]) brick(s * 1.0, 0.25 + y * 0.5, 0, 0.7, 0.48, 0.6);
+    for (let i = 0; i <= 6; i++) { const a = Math.PI - i / 6 * Math.PI; brick(Math.cos(a) * 0.95, 2.5 + Math.sin(a) * 0.75, 0, 0.42, 0.42, 0.6); }
+  } else if (v === 1) { // 残墙
+    for (let x = 0; x < 6; x++) { const hgt = Math.max(1, Math.round(4 - Math.abs(x - 2) * 0.9 + r())); for (let y = 0; y < hgt; y++) brick(-1.5 + x * 0.6 + (y % 2) * 0.15, 0.22 + y * 0.44, 0, 0.58, 0.42, 0.5); }
+    for (let i = 0; i < 4; i++) brick(-1 + r() * 2.5, 0.12, 0.6 + r() * 0.4, 0.4, 0.22, 0.3);
+  } else { // 台阶祭坛
+    for (let i = 0; i < 3; i++) brick(0, 0.15 + i * 0.3, -i * 0.35, 2.4 - i * 0.5, 0.3, 1.6 - i * 0.35);
+    k.add(G.cyl(0.25, 0.3, 0.35, 8), grad('#8a6a3a', 0.7, 1.2), { at: [0, 0.9, -0.7] });
+  }
+  return k.build();
+}
+function statueHead(v, seed) {
+  const k = new Kit(), S = grad('#c8a878', 0.65, 1.05, 0.15);
+  k.add(lumpy(G.sph(0.8, 14, 10).scale(0.85, 1.05, 0.9), 0.05, 3, seed), S, { at: [0, 0.55, 0], rot: [0.15, 0.4, v ? 0.5 : 0.15] });
+  k.add(G.box(0.18, 0.4, 0.25), S, { at: [0.15, 0.6, 0.75], rot: [0, 0.4, 0.15] });
+  for (const s of [-1, 1]) k.add(G.box(0.28, 0.06, 0.06), grad('#6a5038'), { at: [s * 0.25 + 0.1, 0.9, 0.72], rot: [0, 0.4, 0.15] });
+  if (!v) k.add(G.cone(0.75, 0.9, 8), S, { at: [0, 1.35, 0], rot: [0.15, 0.4, 0.15] }); // 冠
+  return k.build();
+}
+
+// ======================================================================
+// 古战场
+// ======================================================================
+const STEEL = grad('#9aa0a8', 0.6, 1.25, 0.15), RUST = (g) => paint(g, (p, n, out) => out.set('#8a8e94').lerp(C('#8a4a2a'), smooth(0.55, 0.8, vnoise(p.x * 9, p.y * 9 + p.z * 9, 4))).multiplyScalar(0.7 + 0.4 * Math.abs(n.x)));
+function brokenSword(v, seed) {
+  const k = new Kit(), r = rnd(seed + v);
+  const sword = (x, z, tilt, len) => {
+    const at = (y) => [x + Math.sin(tilt) * y, y, z];
+    k.add(G.box(0.12, len, 0.025), RUST, { at: at(len / 2 - 0.2), rot: [0, 0, -tilt] });
+    k.add(G.box(0.4, 0.06, 0.08), grad('#7a6a3a', 0.7, 1.2), { at: at(len - 0.18), rot: [0, 0, -tilt] });
+    k.add(G.cyl(0.03, 0.03, 0.25, 5), grad('#4a3020'), { at: at(len - 0.15), rot: [0, 0, -tilt] });
+    k.add(G.sph(0.05, 5, 4), grad('#9a8040'), { at: at(len + 0.12) });
+  };
+  if (v === 0) sword(0, 0, 0.08, 1.3);
+  else if (v === 1) sword(0, 0, 0.45, 1.1);
+  else if (v === 2) { for (let i = 0; i < 5; i++) sword((r() - 0.5) * 0.9, (r() - 0.5) * 0.9, (r() - 0.5) * 0.7, 0.9 + r() * 0.4); k.add(G.sph(0.5, 8, 6).scale(1.2, 0.25, 1.2), grad('#5a4a3a')); }
+  else { // 长戟
+    k.add(G.cyl(0.035, 0.04, 2.4, 6), grad('#5a4030', 0.7, 1), { at: [0, -0.2, 0], rot: [0.25, 0, 0.1] });
+    k.add(G.cone(0.08, 0.4, 4), RUST, { at: [0.22, 2.0, 0.55], rot: [0.25, 0, 0.1] });
+    k.add(G.box(0.4, 0.2, 0.03), RUST, { at: [0.3, 1.85, 0.5], rot: [0.25, 0, 0.1] });
+  }
+  return k.build();
+}
+function banner(v, seed) {
+  const k = new Kit(), r = rnd(seed + v), cols = ['#a83a2a', '#3a4a7a', '#4a4a3a'], H = 2.6;
+  k.add(G.cyl(0.04, 0.05, H, 6), grad('#4a3020', 0.6, 1), { rot: [0, 0, (v - 1) * 0.12] });
+  k.add(G.cyl(0.025, 0.025, 1.0, 5), grad('#4a3020'), { at: [0.5, H - 0.05, 0], rot: [0, 0, Math.PI / 2] });
+  // 破旗：带锯齿下摆和破洞的布
+  const W = 0.9, L = 1.3, nx = 6, ny = 8, pos = [], idx = [];
+  for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
+    const u = i / nx, t = j / ny, rag = j === ny ? (r() - 0.3) * 0.25 : 0;
+    pos.push(0.05 + u * W, -t * L - rag, Math.sin(u * 3 + t * 2) * 0.06);
+  }
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    if (j > 3 && r() < 0.12) continue; // 破洞
+    const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  // 背面：同一片布反向绕序（实心材质是单面的）
+  const back = new THREE.BufferGeometry(); back.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const ridx = []; for (let i = 0; i < idx.length; i += 3) ridx.push(idx[i], idx[i + 2], idx[i + 1]);
+  back.setIndex(ridx); back.computeVertexNormals();
+  for (const gg of [g, back]) k.add(gg, (geo) => paint(geo, (p, n, out) => { out.set(cols[v % 3]).multiplyScalar(0.7 + 0.3 * (1 + p.y / L)); if (Math.abs(p.x - 0.5) < 0.15 && p.y < -0.35 && p.y > -0.75) out.set('#e8d8a0'); }), { at: [0, H - 0.1, 0] });
+  return k.build();
+}
+function shieldProp(v, seed) {
+  const k = new Kit();
+  if (v === 0) { k.add(G.cyl(0.42, 0.42, 0.06, 14), (g) => paint(g, (p, n, out) => out.set(Math.hypot(p.x, p.z) > 0.36 ? '#8a8e94' : '#7a3a2a').multiplyScalar(0.7 + 0.3 * n.y)), { at: [0, 0.32, 0], rot: [1.2, 0, 0.2] }); k.add(G.sph(0.08, 8, 6), STEEL, { at: [0, 0.35, 0.05] }); }
+  else if (v === 1) { k.add(G.box(0.6, 0.9, 0.06), (g) => paint(g, (p, n, out) => out.set('#3a4a6a').lerp(C('#c8b060'), Math.abs(p.x) < 0.05 || Math.abs(p.y) < 0.05 ? 1 : 0).multiplyScalar(0.7 + 0.3 * n.z)), { at: [0, 0.4, 0], rot: [-0.3, 0.3, 0.1] }); }
+  else { // 头盔
+    k.add(new THREE.SphereGeometry(0.28, 12, 8, 0, TAU, 0, Math.PI * 0.55), RUST, { at: [0, 0.1, 0], rot: [0.6, 0, 0.3] });
+    k.add(G.cone(0.04, 0.3, 4), grad('#a83a2a'), { at: [0, 0.35, -0.1], rot: [0.6, 0, 0.3] });
+  }
+  return k.build();
+}
+function grave(v, seed) {
+  const k = new Kit();
+  const mound = G.sph(0.8, 12, 6).scale(1, 0.32, 1.4), p = mound.attributes.position;
+  for (let i = 0; i < p.count; i++) if (p.getY(i) < 0) p.setY(i, 0);
+  k.add(mound, mossCap('#6a5a48', '#6a7a4a', 0.7, 0.6));
+  if (v === 0) { k.add(G.box(0.08, 0.9, 0.06), grad('#6a5038'), { at: [0, 0.45, -1.0] }); k.add(G.box(0.5, 0.08, 0.06), grad('#6a5038'), { at: [0, 0.68, -1.0] }); }
+  else if (v === 1) k.add(faceted(lumpy(G.box(0.5, 0.8, 0.14), 0.03, 5, seed)), grad('#8a8a88', 0.7, 1.05), { at: [0, 0.4, -1.05], rot: [0.08, 0, 0.06] });
+  else { k.add(G.box(0.1, 1.0, 0.025), RUST, { at: [0, 0.6, -1.0], rot: [0, 0, 0.1] }); k.add(G.box(0.34, 0.06, 0.07), grad('#7a6a3a'), { at: [0.05, 1.05, -1.0], rot: [0, 0, 0.1] }); }
+  return k.build();
+}
+function brokenCart(v, seed) {
+  const k = new Kit();
+  k.add(...plank(1.6, 0.1, 1.0, '#6a4a32'), { at: [0, 0.45, 0], rot: [0, 0, v ? 0.35 : 0.1] });
+  for (const s of [-1, 1]) k.add(...plank(1.6, 0.35, 0.06, '#5a3a26'), { at: [0, 0.65, s * 0.5], rot: [0, 0, v ? 0.35 : 0.1] });
+  k.add(G.tor(0.38, 0.05, 5, 12), grad('#5a3a26'), { at: [-0.3, 0.38, 0.6] });
+  for (let i = 0; i < 6; i++) k.add(G.cyl(0.02, 0.02, 0.72, 3), grad('#5a3a26'), { at: [-0.3, 0.38, 0.6], rot: [0, 0, i / 6 * Math.PI], s: [1, 1, 1] });
+  k.add(G.tor(0.38, 0.05, 5, 12), grad('#5a3a26'), { at: [0.9, 0.06, -0.3], rot: [Math.PI / 2, 0, 0.1] });
+  k.add(G.cyl(0.04, 0.04, 1.8, 5), grad('#5a3a26'), { at: [-0.9, 0.05, 0], rot: [0, 0.3, Math.PI / 2 - 0.15] });
+  return k.build();
+}
+
+// ======================================================================
+// 百花谷
+// ======================================================================
+function wisteria(v, seed) {
+  const k = new Kit(), r = rnd(seed + v), col = v ? '#f0e8ff' : '#b08af0';
+  k.add(G.tube([[0, 0, 0], [0.3, 1.2, 0], [-0.1, 2.2, 0.1], [0.2, 2.8, 0]], 0.18, 0.09, 7), grad('#6a5040', 0.6, 1.05, 0.15));
+  const crown = [[0.2, 3.1, 0, 1.1], [1.0, 2.9, 0.2, 0.8], [-0.7, 2.95, -0.2, 0.85], [0.2, 3.0, 0.9, 0.75]];
+  k.add(G.blobs(crown, 2, seed + v), crownPaint('#5aa040', '#7ac050', seed), { s: [1, 0.6, 1], kind: 'leaf' });
+  for (let i = 0; i < 26; i++) {
+    const c = crown[i % crown.length], a = r() * TAU, d = c[3] * (0.3 + r() * 0.7), L = 0.6 + r() * 0.8;
+    const x = c[0] + Math.cos(a) * d, z = c[2] + Math.sin(a) * d, y = c[1] - c[3] * 0.35;
+    for (let s = 0; s < 5; s++) k.add(G.sph(0.09 * (1 - s * 0.14), 5, 4), grad(col, 0.8, 1.15), { at: [x, y - s * L / 5, z], kind: 'bloom' });
+  }
+  return k.build();
+}
+function flowerBed(v, seed) {
+  const k = new Kit(), r = rnd(seed + v);
+  const palettes = [['#ff9ec7', '#ffffff', '#ffd84a'], ['#a78bf0', '#7ab8ff', '#ffffff'], ['#ff6a5a', '#ffaa33', '#ffe36b'], ['#ffffff', '#f4e0ff', '#ffd0e8']];
+  const pal = palettes[v % 4];
+  k.add(G.blobs([[0, 0.12, 0, 0.6], [0.5, 0.1, 0.2, 0.45], [-0.45, 0.1, -0.1, 0.45]], 1, seed + v), crownPaint('#4f9a3a'), { s: [1, 0.45, 1], kind: 'leaf' });
+  for (let i = 0; i < 26; i++) {
+    const a = r() * TAU, d = Math.sqrt(r()) * 0.85, x = Math.cos(a) * d, z = Math.sin(a) * d * 0.8;
+    const y = 0.22 + (1 - d) * 0.12 + r() * 0.08;
+    k.add(G.sph(0.06 + r() * 0.03, 6, 4), grad(pal[i % 3], 0.85, 1.2), { at: [x, y, z], s: [1, 0.6, 1], kind: 'plant' });
+  }
+  return k.build();
+}
+function herbRack(v, seed) {
+  const k = new Kit(), r = rnd(seed + v);
+  for (const sx of [-0.9, 0.9]) for (const sz of [-0.3, 0.3]) k.add(...plank(0.08, 1.4, 0.08, DWOOD), { at: [sx, 0.7, sz] });
+  const shelves = v ? [0.5, 1.0] : [0.7];
+  for (const y of shelves) {
+    k.add(...plank(1.9, 0.05, 0.7, WOOD), { at: [0, y, 0] });
+    for (let i = 0; i < 3; i++) {
+      const x = -0.6 + i * 0.6;
+      k.add(G.lathe([[0, 0], [0.22, 0.01], [0.26, 0.08], [0.27, 0.1]], 12), grad('#c8a868', 0.75, 1.1), { at: [x, y + 0.03, 0] });
+      for (let j = 0; j < 6; j++) k.add(G.sph(0.06, 5, 3), grad(['#7ab84a', '#c88a4a', '#e85a8a', '#a8c84a'][(i + j) % 4], 0.8, 1.1), { at: [x + (r() - 0.5) * 0.3, y + 0.1, (r() - 0.5) * 0.3], s: [1.2, 0.5, 1] });
+    }
+  }
+  if (!v) { k.add(...plank(1.9, 0.04, 0.04, DWOOD), { at: [0, 1.35, 0] }); for (let i = 0; i < 6; i++) k.add(G.cone(0.08, 0.35, 5).rotateX(Math.PI), grad('#8aa850', 0.7, 1.1), { at: [-0.75 + i * 0.3, 1.0, 0], kind: 'plant' }); }
+  return k.build();
+}
+
+// ======================================================================
+// 天劫峰
+// ======================================================================
+function floatRock(v, seed) {
+  const k = new Kit(), r = rnd(seed + v), R0 = [1.2, 0.8, 1.6, 0.6][v % 4];
+  const top = lumpy(new THREE.CylinderGeometry(R0, R0 * 0.85, 0.35, 9, 1).translate(0, 0, 0), 0.12, 2, seed + v);
+  k.add(faceted(top), mossCap('#5a5468', '#4a8a5a', 0.6), {});
+  const bot = lumpy(new THREE.ConeGeometry(R0 * 0.85, R0 * 1.8, 8, 3).rotateX(Math.PI).translate(0, -R0 * 0.9 - 0.17, 0), 0.18, 2, seed + v + 3);
+  k.add(faceted(bot), (g) => paint(g, (p, n, out) => out.set('#4a4458').multiplyScalar(0.55 + 0.3 * smooth(-R0 * 2, 0, p.y))));
+  if (v % 2 === 0) k.add(G.blobs([[0, 0, 0, 0.35]], 1, seed), crownPaint('#2f7a4a'), { at: [R0 * 0.3, 0.45, 0], s: [1, 0.6, 1], kind: 'leaf' });
+  if (v === 2) for (let i = 0; i < 3; i++) k.add(faceted(G.cone(0.1, 0.5 + r() * 0.3, 5)), grad('#a87aff', 0.6, 1.2), { at: [-0.4 + i * 0.3, 0.15, 0.3], kind: 'gem' });
+  return k.build();
+}
+function formation(v, seed) {
+  const k = new Kit(), R0 = v ? 2.6 : 3.4, sides = 8;
+  k.add(faceted(G.cyl(R0, R0 + 0.15, 0.3, sides)), grad('#6a6878', 0.7, 1.05, 0.12));
+  k.add(faceted(G.cyl(R0 * 0.7, R0 * 0.72, 0.1, sides)), grad('#5a5868', 0.7, 1), { at: [0, 0.3, 0] });
+  // 阵纹：一圈发光细条 + 八卦方向短线
+  k.add(G.tor(R0 * 0.82, 0.04, 4, 48), grad('#8ad0ff'), { at: [0, 0.32, 0], rot: [Math.PI / 2, 0, 0], kind: 'glow' });
+  k.add(G.tor(R0 * 0.45, 0.035, 4, 36), grad('#8ad0ff'), { at: [0, 0.42, 0], rot: [Math.PI / 2, 0, 0], kind: 'glow' });
+  for (let i = 0; i < sides; i++) {
+    const a = i / sides * TAU;
+    for (let j = 0; j < 3; j++) k.add(G.box(0.36, 0.03, j === 1 && i % 2 ? 0.05 : 0.08), grad('#8ad0ff'), { at: [Math.cos(a) * (R0 * 0.55 + j * 0.12), 0.42, Math.sin(a) * (R0 * 0.55 + j * 0.12)], rot: [0, -a + Math.PI / 2, 0], kind: 'glow' });
+  }
+  const n = v ? 4 : 8;
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU + 0.2;
+    k.add(faceted(lumpy(G.box(0.4, 1.8, 0.4), 0.04, 4, seed + i)), grad('#7a7888', 0.65, 1.05, 0.15), { at: [Math.cos(a) * R0 * 0.95, 1.1, Math.sin(a) * R0 * 0.95] });
+    k.add(G.ico(0.18, 1), grad('#8ad0ff'), { at: [Math.cos(a) * R0 * 0.95, 2.3, Math.sin(a) * R0 * 0.95], kind: 'glow' });
+  }
+  return k.build({ light: { color: '#8ad0ff', i: 1.0, d: 8, y: 1.2 } });
+}
+
+// ======================================================================
 // 素材登记：按区域分组（同一素材可出现在多个区域）
 // ======================================================================
 export const ASSETS = {
@@ -906,6 +1192,37 @@ export const ASSETS = {
   pavilion:  { name: '亭子', n: 2, make: (v) => pavilion(v) },
   cloud:     { name: '祥云', n: 3, make: (v) => cloud(v, 491) },
   jade:      { name: '玉石', n: 3, make: (v) => jade(v, 501) },
+  // ---- 矿脉（world_map.json 副矿）----
+  vein:      { name: '矿脉', n: 8, make: (v) => vein(v, 581) },
+  // ---- 沼泽 ----
+  swampTree: { name: '沼泽气根树', n: 3, make: (v) => swampTree(v, 591) },
+  bogPlant:  { name: '沼泽植物', n: 3, make: (v) => bogPlant(v, 601) },
+  bogShroom: { name: '毒菇', n: 4, make: (v) => mushroom(v, ['#9aff4a', '#c87aff', '#5ad8a0', '#e8e05a'][v], 611, true) },
+  swampGrass:{ name: '沼草', n: 4, make: (v) => grassTuft(v, '#7a9a3a', 625, { h: 0.6 }) },
+  bogRock:   { name: '沼石', n: 5, make: (v) => rock(v, mossCap('#5a5a4a', '#4a6a2a', 0.45, 1), 621) },
+  // ---- 沙漠遗迹 ----
+  cactus:    { name: '仙人掌', n: 4, make: (v) => cactus(v, 631) },
+  pillar:    { name: '遗迹石柱', n: 4, make: (v) => ruinPillar(v, 641) },
+  ruinWall:  { name: '遗迹残墙', n: 3, make: (v) => ruinWall(v, 651) },
+  statue:    { name: '半埋石像', n: 2, make: (v) => statueHead(v, 661) },
+  sandRock:  { name: '砂岩', n: 5, make: (v) => rock(v, SANDSTONE, 671) },
+  dryShrub:  { name: '旱生灌丛', n: 3, make: (v) => deadTree(v, 681, '#8a7050') },
+  desertGrass:{ name: '沙草', n: 4, make: (v) => grassTuft(v, '#b8a868', 691, { h: 0.45 }) },
+  // ---- 古战场 ----
+  sword:     { name: '残剑', n: 4, make: (v) => brokenSword(v, 701) },
+  banner:    { name: '残旗', n: 3, make: (v) => banner(v, 711) },
+  shield:    { name: '盾/盔', n: 3, make: (v) => shieldProp(v, 721) },
+  grave:     { name: '坟冢', n: 3, make: (v) => grave(v, 731) },
+  wreck:     { name: '破战车', n: 2, make: (v) => brokenCart(v, 741) },
+  // ---- 百花谷 ----
+  wisteria:  { name: '紫藤', n: 2, make: (v) => wisteria(v, 751) },
+  flowerTree:{ name: '花树', n: 3, make: (v) => broadTree([0, 2, 1][v], ['#fff4f0', '#ffd84a', '#ff8ab0'][v], ['#ffd0e0', '#fff0a0', '#ffffff'][v], 761 + v, { bloom: true, bark: '#6a4a3a', accentAmt: 0.1 }) },
+  flowerBed: { name: '花圃', n: 4, make: (v) => flowerBed(v, 771) },
+  herbRack:  { name: '晒药架', n: 2, make: (v) => herbRack(v, 781) },
+  // ---- 天劫峰 ----
+  floatRock: { name: '浮空石', n: 4, make: (v) => floatRock(v, 791) },
+  formation: { name: '渡劫法阵', n: 2, make: (v) => formation(v, 801) },
+  stormPine: { name: '雷击松', n: 3, make: (v) => deadTree(v, 811, '#3a3440') },
   // ---- 赤岩荒原 ----
   lavaRock:  { name: '熔岩石', n: 5, make: (v) => lavaRock(v, 511) },
   redRock:   { name: '赤砂岩', n: 5, make: (v) => redRock(v, 521) },
