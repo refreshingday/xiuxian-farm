@@ -90,7 +90,7 @@ export const BIOMES = [
     light: { sun: '#fff4e0', sunI: 2.4, sky: '#d0e8e0', ground: '#6a7a40', hemiI: 1.15, fog: '#c8e0d8', top: '#88c0d8', bottom: '#d8ece4', exposure: 1.1, bloom: 0.5 },
     particles: [{ type: 'leaves', n: 80, color: '#8ac04a', size: 5 }, { type: 'motes', n: 60, color: '#fff8c0', size: 3 }],
     scatter: [
-      { id: 'bridge', n: 1, list: [[3, 1, Math.PI / 2 + 0.1]], y: 0 },
+      { id: 'bridge', n: 1, list: [[3, 1, -0.15]], y: 0 },
       { id: 'stoneLan', n: 6, list: [[-6, 2.6, 0], [-12, -0.4, 0.5], [10, 3, 0.2], [16, 0.6, 0], [-1, -1.2, 0], [7.5, -1.2, 0]] },
       { id: 'lanPost', n: 3, list: [[-16, 3.2, 0], [13, -1.4, 3.1], [-3, 3, 0]] },
       { id: 'sign', n: 1, list: [[-9, 2.8, 0.3]] },
@@ -467,7 +467,7 @@ export const BIOMES = [
     particles: [{ type: 'petals', n: 160, color: '#ffb8d8', size: 5 }, { type: 'petals', n: 70, color: '#ffffff', size: 4 }, { type: 'motes', n: 40, color: '#fff4b0', size: 4 }],
     scatter: [
       { id: 'pavilion', n: 1, list: [[-9, -6, 0.2]] },
-      { id: 'bridge', n: 1, list: [[-1.2, -1.2, Math.PI / 2 - 0.15]], y: 0 },
+      { id: 'bridge', n: 1, list: [[-1.2, -1.2, 0.12]], y: 0 }, // 桥沿 x 跨，溪沿 z 流
       { id: 'herbRack', n: 2, list: [[-12, 2, 0.3], [-7, 3.4, -0.2]], pick: [0, 1] },
       { id: 'jar', n: 3, list: [[-10, 3.5, 0], [-9.4, 4.1, 0], [-13.4, 0.6, 0]] },
       { id: 'wisteria', n: 6, k: ['grass', 'bloom'], r: [5, 18], s: [0.9, 1.2], gap: 3.4 },
