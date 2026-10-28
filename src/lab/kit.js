@@ -163,7 +163,7 @@ export function instance(proto, list) {
     const im = new THREE.InstancedMesh(m.geometry, m.material, list.length);
     list.forEach((o, i) => {
       _e.set(o.tilt || 0, o.rot || 0, o.tilt2 || 0); _q.setFromEuler(_e);
-      _s.set(o.s, o.sy ?? o.s, o.s); _p.set(o.x, o.y || 0, o.z);
+      _s.set(o.s, o.sy ?? o.s, o.sz ?? o.s); _p.set(o.x, o.y || 0, o.z);
       _m.compose(_p, _q, _s); im.setMatrixAt(i, _m);
     });
     im.castShadow = m.castShadow; im.receiveShadow = m.receiveShadow;

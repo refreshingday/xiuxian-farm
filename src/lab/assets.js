@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32 } from './kit.js';
 import { vnoise, smooth, clamp } from '../util.js';
+import { LH } from './biomes.js';
 
 // 素材库：每个素材 = { name, n(变体数), make(v) → Group }，变体之间形状不同而不只是换色。
 // 统一比例：1 单位 ≈ 角色半身高（Q 版角色约 1.6 高）。
@@ -1121,9 +1122,9 @@ function formation(v, seed) {
 
 
 // ======================================================================
-// 台地：石阶（与 biomes.js 的坡道一致：宽 2.2、水平 3、高 1.5，朝 -z 上坡，原点在坡道中点的底部高度）
+// 台地：石阶（与 biomes.js 的台阶路一致：宽 2.2、进深 3（摆放时按实际进深沿 z 拉伸）、高一级 LH，朝 -z 上坡）
 // ======================================================================
-function stairs(v, seed, W = 2.2, RUN = 3, RISE = 1.5) {
+function stairs(v, seed, W = 2.2, RUN = 3, RISE = LH) {
   const k = new Kit(), n = 7, stone = (g) => faceted(lumpy(g, 0.025, 5, seed));
   for (let i = 0; i < n; i++) {
     const h = (i + 1) * RISE / n, d = RUN / n;

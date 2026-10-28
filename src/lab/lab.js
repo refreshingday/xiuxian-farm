@@ -317,7 +317,7 @@ function waterfall(f, W) {
   const Hh = f.top - f.bottom, seg = 14, g = new THREE.PlaneGeometry(f.w, 1, 4, seg), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const t = 0.5 - p.getY(i); // 0 顶 → 1 底
-    p.setXYZ(i, p.getX(i) * (1 + t * 0.25), f.top - t * Hh, f.z - 0.25 + Math.pow(t, 0.55) * 0.9 - (1 - t) * (1 - t) * 0.0);
+    p.setXYZ(i, p.getX(i) * (1 + t * 0.25), f.top - t * Hh, -0.25 + Math.pow(t, 0.55) * 0.9);
   }
   g.computeVertexNormals();
   const mat = new THREE.ShaderMaterial({
@@ -343,7 +343,9 @@ function waterfall(f, W) {
         #include <fog_fragment>
       }`,
   });
-  const m = new THREE.Mesh(g, mat); m.position.x = f.x; m.renderOrder = 2;
+  // 局部坐标里水往 +z 流，整体转到溪流方向
+  const rot = f.rot ?? 0, fx = Math.sin(rot), fz = Math.cos(rot);
+  const m = new THREE.Mesh(g, mat); m.position.set(f.x, 0, f.z); m.rotation.y = rot; m.renderOrder = 2;
   root.add(m);
   // 落水白沫：一圈向外扩散的波纹
   const foam = new THREE.Mesh(new THREE.CircleGeometry(f.w * 1.1, 24).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
@@ -353,11 +355,11 @@ function waterfall(f, W) {
       void main() { float r = length(vUv - 0.5) * 2.0; float w = fract(r * 2.5 - uTime * 1.2);
         float a = smoothstep(1.0, 0.55, r) * (0.35 + 0.65 * step(0.6, w)) * 0.85; gl_FragColor = vec4(vec3(0.95, 0.98, 1.0) * 1.3, a); }`,
   }));
-  foam.position.set(f.x, f.bottom + 0.02, f.z + 0.75); foam.renderOrder = 2;
+  foam.position.set(f.x + fx * 0.75, f.bottom + 0.02, f.z + fz * 0.75); foam.renderOrder = 2;
   root.add(foam);
   // 水雾：落水点附近缓慢上升的白点
   const n = 60, pp = new Float32Array(n * 3), rnd = new Float32Array(n * 4);
-  for (let i = 0; i < n; i++) { pp.set([f.x, f.bottom, f.z + 0.75], i * 3); for (let c = 0; c < 4; c++) rnd[i * 4 + c] = Math.random(); }
+  for (let i = 0; i < n; i++) { pp.set([f.x + fx * 0.75, f.bottom, f.z + fz * 0.75], i * 3); for (let c = 0; c < 4; c++) rnd[i * 4 + c] = Math.random(); }
   const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); mg.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 4));
   const mist = new THREE.Points(mg, new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, uniforms: { uTime: U.time, uW: { value: f.w } },
@@ -389,9 +391,9 @@ function placeAll(b, hAt) {
     const A = ASSETS[rule.id], gap = rule.gap ?? 1;
     const variant = () => (rule.pick ? rule.pick[Math.floor(rng() * rule.pick.length)] : Math.floor(rng() * A.n));
     if (rule.list) {
-      rule.list.forEach(([x, z, rot], i) => {
+      rule.list.forEach(([x, z, rot, sz], i) => {
         const v = rule.pick ? rule.pick[i % rule.pick.length] : Math.floor(rng() * A.n);
-        const o = { x, z, y: rule.y ?? hAt(x, z) + (rule.dy || 0), rot, s: 1 };
+        const o = { x, z, y: rule.y ?? hAt(x, z) + (rule.dy || 0), rot, s: 1, sz };
         add(rule.id, v, o); taken.push([x, z, 1.4, rule.id]);
       });
       continue;
@@ -446,7 +448,7 @@ function placeAll(b, hAt) {
     const proto = getAsset(id, v), light = proto.userData.light;
     if (list.length <= 4 || list[0].bob !== undefined) {
       for (const o of list) {
-        const c = proto.clone(); c.position.set(o.x, o.y, o.z); c.rotation.y = o.rot || 0; c.scale.set(o.s, o.sy ?? o.s, o.s);
+        const c = proto.clone(); c.position.set(o.x, o.y, o.z); c.rotation.y = o.rot || 0; c.scale.set(o.s, o.sy ?? o.s, o.sz ?? o.s);
         if (o.bob !== undefined) { c.userData.bob = o.bob; c.userData.y0 = o.y; bobbers.push(c); }
         root.add(c);
       }
