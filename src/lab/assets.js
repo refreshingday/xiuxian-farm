@@ -67,8 +67,9 @@ function broadTree(v, leaf, accent, seed, o = {}) {
   if (o.fruit) {
     const r = rnd(seed);
     for (let i = 0; i < 9; i++) {
-      const c = T.c[Math.floor(r() * T.c.length)], a = r() * TAU, e = r() * 0.8 - 0.3;
-      k.add(G.sph(0.09, 6, 5), o.fruit, { at: [c[0] + Math.cos(a) * Math.cos(e) * c[3] * 0.95, c[1] + Math.sin(e) * c[3], c[2] + Math.sin(a) * Math.cos(e) * c[3] * 0.95], kind: 'leaf' });
+      // 叶卡主要铺在树冠上半部、半径 0.55~0.9R 的壳层里：果子贴在上半部的壳层上，不会飘在冠外
+      const c = T.c[Math.floor(r() * T.c.length)], a = r() * TAU, e = 0.15 + r() * 0.7, d = c[3] * 0.82;
+      k.add(G.sph(0.1, 6, 5), o.fruit, { at: [c[0] + Math.cos(a) * Math.cos(e) * d, c[1] + Math.sin(e) * d, c[2] + Math.sin(a) * Math.cos(e) * d], kind: 'leaf' });
     }
   }
   return k.build();
