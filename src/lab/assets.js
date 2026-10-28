@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage } from './kit.js';
+import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage, foliageLeaves } from './kit.js';
 import { vnoise, smooth, clamp } from '../util.js';
 import { LH } from './biomes.js';
 
@@ -63,7 +63,7 @@ function broadTree(v, leaf, accent, seed, o = {}) {
     const a = i * 2.1 + seed, top = T.t[2];
     k.add(G.tube([[top[0], top[1] - 0.3, top[2]], [top[0] + Math.cos(a) * 0.6, top[1] + 0.2, top[2] + Math.sin(a) * 0.6]], T.r * 0.5, T.r * 0.2, 5), grad(o.bark || '#7a5236', 0.6, 1));
   }
-  foliage(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt });
+  (o.real ? foliageLeaves : foliage)(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt });
   if (o.fruit) {
     const r = rnd(seed);
     for (let i = 0; i < 9; i++) {
@@ -87,7 +87,7 @@ function pine(v, color, seed, snow = false) {
     for (let j = 0; j < p.count; j++) if (p.getY(j) < 0.05) { const a = Math.atan2(p.getZ(j), p.getX(j)); p.setY(j, p.getY(j) - (Math.sin(a * 9) * 0.5 + 0.5) * 0.12); }
     g.computeVertexNormals();
     // 雪松不用叶贴图（白雪乘上绿叶纹理会发蓝发花）
-    k.add(g, snow ? snowCap(color, 0.45) : crownPaint(color, null, seed + i), { at: [0, y, 0], rot: [0, r() * TAU, 0], kind: snow ? 'solid' : 'leaf' });
+    k.add(g, snow ? snowCap(color, 0.45) : crownPaint(color, null, seed + i), { at: [0, y, 0], rot: [0, r() * TAU, 0], kind: snow ? 'solid' : 'sway' });
   }
   return k.build();
 }
@@ -103,7 +103,7 @@ function bamboo(v, seed) {
       k.add(G.cyl(rad * 0.95, rad, sh * 0.96, 6), grad(col, 0.8, 1.1), { at: [x + lean * y, y, z + lean * y * 0.5] });
       k.add(G.cyl(rad * 1.25, rad * 1.25, 0.05, 6), grad('#4e7a2a', 0.9, 1), { at: [x + lean * (y + sh), y + sh * 0.97, z + lean * (y + sh) * 0.5] });
       // 竹节处的细枝叶
-      if (s >= segs - 3 && r() < 0.8) for (let l = 0; l < 3; l++) {
+      if (s >= segs - 3 && r() < 0.8) for (let l = 0; l < 9; l++) {
         const la = r() * TAU;
         k.add(G.blade(0.07, 0.55, 0.1), grad('#5fa83a', 0.7, 1.15), { at: [x + lean * (y + sh), y + sh, z + lean * (y + sh) * 0.5], rot: [Math.PI / 2 - 0.5 + r() * 0.4, la, 0], kind: 'plant' });
       }
@@ -155,7 +155,7 @@ function deadTree(v, seed, color = '#5a4638') {
 // ======================================================================
 // 灌木 / 花草
 // ======================================================================
-function bush(v, color, accent, seed, sy = 1, kind = 'leaf') {
+function bush(v, color, accent, seed, sy = 1, kind = 'leaf', real = false) {
   const k = new Kit(), r = rnd(seed + v);
   const parts = [
     [[0, 0.45, 0, 0.55], [0.45, 0.35, 0.1, 0.4], [-0.4, 0.38, -0.1, 0.42]],
@@ -163,7 +163,7 @@ function bush(v, color, accent, seed, sy = 1, kind = 'leaf') {
     [[-0.5, 0.32, 0, 0.38], [0, 0.42, 0.1, 0.48], [0.55, 0.3, -0.05, 0.36], [0.1, 0.3, -0.45, 0.34]],
     [[0, 0.55, 0, 0.45], [0, 0.95, 0, 0.32]],
   ][v % 4];
-  foliage(k, parts, color, accent, seed + v, { sy, cy: 0, accentAmt: accent ? 0.12 : 0, dens: 1.4 });
+  (real ? foliageLeaves : foliage)(k, parts, color, accent, seed + v, { sy, cy: 0, accentAmt: accent ? 0.12 : 0, dens: 1.4 });
   return k.build();
 }
 const FLOWER_KIND = [
@@ -398,7 +398,7 @@ function crop(v, seed) {
       for (let i = 0; i < 5; i++) k.add(G.blade(0.06, 0.35, 0.1), grad('#5fae3e', 0.7, 1.2), { at: [x, 0.24, z], rot: [0.4, i * 1.25, 0], kind: 'plant' });
     } else if (v === 2) { // 番茄架
       k.add(G.cyl(0.015, 0.015, 0.8, 4), grad(DWOOD), { at: P });
-      k.add(G.blobs([[0, 0.45, 0, 0.18], [0.05, 0.62, 0.02, 0.14]], 1, x * 9), crownPaint('#4f9a3a'), { at: P, kind: 'leaf' });
+      foliage(k, [[0, 0.45, 0, 0.18], [0.05, 0.62, 0.02, 0.14]], '#4f9a3a', null, Math.round(x * 9), { at: P, dens: 2, leaf: [0.7, 1] });
       for (let i = 0; i < 3; i++) k.add(G.sph(0.06, 7, 5), grad('#e8442e', 0.8, 1.3), { at: [x + Math.cos(i * 2) * 0.14, 0.45 + i * 0.1, z + Math.sin(i * 2) * 0.14] });
     } else if (v === 3) { // 麦子
       for (let i = 0; i < 6; i++) {
@@ -671,7 +671,7 @@ function karst(v, seed) {
   for (let i = 0; i < tops; i++) {
     const a = r() * TAU, d = r() * R * 0.35, x = Math.cos(a) * d, z = Math.sin(a) * d;
     k.add(G.cyl(0.05, 0.08, 0.6, 5), grad('#6a4630'), { at: [x, H - 0.1, z] });
-    k.add(G.blobs([[0, 0, 0, 0.35], [0.3, -0.05, 0, 0.25]], 1, seed + i), crownPaint('#3a8a52'), { at: [x, H + 0.5, z], s: [1, 0.55, 1], kind: 'leaf' });
+    foliage(k, [[0, 0, 0, 0.35], [0.3, -0.05, 0, 0.25]], '#3a8a52', null, seed + i, { at: [x, H + 0.5, z], sy: 0.55, dens: 1.6, leaf: [0.6, 0.6] });
   }
   k.add(G.blobs([[0, 0, 0, R * 0.6]], 2, seed), crownPaint('#6ab048'), { at: [0, H - 0.05, 0], s: [1, 0.25, 1], kind: 'leaf' });
   return k.build();
@@ -689,7 +689,7 @@ function bonsaiPine(v, seed) {
     const [x, y, z] = paths[i], a = r() * TAU;
     const ex = x + Math.cos(a) * 0.7, ez = z + Math.sin(a) * 0.4;
     k.add(G.tube([[x, y, z], [ex, y + 0.15, ez]], 0.06, 0.03, 5), grad('#6a4a3a', 0.6, 1));
-    for (const [px, pz, rr] of [[ex, ez, 0.55], [x, z, 0.42]]) k.add(G.blobs([[0, 0, 0, rr], [rr * 0.7, -0.02, 0.1, rr * 0.7], [-rr * 0.6, 0, -0.1, rr * 0.6]], 2, seed + i), crownPaint('#2f7a4a', '#5aa868', seed + i, 0.1), { at: [px, y + 0.25, pz], s: [1, 0.38, 1], kind: 'leaf' });
+    for (const [px, pz, rr] of [[ex, ez, 0.55], [x, z, 0.42]]) foliage(k, [[0, 0, 0, rr], [rr * 0.7, -0.02, 0.1, rr * 0.7], [-rr * 0.6, 0, -0.1, rr * 0.6]], '#2f7a4a', '#5aa868', seed + i, { at: [px, y + 0.25, pz], sy: 0.38, cy: 0, dens: 2.2, leaf: [0.7, 0.45], accentAmt: 0.1 });
   }
   return k.build();
 }
@@ -761,7 +761,8 @@ function pavilion(v) {
   for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; k.add(G.cyl(0.1, 0.11, 2.2, 8), red, { at: [Math.cos(a) * R, 0.3, Math.sin(a) * R] }); }
   for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + TAU / 12; k.add(G.box(R * 1.0, 0.18, 0.12), red, { at: [Math.cos(a) * R * 0.87, 2.4, Math.sin(a) * R * 0.87], rot: [0, -a + Math.PI / 2, 0] }); }
   // 六角攒尖顶：向上凹的曲面 + 翘角
-  const roof = new THREE.LatheGeometry([[0, 1.5], [0.3, 1.25], [0.9, 0.7], [1.6, 0.25], [2.2, 0.0], [2.35, 0.08]].map(([x, y]) => new THREE.Vector2(x, y)), 6);
+  // 轮廓从檐口往顶点走，面才朝外（反过来会被背面剔除，从上面看不到屋顶）
+  const roof = new THREE.LatheGeometry([[2.35, 0.08], [2.2, 0.0], [1.6, 0.25], [0.9, 0.7], [0.3, 1.25], [0, 1.5]].map(([x, y]) => new THREE.Vector2(x, y)), 6);
   k.add(faceted(roof), (geo) => paint(geo, (p, n, out) => out.set(v ? '#3a7a6a' : '#5a6070').multiplyScalar((0.75 + 0.35 * n.y) * (Math.floor(Math.atan2(p.z, p.x) * 8) % 2 ? 0.92 : 1))), { at: [0, 2.45, 0] });
   for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; k.add(G.cone(0.08, 0.6, 5), grad('#3a3e48'), { at: [Math.cos(a) * 2.25, 2.5, Math.sin(a) * 2.25], rot: [Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9] }); }
   k.add(G.sph(0.18, 8, 6), grad('#e8c25a', 0.8, 1.3), { at: [0, 4.0, 0] });
@@ -1063,7 +1064,7 @@ function flowerBed(v, seed) {
   const k = new Kit(), r = rnd(seed + v);
   const palettes = [['#ff9ec7', '#ffffff', '#ffd84a'], ['#a78bf0', '#7ab8ff', '#ffffff'], ['#ff6a5a', '#ffaa33', '#ffe36b'], ['#ffffff', '#f4e0ff', '#ffd0e8']];
   const pal = palettes[v % 4];
-  k.add(G.blobs([[0, 0.12, 0, 0.6], [0.5, 0.1, 0.2, 0.45], [-0.45, 0.1, -0.1, 0.45]], 1, seed + v), crownPaint('#4f9a3a'), { s: [1, 0.45, 1], kind: 'leaf' });
+  foliage(k, [[0, 0.12, 0, 0.6], [0.5, 0.1, 0.2, 0.45], [-0.45, 0.1, -0.1, 0.45]], '#4f9a3a', null, seed + v, { sy: 0.45, cy: 0, dens: 1.4, leaf: [0.8, 1] });
   for (let i = 0; i < 26; i++) {
     const a = r() * TAU, d = Math.sqrt(r()) * 0.85, x = Math.cos(a) * d, z = Math.sin(a) * d * 0.8;
     const y = 0.22 + (1 - d) * 0.12 + r() * 0.08;
@@ -1096,7 +1097,7 @@ function floatRock(v, seed) {
   k.add(faceted(top), mossCap('#5a5468', '#4a8a5a', 0.6), {});
   const bot = lumpy(new THREE.ConeGeometry(R0 * 0.85, R0 * 1.8, 8, 3).rotateX(Math.PI).translate(0, -R0 * 0.9 - 0.17, 0), 0.18, 2, seed + v + 3);
   k.add(faceted(bot), (g) => paint(g, (p, n, out) => out.set('#4a4458').multiplyScalar(0.55 + 0.3 * smooth(-R0 * 2, 0, p.y))));
-  if (v % 2 === 0) k.add(G.blobs([[0, 0, 0, 0.35]], 1, seed), crownPaint('#2f7a4a'), { at: [R0 * 0.3, 0.45, 0], s: [1, 0.6, 1], kind: 'leaf' });
+  if (v % 2 === 0) foliage(k, [[0, 0, 0, 0.35]], '#2f7a4a', null, seed, { at: [R0 * 0.3, 0.45, 0], sy: 0.6, cy: -0.35, dens: 1.8, leaf: [0.7, 1] });
   if (v === 2) for (let i = 0; i < 3; i++) k.add(faceted(G.cone(0.1, 0.5 + r() * 0.3, 5)), grad('#a87aff', 0.6, 1.2), { at: [-0.4 + i * 0.3, 0.15, 0.3], kind: 'gem' });
   return k.build();
 }
@@ -1175,6 +1176,10 @@ export const ASSETS = {
   peach:     { name: '桃花树', n: 3, make: (v) => broadTree([0, 2, 4][v], '#ffb6d0', '#ffffff', 31 + v, { accentAmt: 0.06, bark: '#6a4038', bloom: true }) },
   bush:      { name: '灌木', n: 4, make: (v) => bush(v, ['#4f9e36', '#5aa83a', '#3f8a32', '#66b040'][v], null, 41) },
   berryBush: { name: '浆果丛', n: 3, make: (v) => bush(v, '#3f8a32', ['#e8442e', '#5a6aff', '#ffffff'][v], 51) },
+  // ---- 实叶版（一片片叶子几何）：只在「全部素材」里对比，场景不用 ----
+  treeReal:  { name: '阔叶树·实叶', n: 5, extra: true, make: (v) => broadTree(v, ['#5fae3e', '#4f9e36', '#72bc46', '#5aa83a', '#6cbc44'][v], '#a8d858', 11 + v, { real: true }) },
+  mapleReal: { name: '枫树·实叶', n: 4, extra: true, make: (v) => broadTree(v, ['#e8783a', '#d8582e', '#f2a640', '#cc4a2f'][v], ['#ffb84a', '#ff8a4a', '#ffd86a', '#e8783a'][v], 271 + v, { bark: '#5a3a2e', real: true }) },
+  bushReal:  { name: '灌木·实叶', n: 4, extra: true, make: (v) => bush(v, ['#4f9e36', '#5aa83a', '#3f8a32', '#66b040'][v], null, 41, 1, 'leaf', true) },
   rock:      { name: '岩石', n: 5, make: (v) => rock(v, mossCap('#a8a4a0', '#6ab048', 0.62), 61) },
   flower:    { name: '花丛', n: 6, make: (v) => flowers(v, 71) },
   grass:     { name: '草丛', n: 4, make: (v) => grassTuft(v, '#6cb342', 81) },

@@ -58,22 +58,32 @@ export function mats() {
   const bloom = chain(toon('#ffffff', { vc: true, leaf: true, unique: true, leafTex: PNG.peach_foliage || PNG.foliage }), (s) => swayPatch(s, 1, 0.8), 'swayB');
   const plant = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 2.2, 0.02), 'swayP');
   plant.side = THREE.DoubleSide;
-  const glowM = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) });
+  // 发光物只吃一部分雾：洞穴里雾几乎是黑的，全吃雾的话远处的灯 / 晶石就暗到不发光，只有走近才亮
+  const lightFog = (m) => { m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', '#ifdef USE_FOG\n float fogF = smoothstep(fogNear, fogFar, vFogDepth) * 0.3;\n gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogF);\n#endif'); }; m.customProgramCacheKey = () => 'lightFog'; return m; };
+  const glowM = lightFog(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) }));
   // 晶石类：自发光但不过曝，保留颜色
-  const gem = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.15, 1.15, 1.15) });
+  const gem = lightFog(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.15, 1.15, 1.15) }));
   const ice = new THREE.MeshToonMaterial({ vertexColors: true, transparent: true, opacity: 0.82, gradientMap: solid.gradientMap });
   ice.emissive.set('#3a6a90'); ice.emissiveIntensity = 0.35;
-  // 叶簇卡片树冠：灰度叶簇贴图 × 顶点色，alphaTest 镂空；双面但不翻法线（法线是从树冠中心向外的球面法线，明暗才连贯）
+  // 树叶：真正一片片的叶子几何（同花草做法），双面但不翻法线（法线是从树冠中心向外的球面法线，整冠明暗连贯）
+  const foli = chain(toon('#ffffff', { vc: true, unique: true }), (s) => {
+    swayPatch(s, 1, 0.8);
+    s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#undef DOUBLE_SIDED\n#include <normal_fragment_begin>\n#define DOUBLE_SIDED');
+  }, 'foli');
+  foli.side = THREE.DoubleSide;
+  // 会随风摆的实心件（竹竿等），叶子长在上面不会脱节
+  const sway = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 1, 0.8), 'swayS');
+  // 松针：三向投影松针贴图（有 Codex 生成的 pine_needles.png 就用它，否则用程序贴图）
+  const pine = chain(toon('#ffffff', { vc: true, leaf: true, unique: true, leafTex: PNG.pine_needles || pineNeedleTex() }), (s) => swayPatch(s, 1, 0.8), 'swayPine');
+  // 叶簇卡片树冠：灰度叶簇贴图 × 顶点色，alphaTest 镂空；双面但不翻法线
   const card = chain(toon('#ffffff', { vc: true, unique: true, map: leafClumpTex() }), (s) => {
     swayPatch(s, 1, 0.8);
     s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#undef DOUBLE_SIDED\n#include <normal_fragment_begin>\n#define DOUBLE_SIDED');
   }, 'card');
   card.side = THREE.DoubleSide; card.alphaTest = 0.5;
-  // 叶卡后面的实心内芯：暗色、无描边，挡住卡片缝隙里的“透光”
-  const core = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 1, 0.8), 'swayC');
   MATS = {
-    solid, leaf, bloom, plant, glow: glowM, gem, ice, card, core,
-    line: { solid: lineMat('#2b1d14', 0.03), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), ice: lineMat('#1a2a44', 0.025), gem: lineMat('#1a1428', 0.02) },
+    solid, leaf, bloom, plant, glow: glowM, gem, ice, foli, sway, pine, card,
+    line: { solid: lineMat('#2b1d14', 0.03), sway: lineMat('#2b1d14', 0.03, [1, 0.8]), pine: lineMat('#14281c', 0.04, [1, 0.8]), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), ice: lineMat('#1a2a44', 0.025), gem: lineMat('#1a1428', 0.02) },
   };
   return MATS;
 }
@@ -152,8 +162,7 @@ export class Kit {
       mesh.castShadow = kind !== 'glow' && kind !== 'plant';
       mesh.receiveShadow = kind !== 'glow' && kind !== 'gem';
       if (kind === 'plant') mesh.castShadow = !!o.plantShadow;
-      if (kind === 'leaf' || kind === 'bloom' || kind === 'card') mesh.castShadow = true;
-      if (kind === 'core') mesh.castShadow = false;
+      if (kind === 'leaf' || kind === 'bloom' || kind === 'foli' || kind === 'pine' || kind === 'card') mesh.castShadow = true;
       mesh.userData.kind = kind;
       if (M.line[kind] && o.outline !== false) addOutline(mesh, M.line[kind]);
       grp.add(mesh);
@@ -233,6 +242,79 @@ export const G = {
   lathe: (pts, seg = 12) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg),
 };
 
+// 程序松针贴图（可平铺，中性灰，乘顶点色）：一簇簇斜向下的细针
+function pineNeedleTex() {
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const ctx = cv.getContext('2d'), r = mulberry32(91);
+  ctx.fillStyle = 'rgb(150,150,150)'; ctx.fillRect(0, 0, N, N);
+  const needle = (x, y, a, L, g) => {
+    for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]) {
+      ctx.beginPath(); ctx.moveTo(x + ox, y + oy); ctx.lineTo(x + ox + Math.cos(a) * L, y + oy + Math.sin(a) * L);
+      ctx.strokeStyle = `rgb(${g},${g},${g})`; ctx.stroke();
+    }
+  };
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 260; i++) {
+    // 一簇：小枝向下斜，针从枝上向两侧下方散开
+    const x = r() * N, y = r() * N, dir = Math.PI / 2 + (r() - 0.5) * 0.9, L = 14 + r() * 14, lit = r();
+    ctx.lineWidth = 2.2;
+    for (let k = 0; k < 9; k++) {
+      const t = k / 8, bx = x + Math.cos(dir) * L * t * 0.6, by = y + Math.sin(dir) * L * t * 0.6;
+      for (const sd of [-1, 1]) needle(bx, by, dir + sd * (0.55 + r() * 0.3), L * (0.45 + r() * 0.25), Math.round(110 + lit * 110 + t * 25 + (r() - 0.5) * 30));
+    }
+  }
+  // 归一到平均亮度约 0.88
+  const img = ctx.getImageData(0, 0, N, N), D = img.data; let sum = 0;
+  for (let i = 0; i < D.length; i += 4) sum += D[i];
+  const k = (0.88 * 255) / (sum / (N * N));
+  for (let i = 0; i < D.length; i += 4) D[i] = D[i + 1] = D[i + 2] = Math.min(255, D[i] * k);
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  return t;
+}
+// 树冠：在每个树冠球体里撒一片片真实叶子（带中脊折角的菱形叶），没有实心团块。
+// 叶面大致贴着球面朝外、略微下垂；法线取球面法线，越靠里的叶子越暗（假环境光遮蔽）
+const LEAF_D = matchMedia('(pointer: coarse)').matches ? 0.7 : 1;
+const _lf = { d: new THREE.Vector3(), t: new THREE.Vector3(), X: new THREE.Vector3(), Y: new THREE.Vector3(), Z: new THREE.Vector3(), q: new THREE.Vector3(), n: new THREE.Vector3() };
+export function leafCrown(parts, color, accent, seed = 1, o = {}) {
+  const r = mulberry32(seed * 7 + 3), pos = [], nor = [], col = [], dens = (o.dens ?? 1) * LEAF_D;
+  const base = new THREE.Color(color), acc = accent && new THREE.Color(accent), c = new THREE.Color();
+  const sq = o.sy ?? 1, cy0 = o.cy ?? parts.reduce((a, p) => a + p[1], 0) / parts.length;
+  parts = parts.map(([x, y, z, R]) => [x, cy0 + (y - cy0) * sq, z, R]);
+  const yMin = Math.min(...parts.map((p) => p[1] - p[3] * sq)), yMax = Math.max(...parts.map((p) => p[1] + p[3] * sq));
+  const { d, t, X, Y, Z, q, n } = _lf, lk = o.leaf || [1, 1];
+  // 叶片局部形状：基部、右、尖、左、中脊（中脊略凹）
+  const shape = [[0, 0, 0], [0.38, 0.45, 0.06], [0, 1, 0.1], [-0.38, 0.45, 0.06], [0, 0.42, -0.05]], tris = [0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4];
+  for (const [x, y, z, R] of parts) {
+    const cnt = Math.max(14, Math.round(200 * R * R * dens));
+    for (let i = 0; i < cnt; i++) {
+      const th = r() * Math.PI * 2, cy = r() * 1.75 - 0.75, sy = Math.sqrt(1 - cy * cy);
+      d.set(Math.cos(th) * sy, cy, Math.sin(th) * sy);
+      const depth = Math.sqrt(0.15 + r() * 0.85), rr = R * depth;
+      const L = (0.2 + 0.13 * R) * (0.8 + r() * 0.45) * lk[0], W = lk[1];
+      // 叶尖方向：沿切线 + 一点朝外 + 一点下垂
+      t.set(r() - 0.5, r() - 0.5, r() - 0.5).cross(d).normalize();
+      Y.copy(t).multiplyScalar(0.8).addScaledVector(d, 0.55).add(q.set(0, -0.25, 0)).normalize();
+      Z.copy(d).addScaledVector(Y, -d.dot(Y)).normalize(); X.crossVectors(Y, Z);
+      const bx = x + d.x * rr, by = y + d.y * rr * sq, bz = z + d.z * rr;
+      const ht = (by - yMin) / Math.max(0.01, yMax - yMin);
+      const v = (0.6 + 0.45 * ht) * (0.55 + 0.45 * depth) * (0.86 + r() * 0.26) * (0.85 + 0.25 * Math.max(0, d.y));
+      c.copy(base); if (acc && r() < (o.accentAmt ?? 0.08) * 2.5) c.lerp(acc, 0.85); c.multiplyScalar(v);
+      for (const k of tris) {
+        const [sx, sy2, sz] = shape[k];
+        q.set(bx, by, bz).addScaledVector(X, sx * L * W).addScaledVector(Y, sy2 * L).addScaledVector(Z, sz * L);
+        n.set(q.x - x, (q.y - y) * 1.1 + R * 0.3, q.z - z).normalize().lerp(Z, 0.25).normalize();
+        pos.push(q.x, q.y, q.z); nor.push(n.x, n.y, n.z); col.push(c.r, c.g, c.b);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return g;
+}
 // 叶簇贴图：一团向外散开的尖叶（灰度，乘顶点色上色），透明底
 let _leafTex;
 function leafClumpTex() {
@@ -273,12 +355,12 @@ export function leafCards(parts, seed = 1, o = {}) {
   const r = mulberry32(seed * 7 + 3), pos = [], nor = [], uv = [], dens = o.dens ?? 1;
   const f = new THREE.Vector3(), u = new THREE.Vector3(), v = new THREE.Vector3(), ref = new THREE.Vector3(), c = new THREE.Vector3(), q = new THREE.Vector3(), n = new THREE.Vector3();
   for (const [x, y, z, R] of parts) {
-    const cnt = Math.round((6 + R * R * 12) * dens);
+    const cnt = Math.round((8 + R * R * 16) * dens * LEAF_D);
     for (let i = 0; i < cnt; i++) {
       // 方向偏上（顶部更密），下半部分少放
       const th = r() * Math.PI * 2, cy = r() * 1.6 - 0.6, sy = Math.sqrt(1 - cy * cy);
       const d = new THREE.Vector3(Math.cos(th) * sy, cy, Math.sin(th) * sy);
-      const rr = R * (0.55 + r() * 0.35), size = Math.max(0.32, R * (0.95 + r() * 0.45));
+      const rr = R * (0.2 + r() * 0.7), size = Math.max(0.32, R * (0.95 + r() * 0.45));
       c.set(x, y, z).addScaledVector(d, rr);
       f.copy(d).add(new THREE.Vector3(r() - 0.5, r() - 0.3, r() - 0.5).multiplyScalar(0.9)).normalize();
       ref.set(0, 1, 0); if (Math.abs(f.y) > 0.92) ref.set(1, 0, 0);
@@ -299,13 +381,16 @@ export function leafCards(parts, seed = 1, o = {}) {
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   return g;
 }
-// 树冠 = 暗色实心内芯 + 外面一层叶卡；sy 绕树冠中心压扁
+// 树冠 / 灌木（场景里用的）：叶簇卡片，不要内芯；sy 绕 cy 压扁；at 整体平移
 export function foliage(k, parts, color, accent, seed, o = {}) {
   const sy = o.sy ?? 1, cy = o.cy ?? parts.reduce((a, p) => a + p[1], 0) / parts.length;
-  const squash = (g) => sy === 1 ? g : g.translate(0, -cy, 0).scale(1, sy, 1).translate(0, cy, 0);
-  const dark = new THREE.Color(color).multiplyScalar(0.55);
-  k.add(squash(G.blobs(parts.map(([x, y, z, R]) => [x, y, z, R * 0.72]), 1, seed, 0.15)), crownPaint('#' + dark.getHexString(), null, seed), { kind: 'core' });
-  k.add(squash(leafCards(parts, seed, o)), crownPaint(color, accent, seed, o.accentAmt), { kind: 'card' });
+  const g = leafCards(parts, seed, o);
+  if (sy !== 1) g.translate(0, -cy, 0).scale(1, sy, 1).translate(0, cy, 0);
+  k.add(g, crownPaint(color, accent, seed, o.accentAmt), { kind: 'card', at: o.at });
+}
+// 实叶版树冠：一片片叶子几何（只放在「全部素材」里对比，场景不用）
+export function foliageLeaves(k, parts, color, accent, seed, o = {}) {
+  k.add(leafCrown(parts, color, accent, seed, o), null, { kind: 'foli', at: o.at });
 }
 // 树冠上色：顶亮底暗 + 外亮内暗，偶尔撒点亮色
 export function crownPaint(color, accent = null, seed = 1, accentAmt = 0.08) {

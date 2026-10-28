@@ -47,6 +47,7 @@ controls.target.set(0, 0.5, 0);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.5, 0.9);
+bloom.highPassUniforms.smoothWidth.value = 0.25; // 软阈值：亮度接近阈值的小物件不会一闪一闪
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 const grade = new ShaderPass({
@@ -101,9 +102,13 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false,
+  outline: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {}, bloomT: {},
 };
-try { Object.assign(S, JSON.parse(localStorage.getItem('xxlab') || '{}')); } catch { /* 无痕模式等 */ }
+try {
+  const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
+  if ((saved.v || 1) < 2) delete saved.outline; // v2：描边默认关闭，旧存档里的描边开关作废
+  Object.assign(S, saved, { v: 2 });
+} catch { /* 无痕模式等 */ }
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
 
 let root = new THREE.Group(); scene.add(root);
@@ -518,6 +523,8 @@ function contactShadows(taken) {
 // ======================================================================
 // 图鉴模式：所有素材 × 所有变体排成网格，便于逐个检查
 // ======================================================================
+// 全部素材 = 各区域图鉴 + 只供对比的 extra 素材（场景里不用）
+const ALL_IDS = () => [...new Set([...BIOMES.flatMap((x) => x.catalog), ...Object.keys(ASSETS).filter((id) => ASSETS[id].extra)])];
 // 素材来源：Claude 自己建的（./assets.js）和 Codex 建的（./codex/*.js）严格分开；
 // 图鉴里每一行都带来源标签，并且铺不同颜色的底板（Claude 暖黄 / Codex 青绿）
 const SRC = {
@@ -695,7 +702,7 @@ function build() {
     span = R;
     for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
-    const ids = S.mode === 'all' ? [...new Set(BIOMES.flatMap((x) => x.catalog))] : b.catalog;
+    const ids = S.mode === 'all' ? ALL_IDS() : b.catalog;
     span = buildCatalog(ids, S.mode);
     hAtCur = () => 0;
   }
@@ -721,7 +728,7 @@ function build() {
   stats.counts = countAssets();
 }
 function countAssets() {
-  const ids = S.mode === 'scene' ? [...new Set(BIOMES[S.biome].scatter.map((r) => r.id))] : S.mode === 'all' ? [...new Set(BIOMES.flatMap((x) => x.catalog))] : BIOMES[S.biome].catalog;
+  const ids = S.mode === 'scene' ? [...new Set(BIOMES[S.biome].scatter.map((r) => r.id))] : S.mode === 'all' ? ALL_IDS() : BIOMES[S.biome].catalog;
   const src = S.mode === 'codex' || (S.mode === 'scene' && S.src === 'codex') ? CODEX : null;
   const have = src ? ids.filter((id) => src[id]) : ids;
   return { types: have.length, variants: have.reduce((s, id) => s + (src || ASSETS)[id].n, 0) };
@@ -760,7 +767,16 @@ function applyLight() {
   if (S.mode === 'scene') { scene.fog.near = L.fogNear || 55; scene.fog.far = L.fogFar || 120; }
   else { scene.fog.near = span * 2.2; scene.fog.far = span * 5; }
   renderer.toneMappingExposure = L.exposure;
-  bloom.strength = L.bloom + nightK * 0.25;
+  // 泛光强度：每个区域可单独调（存档 S.bloomK[区域id]），夜里额外 +0.25
+  const bk = S.bloomK[BIOMES[S.biome].id], bBase = bk ?? L.bloom;
+  bloom.strength = bBase + nightK * 0.25;
+  $('#bloomS').value = bBase;
+  $('#bloomV').textContent = `${bBase.toFixed(2)}${bk == null ? '（默认）' : `（默认 ${L.bloom}）`}${nightK > 0.01 ? ` 夜 +${(nightK * 0.25).toFixed(2)}` : ''}`;
+  // 泛光阈值：亮度超过它的像素才发光，越低越多东西发光
+  const bt = S.bloomT[BIOMES[S.biome].id], tDef = L.bloomT ?? 0.9;
+  bloom.threshold = bt ?? tDef;
+  $('#bloomT').value = bloom.threshold;
+  $('#bloomTV').textContent = `${bloom.threshold.toFixed(2)}${bt == null ? '（默认）' : `（默认 ${tDef}）`}`;
   grade.uniforms.uWarm.value = L.warm ?? 1;
   for (const m of waterMats) m.uniforms.uSky.value.copy(skyU.top.value);
   $('#timeV').textContent = `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.floor((t % 1) * 60)).padStart(2, '0')}`;
@@ -816,6 +832,10 @@ function setupUI() {
   document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { S[el.dataset.t] = !S[el.dataset.t]; save(); applyToggles(); ui(); });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
+  $('#bloomS').oninput = (e) => { S.bloomK[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
+  $('#bloomReset').onclick = () => { delete S.bloomK[BIOMES[S.biome].id]; save(); applyLight(); };
+  $('#bloomT').oninput = (e) => { S.bloomT[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
+  $('#bloomTReset').onclick = () => { delete S.bloomT[BIOMES[S.biome].id]; save(); applyLight(); };
   $('#line').oninput = (e) => { U.line.value = +e.target.value; };
   $('#reseed').onclick = () => { S.seed++; save(); rebuild(false); };
   $('#shot').onclick = () => { composer.render(); const a = document.createElement('a'); a.download = `lab-${BIOMES[S.biome].id}.png`; a.href = renderer.domElement.toDataURL('image/png'); a.click(); };
@@ -840,7 +860,7 @@ function updateStats(dt) {
   if (stats.acc > 0.5) {
     stats.fps = Math.round(stats.n / stats.acc); stats.acc = 0; stats.n = 0;
     const i = renderer.info.render;
-    $('#stats').textContent = `${stats.fps} fps · ${i.calls} draw · ${(i.triangles / 1000).toFixed(0)}k tri · ${stats.counts.types} 种素材 / ${stats.counts.variants} 个变体 · Codex 已有 ${Object.keys(CODEX).length}/${Object.keys(ASSETS).length} 种${CODEX_ERRORS.length ? ' · ⚠ Codex 出错 ' + CODEX_ERRORS.length + ' 处(见控制台)' : ''}`;
+    $('#stats').textContent = `${stats.fps} fps · ${i.calls} draw · ${(i.triangles / 1000).toFixed(0)}k tri · ${stats.counts.types} 种素材 / ${stats.counts.variants} 个变体 · Codex 已有 ${Object.keys(CODEX).length}/${Object.values(ASSETS).filter((a) => !a.extra).length} 种${CODEX_ERRORS.length ? ' · ⚠ Codex 出错 ' + CODEX_ERRORS.length + ' 处(见控制台)' : ''}`;
   }
 }
 
@@ -930,7 +950,7 @@ function storm(dt) {
 
 status('加载贴图…', 25);
 await loadCodex();
-await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 }, ...CODEX_TEXTURES });
+await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 }, pine_needles: { norm: 0.88 }, ...CODEX_TEXTURES });
 status('生成地形与素材…', 55);
 await nextFrame();
 setupUI();

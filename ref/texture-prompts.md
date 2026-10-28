@@ -85,9 +85,21 @@ Game texture, 1024x512 PNG with TRANSPARENT background (if transparency is impos
 
 ---
 
-# 第四批：农田（Claude 经 Codex CLI 直接生成，模型 gpt-6.1-sol）
+# 第四批：松树
 
-## 12. tilled_soil.png — 开垦后的田土
+## 12. pine_needles.png — 松针（松树每层圆锥用，三向投影平铺）
+
+实验场（lab.html）会自动加载这张；没有时用程序生成的松针贴图代替。
+
+```
+Seamless tileable texture, 512x512 PNG, close-up of dense evergreen pine / fir needle foliage for stylized cozy tree canopies in a xianxia farming game. Many small sprays of short thin needles growing from twigs that angle DOWNWARD and outward (like layered fir branches seen from the side), overlapping in soft rows, each spray lighter at its tips and darker toward its base and underneath. Neutral desaturated mid-grey-green values only (the game tints it with vertex color), medium contrast, no bright highlights, no pure black. Hand-painted painterly style (NOT pixel art), even flat lighting, no sky gaps, no trunk, no cones, no snow, no text, no border. Edges must tile seamlessly on all four sides.
+```
+
+---
+
+# 第五批：农田（Claude 经 Codex CLI 直接生成，模型 gpt-6.1-sol）
+
+## 13. tilled_soil.png — 开垦后的田土
 
 ```
 Seamless tileable texture, 512x512 PNG, top-down orthographic view of freshly tilled farm soil for a cozy xianxia (Chinese immortal cultivation) farming game. Neat parallel furrow rows running horizontally, about 8 rows across the image, raised ridges lighter on top and darker moist soil in the grooves. Rich dark brown tones (#5a3a22 to #8a5a36) with small clods and a few tiny pebbles, no plants, no grass. Hand-painted pixel-art style with soft painterly shading, matching a warm ochre dirt path texture. Even flat lighting, no cast shadows, no perspective, no text, no border. Edges must tile seamlessly on all four sides; rows must line up across the top and bottom edges.
