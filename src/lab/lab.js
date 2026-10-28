@@ -100,7 +100,7 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', time: 10, seed: 1,
-  outline: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, pixel: false, spin: false,
+  outline: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false,
 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('xxlab') || '{}')); } catch { /* 无痕模式等 */ }
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
@@ -149,7 +149,7 @@ function buildIsland(b) {
   top.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   top.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   top.setIndex(idx); top.computeVertexNormals();
-  // 像素贴图：每单位约 10 像素；烘进环境光遮蔽（坡脚、崖底变暗）和高处提亮
+  // 地面颜色贴图（线性过滤，平滑）：每单位约 10 像素；烘进环境光遮蔽（坡脚、崖底变暗）和高处提亮
   const N = 512, AO_R = 0.8, dirs = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [Math.cos(k / 8 * Math.PI * 2) * AO_R, Math.sin(k / 8 * Math.PI * 2) * AO_R]);
   const tex = canvasTex(N, N, (ctx) => {
     const img = ctx.createImageData(N, N), D = img.data;
@@ -157,12 +157,12 @@ function buildIsland(b) {
       const x = -R + (i + 0.5) / N * 2 * R, z = -R + (j + 0.5) / N * 2 * R;
       const t = T(x, z), c = b.color(x, z, t), h = hAt(x, z);
       let occ = 0; for (const [dx, dz] of dirs) occ += clamp((hAt(x + dx, z + dz) - h) / 0.9, 0, 1);
-      const d = (0.95 + hash01(i, j, 3) * 0.1) * (1 - 0.42 * occ / 8) * (1 + clamp(h - 0.35, 0, 4) * 0.035);
+      const d = (1 - 0.42 * occ / 8) * (1 + clamp(h - 0.35, 0, 4) * 0.035);
       const k = (j * N + i) * 4;
       D[k] = c[0] * d; D[k + 1] = c[1] * d; D[k + 2] = c[2] * d; D[k + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
-  }, { repeat: false });
+  }, { repeat: false, pixel: false });
   groundTex = tex;
   // 陡坡（断崖）改用三向投影岩壁贴图 + 横向岩层；坡顶坡底各压一道暗边
   const gm = toon('#ffffff', { map: tex, unique: true });
@@ -285,7 +285,7 @@ function makeWater(W, hAt, area, masked = false) {
         vec4 dm = texture2D(tDepth, uv);
         if (uMask > 0.5 && (dm.g < 0.5 || length(uv - 0.5) > 0.5)) discard;
         float d = dm.r;
-        vec2 p = floor(vXZ * 10.0) / 10.0; // 像素化采样，和地面一致
+        vec2 p = vXZ;
         vec3 c; float a = 0.9;
         if (uMode < 0.5) {
           c = mix(cShallow, cDeep, smoothstep(0.0, 0.75, d));
@@ -370,7 +370,7 @@ function waterfall(f, W) {
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
       void main() {
-        vec2 q = vec2(floor(vUv.x * 14.0) / 14.0, vUv.y);
+        vec2 q = vUv;
         float s = vn(vec2(q.x * 9.0, q.y * 4.0 + uTime * 3.2)) * 0.6 + vn(vec2(q.x * 21.0, q.y * 9.0 + uTime * 5.0)) * 0.4;
         vec3 c = mix(cA * 1.1, cB, smoothstep(0.45, 0.75, s));
         c = mix(c, cB, smoothstep(0.85, 1.0, vUv.y) * 0.7 + smoothstep(0.2, 0.0, vUv.y) * 0.8);
@@ -771,9 +771,8 @@ function applyToggles() {
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
   if (chibi) chibi.root.visible = S.chibi && S.mode === 'scene';
-  const pr = S.pixel ? 0.42 : basePR();
+  const pr = basePR();
   if (pr !== pixelRatio) { pixelRatio = pr; resize(); }
-  renderer.domElement.style.imageRendering = S.pixel ? 'pixelated' : 'auto';
 }
 
 // ======================================================================
@@ -811,7 +810,6 @@ function setupUI() {
     if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
     if (e.key === 'r' || e.key === 'R') { S.seed++; save(); rebuild(false); }
     if (e.key === 'o' || e.key === 'O') { S.outline = !S.outline; save(); applyToggles(); ui(); }
-    if (e.key === 'p' || e.key === 'P') { S.pixel = !S.pixel; save(); applyToggles(); ui(); }
   });
 }
 

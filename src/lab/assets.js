@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32 } from './kit.js';
+import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage } from './kit.js';
 import { vnoise, smooth, clamp } from '../util.js';
 import { LH } from './biomes.js';
 
@@ -63,7 +63,7 @@ function broadTree(v, leaf, accent, seed, o = {}) {
     const a = i * 2.1 + seed, top = T.t[2];
     k.add(G.tube([[top[0], top[1] - 0.3, top[2]], [top[0] + Math.cos(a) * 0.6, top[1] + 0.2, top[2] + Math.sin(a) * 0.6]], T.r * 0.5, T.r * 0.2, 5), grad(o.bark || '#7a5236', 0.6, 1));
   }
-  k.add(G.blobs(T.c, 2, seed), crownPaint(leaf, accent, seed, o.accentAmt), { kind: o.bloom ? 'bloom' : 'leaf' });
+  foliage(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt });
   if (o.fruit) {
     const r = rnd(seed);
     for (let i = 0; i < 9; i++) {
@@ -163,7 +163,7 @@ function bush(v, color, accent, seed, sy = 1, kind = 'leaf') {
     [[-0.5, 0.32, 0, 0.38], [0, 0.42, 0.1, 0.48], [0.55, 0.3, -0.05, 0.36], [0.1, 0.3, -0.45, 0.34]],
     [[0, 0.55, 0, 0.45], [0, 0.95, 0, 0.32]],
   ][v % 4];
-  k.add(G.blobs(parts, 2, seed + v), crownPaint(color, accent, seed + v, accent ? 0.12 : 0), { kind, s: [1, sy, 1] });
+  foliage(k, parts, color, accent, seed + v, { sy, cy: 0, accentAmt: accent ? 0.12 : 0, dens: 1.4 });
   return k.build();
 }
 const FLOWER_KIND = [
@@ -878,7 +878,7 @@ function swampTree(v, seed) {
   k.add(G.tube([[0, 0.8, 0], [bend * 0.5, H * 0.55, 0.1], [bend, H, 0]], 0.2, 0.1, 7), grad('#4a4234', 0.6, 1, 0.15));
   const crown = [[bend, H + 0.2, 0, 1.0], [bend + 0.9, H - 0.05, 0.2, 0.75], [bend - 0.85, H, -0.1, 0.8], [bend, H, 0.8, 0.7]];
   // 压扁树冠要绕树冠中心缩放，不然整团会掉到树干中间
-  k.add(G.blobs(crown, 2, seed + v).translate(0, -H, 0).scale(1, 0.55, 1).translate(0, H, 0), crownPaint('#5a6a34', '#7a8a40', seed + v, 0.08), { kind: 'leaf' });
+  foliage(k, crown, '#5a6a34', '#7a8a40', seed + v, { sy: 0.55, accentAmt: 0.08 });
   // 垂挂的苔藓
   for (let i = 0; i < 16; i++) {
     const c = crown[i % crown.length], a = r() * TAU, d = c[3] * (0.5 + r() * 0.5), L = 0.5 + r() * 0.9;
@@ -1051,7 +1051,7 @@ function wisteria(v, seed) {
   const k = new Kit(), r = rnd(seed + v), col = v ? '#f0e8ff' : '#b08af0';
   k.add(G.tube([[0, 0, 0], [0.3, 1.2, 0], [-0.1, 2.2, 0.1], [0.2, 2.8, 0]], 0.18, 0.09, 7), grad('#6a5040', 0.6, 1.05, 0.15));
   const crown = [[0.2, 3.1, 0, 1.1], [1.0, 2.9, 0.2, 0.8], [-0.7, 2.95, -0.2, 0.85], [0.2, 3.0, 0.9, 0.75]];
-  k.add(G.blobs(crown, 2, seed + v).translate(0, -3, 0).scale(1, 0.6, 1).translate(0, 3, 0), crownPaint('#5aa040', '#7ac050', seed), { kind: 'leaf' });
+  foliage(k, crown, '#5aa040', '#7ac050', seed + v, { sy: 0.6 });
   for (let i = 0; i < 26; i++) {
     const c = crown[i % crown.length], a = r() * TAU, d = c[3] * (0.3 + r() * 0.7), L = 0.6 + r() * 0.8;
     const x = c[0] + Math.cos(a) * d, z = c[2] + Math.sin(a) * d, y = 3 + (c[1] - 3) * 0.6 - c[3] * 0.3;

@@ -63,8 +63,16 @@ export function mats() {
   const gem = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.15, 1.15, 1.15) });
   const ice = new THREE.MeshToonMaterial({ vertexColors: true, transparent: true, opacity: 0.82, gradientMap: solid.gradientMap });
   ice.emissive.set('#3a6a90'); ice.emissiveIntensity = 0.35;
+  // 叶簇卡片树冠：灰度叶簇贴图 × 顶点色，alphaTest 镂空；双面但不翻法线（法线是从树冠中心向外的球面法线，明暗才连贯）
+  const card = chain(toon('#ffffff', { vc: true, unique: true, map: leafClumpTex() }), (s) => {
+    swayPatch(s, 1, 0.8);
+    s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#undef DOUBLE_SIDED\n#include <normal_fragment_begin>\n#define DOUBLE_SIDED');
+  }, 'card');
+  card.side = THREE.DoubleSide; card.alphaTest = 0.5;
+  // 叶卡后面的实心内芯：暗色、无描边，挡住卡片缝隙里的“透光”
+  const core = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 1, 0.8), 'swayC');
   MATS = {
-    solid, leaf, bloom, plant, glow: glowM, gem, ice,
+    solid, leaf, bloom, plant, glow: glowM, gem, ice, card, core,
     line: { solid: lineMat('#2b1d14', 0.03), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), ice: lineMat('#1a2a44', 0.025), gem: lineMat('#1a1428', 0.02) },
   };
   return MATS;
@@ -144,7 +152,8 @@ export class Kit {
       mesh.castShadow = kind !== 'glow' && kind !== 'plant';
       mesh.receiveShadow = kind !== 'glow' && kind !== 'gem';
       if (kind === 'plant') mesh.castShadow = !!o.plantShadow;
-      if (kind === 'leaf' || kind === 'bloom') mesh.castShadow = true;
+      if (kind === 'leaf' || kind === 'bloom' || kind === 'card') mesh.castShadow = true;
+      if (kind === 'core') mesh.castShadow = false;
       mesh.userData.kind = kind;
       if (M.line[kind] && o.outline !== false) addOutline(mesh, M.line[kind]);
       grp.add(mesh);
@@ -224,6 +233,80 @@ export const G = {
   lathe: (pts, seg = 12) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg),
 };
 
+// 叶簇贴图：一团向外散开的尖叶（灰度，乘顶点色上色），透明底
+let _leafTex;
+function leafClumpTex() {
+  if (_leafTex) return _leafTex;
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const ctx = cv.getContext('2d'), r = mulberry32(77);
+  const leaf = (x, y, a, L, w, fill, stroke) => {
+    ctx.save(); ctx.translate(x * N, y * N); ctx.rotate(a + Math.PI / 2);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(w * N, -L * N * 0.45, 0, -L * N); ctx.quadraticCurveTo(-w * N, -L * N * 0.45, 0, 0);
+    ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.2; ctx.stroke(); }
+    ctx.restore();
+  };
+  const grey = (g) => { const v = Math.round(clamp(g, 0, 1) * 255); return `rgb(${v},${v},${v})`; };
+  // 1) 外缘一圈向外的尖叶 → 锯齿状轮廓
+  for (let i = 0; i < 34; i++) {
+    const a = i / 34 * Math.PI * 2 + (r() - 0.5) * 0.2, d = 0.22 + r() * 0.06;
+    leaf(0.5 + Math.cos(a) * d, 0.5 + Math.sin(a) * d, a + (r() - 0.5) * 0.5, 0.13 + r() * 0.06, 0.05, grey(0.62 - Math.sin(a) * 0.14));
+  }
+  // 2) 叶团主体：重叠的圆，上亮下暗
+  for (let i = 0; i < 16; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.16, x = 0.5 + Math.cos(a) * d, y = 0.5 + Math.sin(a) * d, rr = 0.11 + r() * 0.06;
+    const gr = ctx.createRadialGradient(x * N, (y - rr * 0.5) * N, 0, x * N, y * N, rr * N);
+    gr.addColorStop(0, grey(0.95 - y * 0.45)); gr.addColorStop(1, grey(0.7 - y * 0.35));
+    ctx.beginPath(); ctx.arc(x * N, y * N, rr * N, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
+  }
+  // 3) 表面若隐若现的叶片（低对比），上半部更亮
+  for (let i = 0; i < 26; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.22, x = 0.5 + Math.cos(a) * d, y = 0.5 + Math.sin(a) * d;
+    leaf(x, y, a + (r() - 0.5) * 1.2, 0.08 + r() * 0.05, 0.035, y < 0.5 ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.12)', 'rgba(20,30,10,0.12)');
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return (_leafTex = t);
+}
+// 叶簇卡片：在每个树冠球体内外散布朝外的方形叶卡（不再是一团团凹凸球）
+// parts: [[x, y, z, r], ...]；法线取“顶点 - 球心”与卡片朝向的混合，所以整冠有柔和的体积明暗
+export function leafCards(parts, seed = 1, o = {}) {
+  const r = mulberry32(seed * 7 + 3), pos = [], nor = [], uv = [], dens = o.dens ?? 1;
+  const f = new THREE.Vector3(), u = new THREE.Vector3(), v = new THREE.Vector3(), ref = new THREE.Vector3(), c = new THREE.Vector3(), q = new THREE.Vector3(), n = new THREE.Vector3();
+  for (const [x, y, z, R] of parts) {
+    const cnt = Math.round((6 + R * R * 12) * dens);
+    for (let i = 0; i < cnt; i++) {
+      // 方向偏上（顶部更密），下半部分少放
+      const th = r() * Math.PI * 2, cy = r() * 1.6 - 0.6, sy = Math.sqrt(1 - cy * cy);
+      const d = new THREE.Vector3(Math.cos(th) * sy, cy, Math.sin(th) * sy);
+      const rr = R * (0.55 + r() * 0.35), size = Math.max(0.32, R * (0.95 + r() * 0.45));
+      c.set(x, y, z).addScaledVector(d, rr);
+      f.copy(d).add(new THREE.Vector3(r() - 0.5, r() - 0.3, r() - 0.5).multiplyScalar(0.9)).normalize();
+      ref.set(0, 1, 0); if (Math.abs(f.y) > 0.92) ref.set(1, 0, 0);
+      u.crossVectors(ref, f).normalize(); v.crossVectors(f, u);
+      const roll = r() * Math.PI * 2, cr = Math.cos(roll), sr = Math.sin(roll);
+      const U2 = u.clone().multiplyScalar(cr).addScaledVector(v, sr).multiplyScalar(size / 2), V2 = v.clone().multiplyScalar(cr).addScaledVector(u, -sr).multiplyScalar(size / 2);
+      const corners = [[-1, -1, 0, 0], [1, -1, 1, 0], [1, 1, 1, 1], [-1, -1, 0, 0], [1, 1, 1, 1], [-1, 1, 0, 1]];
+      for (const [a, b, s, t] of corners) {
+        q.copy(c).addScaledVector(U2, a).addScaledVector(V2, b);
+        n.set(q.x - x, (q.y - y) * 1.15 + R * 0.25, q.z - z).normalize().lerp(f, 0.3).normalize();
+        pos.push(q.x, q.y, q.z); nor.push(n.x, n.y, n.z); uv.push(s, t);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+// 树冠 = 暗色实心内芯 + 外面一层叶卡；sy 绕树冠中心压扁
+export function foliage(k, parts, color, accent, seed, o = {}) {
+  const sy = o.sy ?? 1, cy = o.cy ?? parts.reduce((a, p) => a + p[1], 0) / parts.length;
+  const squash = (g) => sy === 1 ? g : g.translate(0, -cy, 0).scale(1, sy, 1).translate(0, cy, 0);
+  const dark = new THREE.Color(color).multiplyScalar(0.55);
+  k.add(squash(G.blobs(parts.map(([x, y, z, R]) => [x, y, z, R * 0.72]), 1, seed, 0.15)), crownPaint('#' + dark.getHexString(), null, seed), { kind: 'core' });
+  k.add(squash(leafCards(parts, seed, o)), crownPaint(color, accent, seed, o.accentAmt), { kind: 'card' });
+}
 // 树冠上色：顶亮底暗 + 外亮内暗，偶尔撒点亮色
 export function crownPaint(color, accent = null, seed = 1, accentAmt = 0.08) {
   const base = new THREE.Color(color), acc = accent && new THREE.Color(accent);
