@@ -909,7 +909,7 @@ function storm(dt) {
 }
 
 status('加载贴图…', 25);
-await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 } });
+await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 }, pine_needles: { norm: 0.88 } });
 status('生成地形与素材…', 55);
 await nextFrame();
 setupUI();

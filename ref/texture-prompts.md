@@ -82,3 +82,15 @@ Game texture atlas, 1024x1024 PNG with TRANSPARENT background (if transparency i
 ```
 Game texture, 1024x512 PNG with TRANSPARENT background (if transparency is impossible, use a solid flat pure magenta #FF00FF background with no gradient). A single row of about 25-35 stylized grass blades growing straight up from the BOTTOM edge of the image, like a cozy hand-painted farming game. Blades are slender, tapered to sharp tips, slightly curved and leaning in different directions, varying heights from 40% to 95% of the image height, some overlapping. Every blade must touch the bottom edge; nothing touches the top or the left/right edges. Fresh greens (#4f9a34 at the base to #c4e870 at the tips), darker at the base, lighter at the tips, soft painterly shading, a few blades slightly yellow-green. No flowers, no soil, no ground line, no drop shadow, no outline, no text.
 ```
+
+---
+
+# 第四批：松树
+
+## 12. pine_needles.png — 松针（松树每层圆锥用，三向投影平铺）
+
+实验场（lab.html）会自动加载这张；没有时用程序生成的松针贴图代替。
+
+```
+Seamless tileable texture, 512x512 PNG, close-up of dense evergreen pine / fir needle foliage for stylized cozy tree canopies in a xianxia farming game. Many small sprays of short thin needles growing from twigs that angle DOWNWARD and outward (like layered fir branches seen from the side), overlapping in soft rows, each spray lighter at its tips and darker toward its base and underneath. Neutral desaturated mid-grey-green values only (the game tints it with vertex color), medium contrast, no bright highlights, no pure black. Hand-painted painterly style (NOT pixel art), even flat lighting, no sky gaps, no trunk, no cones, no snow, no text, no border. Edges must tile seamlessly on all four sides.
+```
