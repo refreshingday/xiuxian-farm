@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage } from './kit.js';
+import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage, foliageLeaves } from './kit.js';
 import { vnoise, smooth, clamp } from '../util.js';
 import { LH } from './biomes.js';
 
@@ -63,7 +63,7 @@ function broadTree(v, leaf, accent, seed, o = {}) {
     const a = i * 2.1 + seed, top = T.t[2];
     k.add(G.tube([[top[0], top[1] - 0.3, top[2]], [top[0] + Math.cos(a) * 0.6, top[1] + 0.2, top[2] + Math.sin(a) * 0.6]], T.r * 0.5, T.r * 0.2, 5), grad(o.bark || '#7a5236', 0.6, 1));
   }
-  foliage(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt });
+  (o.real ? foliageLeaves : foliage)(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt });
   if (o.fruit) {
     const r = rnd(seed);
     for (let i = 0; i < 9; i++) {
@@ -155,7 +155,7 @@ function deadTree(v, seed, color = '#5a4638') {
 // ======================================================================
 // 灌木 / 花草
 // ======================================================================
-function bush(v, color, accent, seed, sy = 1, kind = 'leaf') {
+function bush(v, color, accent, seed, sy = 1, kind = 'leaf', real = false) {
   const k = new Kit(), r = rnd(seed + v);
   const parts = [
     [[0, 0.45, 0, 0.55], [0.45, 0.35, 0.1, 0.4], [-0.4, 0.38, -0.1, 0.42]],
@@ -163,7 +163,7 @@ function bush(v, color, accent, seed, sy = 1, kind = 'leaf') {
     [[-0.5, 0.32, 0, 0.38], [0, 0.42, 0.1, 0.48], [0.55, 0.3, -0.05, 0.36], [0.1, 0.3, -0.45, 0.34]],
     [[0, 0.55, 0, 0.45], [0, 0.95, 0, 0.32]],
   ][v % 4];
-  foliage(k, parts, color, accent, seed + v, { sy, cy: 0, accentAmt: accent ? 0.12 : 0, dens: 1.4 });
+  (real ? foliageLeaves : foliage)(k, parts, color, accent, seed + v, { sy, cy: 0, accentAmt: accent ? 0.12 : 0, dens: 1.4 });
   return k.build();
 }
 const FLOWER_KIND = [
@@ -1176,6 +1176,10 @@ export const ASSETS = {
   peach:     { name: '桃花树', n: 3, make: (v) => broadTree([0, 2, 4][v], '#ffb6d0', '#ffffff', 31 + v, { accentAmt: 0.06, bark: '#6a4038', bloom: true }) },
   bush:      { name: '灌木', n: 4, make: (v) => bush(v, ['#4f9e36', '#5aa83a', '#3f8a32', '#66b040'][v], null, 41) },
   berryBush: { name: '浆果丛', n: 3, make: (v) => bush(v, '#3f8a32', ['#e8442e', '#5a6aff', '#ffffff'][v], 51) },
+  // ---- 实叶版（一片片叶子几何）：只在「全部素材」里对比，场景不用 ----
+  treeReal:  { name: '阔叶树·实叶', n: 5, extra: true, make: (v) => broadTree(v, ['#5fae3e', '#4f9e36', '#72bc46', '#5aa83a', '#6cbc44'][v], '#a8d858', 11 + v, { real: true }) },
+  mapleReal: { name: '枫树·实叶', n: 4, extra: true, make: (v) => broadTree(v, ['#e8783a', '#d8582e', '#f2a640', '#cc4a2f'][v], ['#ffb84a', '#ff8a4a', '#ffd86a', '#e8783a'][v], 271 + v, { bark: '#5a3a2e', real: true }) },
+  bushReal:  { name: '灌木·实叶', n: 4, extra: true, make: (v) => bush(v, ['#4f9e36', '#5aa83a', '#3f8a32', '#66b040'][v], null, 41, 1, 'leaf', true) },
   rock:      { name: '岩石', n: 5, make: (v) => rock(v, mossCap('#a8a4a0', '#6ab048', 0.62), 61) },
   flower:    { name: '花丛', n: 6, make: (v) => flowers(v, 71) },
   grass:     { name: '草丛', n: 4, make: (v) => grassTuft(v, '#6cb342', 81) },

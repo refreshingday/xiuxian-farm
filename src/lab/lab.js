@@ -522,6 +522,8 @@ function contactShadows(taken) {
 // ======================================================================
 // 图鉴模式：所有素材 × 所有变体排成网格，便于逐个检查
 // ======================================================================
+// 全部素材 = 各区域图鉴 + 只供对比的 extra 素材（场景里不用）
+const ALL_IDS = () => [...new Set([...BIOMES.flatMap((x) => x.catalog), ...Object.keys(ASSETS).filter((id) => ASSETS[id].extra)])];
 function buildCatalog(ids) {
   const rows = ids.map((id) => {
     const A = ASSETS[id], items = [];
@@ -686,7 +688,7 @@ function build() {
     span = R;
     for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
-    const ids = S.mode === 'all' ? [...new Set(BIOMES.flatMap((x) => x.catalog))] : b.catalog;
+    const ids = S.mode === 'all' ? ALL_IDS() : b.catalog;
     span = buildCatalog(ids);
     hAtCur = () => 0;
   }
@@ -712,7 +714,7 @@ function build() {
   stats.counts = countAssets();
 }
 function countAssets() {
-  const ids = S.mode === 'scene' ? [...new Set(BIOMES[S.biome].scatter.map((r) => r.id))] : S.mode === 'all' ? [...new Set(BIOMES.flatMap((x) => x.catalog))] : BIOMES[S.biome].catalog;
+  const ids = S.mode === 'scene' ? [...new Set(BIOMES[S.biome].scatter.map((r) => r.id))] : S.mode === 'all' ? ALL_IDS() : BIOMES[S.biome].catalog;
   return { types: ids.length, variants: ids.reduce((s, id) => s + ASSETS[id].n, 0) };
 }
 function frame(reset = true) {
