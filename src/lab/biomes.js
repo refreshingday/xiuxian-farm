@@ -113,7 +113,7 @@ const M_T = makeTerrace({
     { kind: 'ladder', pts: [[-7, -7], [-7, -22]] },                                 // 西侧一溜木梯直上
     { kind: 'logs', pts: [[-1, 10], [-1, 17]] },                                    // 南面小丘的木桩台阶
   ],
-  erode: (x, z) => smooth(0.66, 0.74, fbm(x * 0.09 + 3, z * 0.09, 44, 2)) * smooth(2.5, 4, Math.abs(x - 10.8)),
+  erode: (x, z) => smooth(0.7, 0.76, fbm(x * 0.09 + 3, z * 0.09, 44, 2)) * smooth(2.5, 4, Math.abs(x - 10.8)),
   stream: [[11, -21], [11, -14], [10.5, -6], [10, 4]],
 });
 // 赤枫林：东北缓升的梯台 + 西边一座窄阶高台（像层层叠的塔），溪水跌进西南的池塘
@@ -125,7 +125,7 @@ const A_T = makeTerrace({
     { kind: 'stairs', pts: [[-1, 2], [-2.5, -16]] },                               // 一条直上的石阶
     { kind: 'ladder', pts: [[-7.5, -5], [-14, -4]] },                               // 叠塔高台靠木梯一层层爬
   ],
-  erode: (x, z) => smooth(0.66, 0.74, fbm(x * 0.09 + 7, z * 0.09, 45, 2)) * smooth(2.5, 4, Math.abs(x + 6.3)) * smooth(6.5, 8, Math.hypot(x + 14, z + 4)),
+  erode: (x, z) => smooth(0.7, 0.76, fbm(x * 0.09 + 7, z * 0.09, 45, 2)) * smooth(2.5, 4, Math.abs(x + 6.3)) * smooth(6.5, 8, Math.hypot(x + 14, z + 4)),
   stream: [[-5, -21], [-6, -12], [-7, -3], [-7, 5]],
 });
 
