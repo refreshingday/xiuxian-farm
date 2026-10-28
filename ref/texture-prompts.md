@@ -89,7 +89,7 @@ Game texture, 1024x512 PNG with TRANSPARENT background (if transparency is impos
 
 ## 12. pine_needles.png — 松针（松树每层圆锥用，三向投影平铺）
 
-实验场（lab.html）会自动加载这张；没有时用程序生成的松针贴图代替。
+实验场（lab.html）会自动加载这张；没有时用程序生成的松针贴图代替。（2026-10-28 由 Claude 经 Codex CLI 生成，模型 gpt-6.1-sol，已放入 assets/textures/）
 
 ```
 Seamless tileable texture, 512x512 PNG, close-up of dense evergreen pine / fir needle foliage for stylized cozy tree canopies in a xianxia farming game. Many small sprays of short thin needles growing from twigs that angle DOWNWARD and outward (like layered fir branches seen from the side), overlapping in soft rows, each spray lighter at its tips and darker toward its base and underneath. Neutral desaturated mid-grey-green values only (the game tints it with vertex color), medium contrast, no bright highlights, no pure black. Hand-painted painterly style (NOT pixel art), even flat lighting, no sky gaps, no trunk, no cones, no snow, no text, no border. Edges must tile seamlessly on all four sides.
