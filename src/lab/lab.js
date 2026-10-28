@@ -106,7 +106,7 @@ try { Object.assign(S, JSON.parse(localStorage.getItem('xxlab') || '{}')); } cat
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
 
 let root = new THREE.Group(); scene.add(root);
-let emitters = [], bobbers = [], labels = [], waterMat = null, particleSys = [];
+let emitters = [], bobbers = [], labels = [], waterMats = [], particleSys = [];
 
 // ======================================================================
 // 地面：圆形小岛（像素贴图顶面 + 分层土壁）
@@ -227,7 +227,7 @@ function buildIsland(b) {
 function buildWater(b, hAt) {
   const W = b.water; if (!W) return;
   flowLine = b.terrace?.stream || null;
-  waterMat = makeWater(W, hAt, { x: 0, z: 0, r: R - 0.6 });
+  makeWater(W, hAt, { x: 0, z: 0, r: R - 0.6 });
   // 台地上的高处水潭：同一种水，只是单独一层水面，用遮罩裁掉崖外部分
   for (const p of b.terrace?.pools || []) makeWater({ ...W, level: p.level }, hAt, p, true);
   for (const f of b.terrace?.falls || []) waterfall(f, W);
@@ -244,6 +244,8 @@ function flowAt(x, z) {
   const k = smooth(1.6, 0.4, best);
   return [fx * k, fz * k];
 }
+// UniformsUtils.merge 会克隆每个 uniform —— 共享的 uTime 必须重新挂回去，否则时间被冻结、水面不动
+function fogU(o) { const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, o]); if (o.uTime) u.uTime = o.uTime; return u; }
 function makeWater(W, hAt, area, masked = false) {
   const N = masked ? 64 : 192, data = new Uint8Array(N * N * 4), x0 = area.x - area.r, z0 = area.z - area.r, sz = area.r * 2;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
@@ -258,11 +260,11 @@ function makeWater(W, hAt, area, masked = false) {
   const mode = { water: 0, ice: 1, lava: 2 }[W.mode];
   const mat = new THREE.ShaderMaterial({
     transparent: mode !== 2, fog: true,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+    uniforms: fogU({
       tDepth: { value: dt }, uTime: U.time, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: sz }, uMask: { value: masked ? 1 : 0 }, uMode: { value: mode },
       cShallow: { value: new THREE.Color(W.shallow) }, cDeep: { value: new THREE.Color(W.deep) }, cFoam: { value: new THREE.Color(W.foam) },
       uSky: { value: new THREE.Color() }, uGlow: { value: W.glow || 0 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
-    }]),
+    }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
@@ -287,24 +289,34 @@ function makeWater(W, hAt, area, masked = false) {
         vec3 c; float a = 0.9;
         if (uMode < 0.5) {
           c = mix(cShallow, cDeep, smoothstep(0.0, 0.75, d));
-          float w = vn(p * 0.9 + uFlow * uTime * 0.6) * 0.6 + vn(p * 2.1 - uFlow.yx * uTime * 0.9) * 0.4;
           c = mix(c, uSky, 0.12);
-          float rip = abs(w - 0.55);
-          c += smoothstep(0.035, 0.0, rip) * 0.08 * (1.0 - smoothstep(0.3, 0.9, d) * 0.5);
-          c += step(0.985, vn(p * 4.0 + vec2(uTime * 0.7, -uTime * 0.5))) * 0.35;
-          // 溪流：沿流向滚动的白色水纹（UV 顺流平移）
           vec2 fl = (dm.ba - 0.5) * 2.0; float fs = length(fl);
+          vec2 fd = fs > 0.01 ? fl / fs : vec2(0.0, 1.0);
+          // 1) 两层反向滚动的噪声做扰动，让下面的花纹“晃”起来
+          vec2 q = p + vec2(vn(p * 0.55 + uTime * vec2(0.21, 0.13)), vn(p * 0.55 + 5.3 - uTime * vec2(0.12, 0.19))) * 1.1;
+          // 流动方向：静水用 uFlow 慢漂，溪流里按流向快速顺流
+          vec2 drift = uFlow * uTime * 0.35 + fd * fs * uTime * 1.6;
+          // 2) 卡通焦散线（风之杖式）：扰动后的 Voronoi 边，两层叠加
+          vec2 v1 = cell(q * 0.75 - drift), v2 = cell(q * 1.3 + drift.yx * 0.7 + 3.1);
+          float caus = max(smoothstep(0.09, 0.0, v1.y - v1.x), smoothstep(0.06, 0.0, v2.y - v2.x) * 0.6);
+          c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * mix(0.42, 0.22, smoothstep(0.2, 0.9, d)));
+          // 波光点点
+          c += step(0.975, vn(q * 3.0 + vec2(uTime * 0.9, -uTime * 0.7))) * 0.4;
+          // 3) 溪流：沿流向滚动的白色水纹
           if (fs > 0.05) {
-            vec2 fd = fl / fs, fp = vec2(-fd.y, fd.x);
-            float along = dot(p, fd), across = dot(p, fp);
-            float st = vn(vec2(across * 3.2, along * 0.9 - uTime * 2.6)) * 0.65 + vn(vec2(across * 7.0, along * 2.2 - uTime * 3.6)) * 0.35;
-            c = mix(c, cFoam, smoothstep(0.62, 0.8, st) * 0.55 * fs);
-            c *= 1.0 + 0.06 * fs * sin(along * 6.0 - uTime * 7.0);
+            vec2 fp = vec2(-fd.y, fd.x);
+            float along = dot(q, fd), across = dot(q, fp);
+            float st = vn(vec2(across * 3.0, along * 0.8 - uTime * 3.2)) * 0.65 + vn(vec2(across * 6.5, along * 2.0 - uTime * 4.5)) * 0.35;
+            c = mix(c, cFoam, smoothstep(0.58, 0.75, st) * 0.75 * fs);
+            c *= 1.0 + 0.1 * fs * sin(along * 5.0 - uTime * 8.0);
           }
-          float band = d - 0.05 * sin(uTime * 1.8 + vXZ.x * 1.3 + vXZ.y * 1.1);
-          float foam = smoothstep(0.1, 0.06, band) * step(0.0, d - 0.005);
-          float foam2 = smoothstep(0.02, 0.0, abs(band - 0.17)) * 0.6;
-          c = mix(c, cFoam, max(foam, foam2));
+          // 4) 岸边泡沫：实心沫边（噪声打碎、呼吸）+ 一圈圈向岸推进的浪线
+          float nb = vn(q * 1.8 + uTime * 0.4);
+          float edge = d + (nb - 0.5) * 0.06 - 0.03 * sin(uTime * 1.6 + vXZ.x * 0.9 + vXZ.y * 0.7);
+          float foam = smoothstep(0.09, 0.055, edge) * step(0.0, d - 0.005);
+          float wave = fract(d * 5.0 + uTime * 0.45 + nb * 0.35);
+          float rings = smoothstep(0.1, 0.0, abs(wave - 0.5)) * (1.0 - smoothstep(0.08, 0.38, d));
+          c = mix(c, cFoam, max(foam, rings * 0.7));
           c += cShallow * uGlow * (1.0 - d);
           a = mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
         } else if (uMode < 1.5) {
@@ -330,7 +342,7 @@ function makeWater(W, hAt, area, masked = false) {
       }`,
   });
   const m = new THREE.Mesh(new THREE.CircleGeometry(area.r, masked ? 32 : 96).rotateX(-Math.PI / 2), mat);
-  m.position.set(area.x, W.level, area.z); m.renderOrder = 1;
+  m.position.set(area.x, W.level, area.z); m.renderOrder = 1; waterMats.push(mat);
   root.add(m);
   if (mode === 2) emitters.push({ p: new THREE.Vector3(0, 0, 0), color: '#ff6a2a', i: 0, d: 0, lava: true });
   return mat;
@@ -346,7 +358,7 @@ function waterfall(f, W) {
   g.computeVertexNormals();
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }]),
+    uniforms: fogU({ uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }),
     vertexShader: `varying vec2 vUv;
       #include <fog_pars_vertex>
       void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;
@@ -656,7 +668,7 @@ function clear() {
   scene.remove(root);
   root.traverse((o) => { if (o.material && o.material.map && o.material.map.isCanvasTexture && o.material.userData.own) o.material.map.dispose(); });
   root = new THREE.Group(); scene.add(root);
-  emitters = []; bobbers = []; particleSys = []; waterMat = null; groundTex = null;
+  emitters = []; bobbers = []; particleSys = []; waterMats = []; groundTex = null;
   labels = []; $('#labels').innerHTML = '';
 }
 function build() {
@@ -734,7 +746,7 @@ function applyLight() {
   renderer.toneMappingExposure = L.exposure;
   bloom.strength = L.bloom + nightK * 0.25;
   grade.uniforms.uWarm.value = L.warm ?? 1;
-  if (waterMat) waterMat.uniforms.uSky.value.copy(skyU.top.value);
+  for (const m of waterMats) m.uniforms.uSky.value.copy(skyU.top.value);
   $('#timeV').textContent = `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.floor((t % 1) * 60)).padStart(2, '0')}`;
 }
 
