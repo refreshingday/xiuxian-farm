@@ -14,10 +14,10 @@ export const AIR_MOVES = {
   slash1: { ...MOVES.slash1, motion: [{ t0: 0, t1: 0.12, dist: 1.2, seek: true }], lunge: null,
     hits: [arc(0.11, { dmg: 10, knock: 6 })] },
   // 斩二、斩三斜着走位：左右之字绕着目标砍
-  slash2: { ...MOVES.slash2, motion: [{ t0: 0, t1: 0.13, dist: 1.3, ang: 0.75 }], lunge: null,
+  slash2: { ...MOVES.slash2, motion: [{ t0: 0, t1: 0.13, dist: 0.9, ang: 1.2 }, { t0: 0, t1: 0.13, dist: 1.0, seek: true }], lunge: null,
     hits: [arc(0.11, { dmg: 11, knock: 6 })] },
-  slash3: { ...MOVES.slash3, motion: [{ t0: 0, t1: 0.15, dist: 1.5, ang: -0.75 }], lunge: null,
-    hits: [arc(0.12, { range: 2.8, arc: 1.2, dmg: 12, knock: 9, launch: 4.5 })] },
+  slash3: { ...MOVES.slash3, motion: [{ t0: 0, t1: 0.15, dist: 0.9, ang: -1.2 }, { t0: 0, t1: 0.15, dist: 1.2, seek: true }], lunge: null,
+    hits: [arc(0.12, { range: 2.8, arc: 1.2, dmg: 12, knock: 6, launch: 3.5 })] },
   flurry: { ...MOVES.flurry, motion: [{ t0: 0, t1: 0.36, dist: 1.6, seek: true }], lunge: null,
     hits: [0.06, 0.15, 0.24, 0.33].map((t, i) => arc(t, { range: 3.0, arc: 0.45, dmg: 5, knock: i < 3 ? 1 : 12, pull: i < 3 ? 0.6 : 0, stop: 0.02 })) },
   // 先后撤一步拉开，再放剑气

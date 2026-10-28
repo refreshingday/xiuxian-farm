@@ -220,7 +220,8 @@ function updateDummies(dt, time) {
     const air = airborne(d);
     d.stun -= dt; d.bumpT -= dt;
     if (!air && d.stun <= 0) { d.vx += (d.home.x - d.pos.x) * 6 * dt; d.vz += (d.home.y - d.pos.z) * 6 * dt; }
-    const k = Math.exp(-(air ? 0.5 : d.stun > 0 ? 2.6 : 5) * dt); d.vx *= k; d.vz *= k;
+    // 硬直中摩擦大：被打得猛、滑得短，还在连招范围里
+    const k = Math.exp(-(air ? (d.pos.y > 1 ? 0.8 : 3) : d.stun > 0 ? 7 : 5) * dt); d.vx *= k; d.vz *= k;
     d.pos.x += d.vx * dt; d.pos.z += d.vz * dt;
     if (air) {
       d.vy -= GRAV * dt; d.pos.y += d.vy * dt; d.airRot += d.airSpin * dt;
@@ -327,8 +328,8 @@ function airTarget(range) {
 // seek：只冲到目标身前，没目标就按原距离走
 function motionDist(s) {
   if (!s.seek) return s.dist;
-  const d = frontTarget(s.dist * 1.8 + 2);
-  return d ? clamp(Math.hypot(d.pos.x - P.pos.x, d.pos.z - P.pos.z) - (d.r + P.r + 0.6), 0, s.dist * 1.8) : s.dist;
+  const d = frontTarget(s.dist * 2.5 + 2.5);
+  return d ? clamp(Math.hypot(d.pos.x - P.pos.x, d.pos.z - P.pos.z) - (d.r + P.r + 0.6), 0, s.dist * 2.5) : s.dist;
 }
 // 跳跃在起跳那一刻才定落点（前面可能还有一段位移）
 function startLeap(m) {
