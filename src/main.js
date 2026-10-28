@@ -16,6 +16,7 @@ import { ComboFX, MOVE_FX } from './comboFx.js';
 import { SFX, MOVE_SFX } from './comboSfx.js';
 import { animCombo } from './comboAnim.js';
 import { HealthBar, screenOf } from './hpbar.js';
+import { TouchControls } from './touch.js';
 
 // ---------- 渲染 ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -232,15 +233,37 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); mouseDown.fill(false); });
-renderer.domElement.addEventListener('pointermove', (e) => { mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); });
+renderer.domElement.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); });
 // 左键松开才出招（按下只"上膛"）；按下时若在对话中，这次点击只用来关对话框
 let armed = false;
-renderer.domElement.addEventListener('pointerdown', (e) => { sfx.unlock(); mouseDown[e.button] = true; if (e.button === 0) armed = !dialogOpen; closeDialog(); });
-addEventListener('pointerup', (e) => { mouseDown[e.button] = false; if (e.button === 0 && armed) { armed = false; attackClick(); } });
+renderer.domElement.addEventListener('pointerdown', (e) => { sfx.unlock(); closeDialog(); if (e.pointerType === 'touch') return; mouseDown[e.button] = true; if (e.button === 0) armed = !dialogOpen; });
+addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; mouseDown[e.button] = false; if (e.button === 0 && armed) { armed = false; attackClick(); } });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+document.getElementById('dialog').addEventListener('pointerdown', closeDialog);
+
+// 手机模式：摇杆 + 按钮（与电脑操作并存，按最近使用的输入自动切换）
+const touch = new TouchControls();
+touch.onChange = () => { mouseDown.fill(false); armed = false; };
+const tap = (fn) => ({ down: () => { sfx.unlock(); fn(); } });
+touch.bind(document.getElementById('sk0'), { down: () => { sfx.unlock(); mouseDown[0] = true; }, up: (c) => { mouseDown[0] = false; if (!c) attackClick(); } });
+touch.bind(document.getElementById('sk1'), { down: () => { sfx.unlock(); mouseDown[2] = true; }, up: () => { mouseDown[2] = false; } });
+touch.bind(document.getElementById('sk2'), tap(spinSkill));
+touch.bind(document.getElementById('sk3'), tap(eatHerb));
+touch.bind(document.getElementById('sk4'), tap(dash));
+touch.bind(document.getElementById('prompt'), tap(interact));
+touch.bind(document.getElementById('mobTime'), { hold: 'time' });
+touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
 
 const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-function updateAim() { ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); }
+function updateAim() {
+  if (!touch.on) { ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); return; }
+  // 手机：自动瞄准附近最近的敌人，没有就朝移动 / 面朝方向
+  let best = null, bd = 9;
+  for (const e of enemies.list) { const d = Math.hypot(e.pos.x - P.pos.x, e.pos.z - P.pos.z) - e.r; if (d < bd) { bd = d; best = e; } }
+  if (best) { aim.set(best.pos.x, 0, best.pos.z); return; }
+  const mv = moveInput(), yaw = mv.lengthSq() > 0 ? Math.atan2(mv.x, mv.y) : P.yaw;
+  aim.set(P.pos.x + Math.sin(yaw) * 4, 0, P.pos.z + Math.cos(yaw) * 4);
+}
 const aimYaw = () => Math.atan2(aim.x - P.pos.x, aim.z - P.pos.z);
 
 // ---------- 战斗动作 ----------
@@ -376,10 +399,10 @@ function dash() {
   cancelCombo(); sfx.dash();
 }
 function moveInput() {
-  const ix = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0);
-  const iy = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
+  const ix = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0) + touch.stick.x;
+  const iy = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0) + touch.stick.y;
   const v = new THREE.Vector2(ix * Math.cos(camYaw) - iy * Math.sin(camYaw), -ix * Math.sin(camYaw) - iy * Math.cos(camYaw));
-  if (v.lengthSq() > 0) v.normalize();
+  if (v.lengthSq() > 1) v.normalize();
   return v;
 }
 
@@ -496,7 +519,7 @@ function frame(now) {
   for (let i = g.scheduled.length - 1; i >= 0; i--) if (g.scheduled[i].t <= g.time) { const s = g.scheduled[i]; g.scheduled.splice(i, 1); s.fn(); }
 
   // 时间
-  const speed = keys.has('KeyT') ? 40 : 1, dh = dt * 24 / DAY_SEC * speed;
+  const speed = keys.has('KeyT') || touch.held.has('time') ? 40 : 1, dh = dt * 24 / DAY_SEC * speed;
   g.hours += dh;
   if (g.hours >= 24) { g.hours -= 24; g.day++; }
   const h = g.hours;
@@ -705,7 +728,7 @@ function updateUI() {
 }
 
 requestAnimationFrame(frame);
-g.toast('左键连招（松开出招，快慢分支）· 右键剑气 · F 交互 · H 查看操作', 4);
+g.toast(touch.on ? '左下摇杆移动 · 右下按钮出招（自动瞄准）· 拖动画面转镜头 · 点提示交互' : '左键连招（松开出招，快慢分支）· 右键剑气 · F 交互 · H 查看操作', 4);
 // 调试入口
 window.game = g; g.combo = runner;
 export { flat, glow, mesh };
