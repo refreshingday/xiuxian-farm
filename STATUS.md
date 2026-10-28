@@ -59,7 +59,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 
 ## 素材实验场 (`lab.html` `src/lab/`)
 - Claude 版素材 `assets.js`（99 种 / 约 330 变体，程序建模 + 顶点色）— 🟩 — 2026-10-28
-- Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」；「场景用的素材」可整岛切换
+- Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
 - 2026-10-28 — 实验场加 Codex 素材分组（g1_village…g6_ruins）与对比模式
