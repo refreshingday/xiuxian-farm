@@ -15,10 +15,10 @@ function geos() {
 }
 
 export const TYPES = {
-  boar: { name: '野猪妖', hp: 42, r: 0.75, speed: 3.4, dmg: 12, xp: 14 },
-  spider: { name: '毒蛛', hp: 28, r: 0.7, speed: 3.0, dmg: 8, xp: 12 },
-  golem: { name: '石傀', hp: 85, r: 0.9, speed: 2.2, dmg: 18, xp: 26 },
-  boss: { name: '赤岩妖王', hp: 900, r: 1.9, speed: 2.6, dmg: 24, xp: 320 },
+  boar: { name: '野猪妖', hp: 75, r: 0.75, speed: 3.4, dmg: 12, xp: 14 },
+  spider: { name: '毒蛛', hp: 50, r: 0.7, speed: 3.0, dmg: 8, xp: 12 },
+  golem: { name: '石傀', hp: 150, r: 0.9, speed: 2.2, dmg: 18, xp: 26 },
+  boss: { name: '赤岩妖王', hp: 1500, r: 1.9, speed: 2.6, dmg: 24, xp: 320 },
 };
 
 function build(type) {
