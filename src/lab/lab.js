@@ -236,7 +236,7 @@ function makeWater(W, hAt, area, masked = false) {
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = x0 + (i + 0.5) / N * sz, z = z0 + (j + 0.5) / N * sz, dep = W.level - hAt(x, z);
     data[(j * N + i) * 4] = clamp(dep / 0.9, 0, 1) * 255;
-    data[(j * N + i) * 4 + 1] = dep < 1.0 ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
+    data[(j * N + i) * 4 + 1] = dep < (masked ? 0.85 : 1.0) ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
     data[(j * N + i) * 4 + 3] = 255;
   }
   const dt = new THREE.DataTexture(data, N, N); dt.magFilter = dt.minFilter = THREE.LinearFilter; dt.needsUpdate = true;

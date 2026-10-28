@@ -199,7 +199,7 @@ export const BIOMES = [
       if (pond < 0 && s1 < 0.5) h = Math.max(-1, pond * 0.5 - 0.25);
       // 台上的小潭 + 通往崖边的水道
       const pool = Math.min(Math.hypot(x - A_POOL[0], z - A_POOL[1]) - A_POOL[2], Math.abs(x - A_FX) - 0.75 + Math.max(0, A_POOL[1] - z) * 3);
-      if (pool < 0 && s1 > 0.5) h = Math.min(h, LH - 0.2 + pool * 0.5);
+      if (pool < 0 && s1 > 0.5) h = Math.min(h, Math.max(LH - 0.65, LH - 0.2 + pool * 0.5)); // 浅潭（< 遮罩深度）
       const path = Math.min(wavyPath(z, x, 2.5, 0.2, 2), Math.abs(x - A_R1.x) + Math.max(0, z - A_R1.zBot - 1) + Math.max(0, A_R1.zTop - 2 - z) - 0.2);
       return { h, k: (pond < 0.4 && s1 < 0.5) || (pool < 0.35 && s1 > 0.5) ? 'mud' : path < 1.1 ? 'dirt' : 'grass', path, lv: s1 };
     },
