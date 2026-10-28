@@ -15,10 +15,17 @@ import { BIOMES, R } from './biomes.js';
 // 素材实验场：只加载场景素材，不跑游戏逻辑。改素材只需刷新这一页。
 // ======================================================================
 const $ = (s) => document.querySelector(s);
+const status = (t, pct) => window.labStatus && window.labStatus(t, pct);
+// 手机：触屏或窄屏 → 降低分辨率/阴影/粒子，界面改成底部抽屉
+const MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
+if (MOBILE) document.body.classList.add('mobile');
+const basePR = () => Math.min(devicePixelRatio, MOBILE ? 1.25 : 1.5);
+const SHADOW = MOBILE ? 2048 : 4096;
+status('初始化渲染器…', 10);
 
 // ---------- 渲染（与主游戏一致的管线：卡通材质 + 软阴影 + 泛光 + 调色） ----------
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-let pixelRatio = Math.min(devicePixelRatio, 1.5);
+const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE, powerPreference: 'high-performance' });
+let pixelRatio = basePR();
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
@@ -66,11 +73,11 @@ addEventListener('resize', resize);
 const hemi = new THREE.HemisphereLight(0xd8ecff, 0x9a8a50, 1.0);
 const sun = new THREE.DirectionalLight(0xffffff, 2.5);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.set(SHADOW, SHADOW);
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(hemi, sun, sun.target);
 const pool = [];
-for (let i = 0; i < 10; i++) { const l = new THREE.PointLight(0xffaa66, 0, 8, 1.6); scene.add(l); pool.push(l); }
+for (let i = 0; i < (MOBILE ? 6 : 10); i++) { const l = new THREE.PointLight(0xffaa66, 0, 8, 1.6); scene.add(l); pool.push(l); }
 
 // 天空球：上下两色渐变 + 太阳光晕
 const skyU = { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() }, sunDir: { value: new THREE.Vector3() }, sunC: { value: new THREE.Color() } };
@@ -103,7 +110,7 @@ let emitters = [], bobbers = [], labels = [], waterMat = null, particleSys = [];
 // ======================================================================
 // 地面：圆形小岛（像素贴图顶面 + 分层土壁）
 // ======================================================================
-const NR = 70, NS = 168;
+const NR = MOBILE ? 52 : 70, NS = MOBILE ? 128 : 168;
 function buildIsland(b) {
   const T = (x, z) => b.terrain(x, z);
   const hAt = (x, z) => {
@@ -419,7 +426,7 @@ const PT = {
   embers: { vy: 1.6, sway: 0.7, h: 10, shape: 2, flick: 1 }, ash: { vy: -0.4, sway: 1.2, h: 10, shape: 0 },
 };
 function particles(cfg, area = R) {
-  const T = PT[cfg.type], n = cfg.n, rnd = new Float32Array(n * 4), pos = new Float32Array(n * 3);
+  const T = PT[cfg.type], n = MOBILE ? Math.ceil(cfg.n * 0.5) : cfg.n, rnd = new Float32Array(n * 4), pos = new Float32Array(n * 3);
   for (let i = 0; i < n * 4; i++) rnd[i] = Math.random();
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -518,7 +525,6 @@ function build() {
   const sc = sun.shadow.camera, ext = S.mode === 'scene' ? R + 2 : span;
   Object.assign(sc, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: ext * 4 + 60 });
   sc.updateProjectionMatrix();
-  sun.shadow.mapSize.set(4096, 4096);
   applyToggles();
   applyLight();
   ui();
@@ -530,8 +536,10 @@ function countAssets() {
 }
 function frame(reset = true) {
   if (!reset) return;
-  if (S.mode === 'scene') { camera.position.set(0, 26, 40); controls.target.set(0, 0.5, 0); }
-  else { const d = span * 1.35; camera.position.set(0, d * 1.05, d * 0.7); controls.target.set(0, 0.5, 0); }
+  // 竖屏时视野窄，拉远一些让整座岛/整张图鉴放得下
+  const k = camera.aspect < 1 ? Math.min(2.2, 0.85 / camera.aspect) : 1;
+  if (S.mode === 'scene') { camera.position.set(0, 26 * k, 40 * k); controls.target.set(0, 0.5, 0); }
+  else { const d = span * 1.35 * k; camera.position.set(0, d * 1.05, d * 0.7); controls.target.set(0, 0.5, 0); }
 }
 
 // ---------- 时间 / 光照 ----------
@@ -586,7 +594,7 @@ function applyToggles() {
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
   if (chibi) chibi.root.visible = S.chibi && S.mode === 'scene';
-  const pr = S.pixel ? 0.42 : Math.min(devicePixelRatio, 1.5);
+  const pr = S.pixel ? 0.42 : basePR();
   if (pr !== pixelRatio) { pixelRatio = pr; resize(); }
   renderer.domElement.style.imageRendering = S.pixel ? 'pixelated' : 'auto';
 }
@@ -606,23 +614,25 @@ function setupUI() {
   const bx = $('#biomes');
   BIOMES.forEach((b, i) => {
     const el = document.createElement('button'); el.innerHTML = `<kbd>${i + 1}</kbd>${b.name}`;
-    el.onclick = () => { S.biome = i; if (S.mode === 'all') S.mode = 'catalog'; save(); build(); frame(); };
+    el.onclick = () => { S.biome = i; if (S.mode === 'all') S.mode = 'catalog'; save(); rebuild(true); };
     bx.appendChild(el);
   });
-  document.querySelectorAll('#modes button').forEach((el) => el.onclick = () => { S.mode = el.dataset.m; save(); build(); frame(); });
+  document.querySelectorAll('#modes button').forEach((el) => el.onclick = () => { S.mode = el.dataset.m; save(); rebuild(true); });
   document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { S[el.dataset.t] = !S[el.dataset.t]; save(); applyToggles(); ui(); });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
   $('#line').oninput = (e) => { U.line.value = +e.target.value; };
-  $('#reseed').onclick = () => { S.seed++; save(); build(); };
+  $('#reseed').onclick = () => { S.seed++; save(); rebuild(false); };
   $('#shot').onclick = () => { composer.render(); const a = document.createElement('a'); a.download = `lab-${BIOMES[S.biome].id}.png`; a.href = renderer.domElement.toDataURL('image/png'); a.click(); };
-  $('#hideui').onclick = () => document.body.classList.toggle('clean');
+  $('#hideui').onclick = () => { document.body.classList.toggle('clean'); document.body.classList.remove('panel-open'); };
+  $('#gear').onclick = () => document.body.classList.toggle('panel-open');
+  renderer.domElement.addEventListener('pointerdown', () => document.body.classList.remove('panel-open'));
   addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
-    const n = +e.key; if (n >= 1 && n <= BIOMES.length) { S.biome = n - 1; if (S.mode === 'all') S.mode = 'catalog'; save(); build(); frame(); }
-    if (e.key === 'c' || e.key === 'C') { S.mode = S.mode === 'scene' ? 'catalog' : 'scene'; save(); build(); frame(); }
+    const n = +e.key; if (n >= 1 && n <= BIOMES.length) { S.biome = n - 1; if (S.mode === 'all') S.mode = 'catalog'; save(); rebuild(true); }
+    if (e.key === 'c' || e.key === 'C') { S.mode = S.mode === 'scene' ? 'catalog' : 'scene'; save(); rebuild(true); }
     if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
-    if (e.key === 'r' || e.key === 'R') { S.seed++; save(); build(); }
+    if (e.key === 'r' || e.key === 'R') { S.seed++; save(); rebuild(false); }
     if (e.key === 'o' || e.key === 'O') { S.outline = !S.outline; save(); applyToggles(); ui(); }
     if (e.key === 'p' || e.key === 'P') { S.pixel = !S.pixel; save(); applyToggles(); ui(); }
   });
@@ -642,9 +652,26 @@ function updateStats(dt) {
 // ======================================================================
 // 启动
 // ======================================================================
+// 切换区域：先显示"生成中"再建（手机上要一两秒，不然像卡死）
+const nextFrame = () => new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
+let building = false;
+async function rebuild(reframe) {
+  if (building) return;
+  building = true; document.body.classList.add('busy');
+  await nextFrame();
+  try { build(); if (reframe) frame(); } catch (e) { console.error(e); alert('生成失败: ' + e.message); }
+  document.body.classList.remove('busy'); building = false;
+}
+
+status('加载贴图…', 25);
 await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 } });
+status('生成地形与素材…', 55);
+await nextFrame();
 setupUI();
 build(); frame();
+status('编译着色器…', 85);
+await nextFrame();
+renderer.compile(scene, camera);
 $('#loading').remove();
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
