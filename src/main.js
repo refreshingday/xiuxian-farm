@@ -180,30 +180,30 @@ const okSpawn = (x, z) => Math.hypot(x, z) > VILLAGE_R + 8 && Math.hypot(x - MIN
 world.onSpawn = (cx, cz, rng) => {
   if (g.time < 1) return;
   const x0 = cx * CHUNK, z0 = cz * CHUNK;
-  const n = Math.floor(1 + rng() * 2 + g.nightK * 2 + dangerAt(x0 + 16, z0 + 16) * 0.3);
+  const n = Math.floor(2 + rng() * 3 + g.nightK * 2 + dangerAt(x0 + 16, z0 + 16) * 0.3);
   for (let i = 0; i < n; i++) {
     const x = x0 + 4 + rng() * 24, z = z0 + 4 + rng() * 24;
     if (!okSpawn(x, z) || Math.hypot(x - P.pos.x, z - P.pos.z) < 16) continue;
     enemies.spawn(rng() < 0.6 ? 'boar' : 'spider', x, z, Math.floor(dangerAt(x, z)));
   }
 };
-let spawnT = 6, golemT = 0;
+let spawnT = 4, golemT = 0;
 function ambientSpawns(dt) {
   spawnT -= dt; golemT -= dt;
-  const near = enemies.list.filter((e) => e.type !== 'golem' && e.type !== 'boss' && e.pos.distanceTo(P.pos) < 35).length;
+  const near = enemies.list.filter((e) => e.type !== 'golem' && e.type !== 'boss' && e.pos.distanceTo(P.pos) < 35 * camZoom).length;
   if (spawnT <= 0) {
-    spawnT = 4 - g.nightK * 2;
-    if (near < 7 + g.nightK * 5 && !P.dead) {
-      const a = Math.random() * 6.28, r = 24 + Math.random() * 6;
+    spawnT = 2.5 - g.nightK * 1.2;
+    if (near < 11 + g.nightK * 7 && !P.dead) {
+      const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * camZoom;
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
       if (okSpawn(x, z)) enemies.spawn(Math.random() < 0.6 ? 'boar' : 'spider', x, z, Math.floor(dangerAt(x, z)));
     }
   }
   const dm = Math.hypot(P.pos.x - MINE.x, P.pos.z - MINE.y);
   if (golemT <= 0 && dm < MINE_R + 25) {
-    golemT = 7;
+    golemT = 5;
     const golems = enemies.list.filter((e) => e.type === 'golem').length;
-    if (golems < 9) {
+    if (golems < 12) {
       for (let k = 0; k < 10; k++) {
         const a = Math.random() * 6.28, r = 3 + Math.random() * (MINE_R - 6);
         const x = MINE.x + Math.cos(a) * r, z = MINE.y + Math.sin(a) * r;
@@ -217,7 +217,7 @@ function ambientSpawns(dt) {
 const keys = new Set();
 const mouse = new THREE.Vector2(), mouseDown = [false, false, false];
 const aim = new THREE.Vector3();
-let camYaw = 0, camYawT = 0;
+let camYaw = 0, camYawT = 0, camZoom = 1;
 addEventListener('keydown', (e) => {
   sfx.unlock();
   if (e.repeat) { keys.add(e.code); return; }
@@ -646,7 +646,9 @@ function updateCamera(dt) {
   camYawT = clamp(camYawT, -0.8, 0.8);
   camYaw = lerp(camYaw, camYawT, 1 - Math.exp(-8 * dt));
   focus.lerp(P.pos, 1 - Math.exp(-8 * dt));
-  const dist = 21, pitch = 0.9;
+  // 手机屏幕小，镜头拉远 1.4 倍看得更远
+  camZoom = lerp(camZoom, touch.on ? 1.4 : 1, 1 - Math.exp(-6 * dt));
+  const dist = 21 * camZoom, pitch = 0.9;
   camera.position.set(focus.x + Math.sin(camYaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, focus.z + Math.cos(camYaw) * Math.cos(pitch) * dist);
   if (g.shakeV > 0) {
     camera.position.x += (Math.random() - 0.5) * g.shakeV * 0.5;
@@ -679,7 +681,10 @@ function updateLights(h) {
   _fog.lerp(_ca.setHex(0x8e98a4), r * 0.6);
   scene.fog.color.copy(_fog); scene.background.copy(_fog);
   weatherU.sky.value.copy(_fog).lerp(hemi.color, 0.5);
-  scene.fog.near = lerp(lerp(48, 30, r), 16, m); scene.fog.far = lerp(lerp(95, 70, r), 38, m);
+  const fogPush = 21 * (camZoom - 1);   // 镜头拉远时雾也往后推，别把主角雾掉
+  scene.fog.near = lerp(lerp(48, 30, r), 16, m) + fogPush; scene.fog.far = lerp(lerp(95, 70, r), 38, m) + fogPush * 1.4;
+  const sh = sun.shadow.camera, ext = 30 * camZoom;
+  if (Math.abs(sh.right - ext) > 0.5) { Object.assign(sh, { left: -ext, right: ext, top: ext, bottom: -ext }); sh.updateProjectionMatrix(); }
   grade.uniforms.uSat.value = 1.12 - 0.25 * r;
   bloom.strength = 0.25 + Math.max(g.nightK, m) * 0.7;
   grade.uniforms.uWarm.value = 1 - Math.max(g.nightK, m) * 0.8;
