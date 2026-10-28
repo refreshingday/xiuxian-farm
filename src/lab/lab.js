@@ -226,10 +226,23 @@ function buildIsland(b) {
 // ======================================================================
 function buildWater(b, hAt) {
   const W = b.water; if (!W) return;
+  flowLine = b.terrace?.stream || null;
   waterMat = makeWater(W, hAt, { x: 0, z: 0, r: R - 0.6 });
   // 台地上的高处水潭：同一种水，只是单独一层水面，用遮罩裁掉崖外部分
   for (const p of b.terrace?.pools || []) makeWater({ ...W, level: p.level }, hAt, p, true);
   for (const f of b.terrace?.falls || []) waterfall(f, W);
+}
+let flowLine = null;
+function flowAt(x, z) {
+  if (!flowLine) return [0, 0];
+  let best = 9, fx = 0, fz = 0;
+  for (let i = 1; i < flowLine.length; i++) {
+    const [ax, az] = flowLine[i - 1], [bx, bz] = flowLine[i], vx = bx - ax, vz = bz - az, L = Math.hypot(vx, vz);
+    const t = clamp(((x - ax) * vx + (z - az) * vz) / (L * L), 0, 1), d = Math.hypot(x - ax - vx * t, z - az - vz * t);
+    if (d < best) { best = d; fx = vx / L; fz = vz / L; }
+  }
+  const k = smooth(1.6, 0.4, best);
+  return [fx * k, fz * k];
 }
 function makeWater(W, hAt, area, masked = false) {
   const N = masked ? 64 : 192, data = new Uint8Array(N * N * 4), x0 = area.x - area.r, z0 = area.z - area.r, sz = area.r * 2;
@@ -237,7 +250,9 @@ function makeWater(W, hAt, area, masked = false) {
     const x = x0 + (i + 0.5) / N * sz, z = z0 + (j + 0.5) / N * sz, dep = W.level - hAt(x, z);
     data[(j * N + i) * 4] = clamp(dep / 0.9, 0, 1) * 255;
     data[(j * N + i) * 4 + 1] = dep < (masked ? 0.85 : 1.0) ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
-    data[(j * N + i) * 4 + 3] = 255;
+    // B/A：溪流流向 × 强度（离溪流中线 1.6 米内），水面沿着它滚动条纹
+    const [fx, fz] = flowAt(x, z);
+    data[(j * N + i) * 4 + 2] = (fx * 0.5 + 0.5) * 255; data[(j * N + i) * 4 + 3] = (fz * 0.5 + 0.5) * 255;
   }
   const dt = new THREE.DataTexture(data, N, N); dt.magFilter = dt.minFilter = THREE.LinearFilter; dt.needsUpdate = true;
   const mode = { water: 0, ice: 1, lava: 2 }[W.mode];
@@ -277,6 +292,15 @@ function makeWater(W, hAt, area, masked = false) {
           float rip = abs(w - 0.55);
           c += smoothstep(0.035, 0.0, rip) * 0.08 * (1.0 - smoothstep(0.3, 0.9, d) * 0.5);
           c += step(0.985, vn(p * 4.0 + vec2(uTime * 0.7, -uTime * 0.5))) * 0.35;
+          // 溪流：沿流向滚动的白色水纹（UV 顺流平移）
+          vec2 fl = (dm.ba - 0.5) * 2.0; float fs = length(fl);
+          if (fs > 0.05) {
+            vec2 fd = fl / fs, fp = vec2(-fd.y, fd.x);
+            float along = dot(p, fd), across = dot(p, fp);
+            float st = vn(vec2(across * 3.2, along * 0.9 - uTime * 2.6)) * 0.65 + vn(vec2(across * 7.0, along * 2.2 - uTime * 3.6)) * 0.35;
+            c = mix(c, cFoam, smoothstep(0.62, 0.8, st) * 0.55 * fs);
+            c *= 1.0 + 0.06 * fs * sin(along * 6.0 - uTime * 7.0);
+          }
           float band = d - 0.05 * sin(uTime * 1.8 + vXZ.x * 1.3 + vXZ.y * 1.1);
           float foam = smoothstep(0.1, 0.06, band) * step(0.0, d - 0.005);
           float foam2 = smoothstep(0.02, 0.0, abs(band - 0.17)) * 0.6;
@@ -393,7 +417,10 @@ function placeAll(b, hAt) {
     if (rule.list) {
       rule.list.forEach(([x, z, rot, sz], i) => {
         const v = rule.pick ? rule.pick[i % rule.pick.length] : Math.floor(rng() * A.n);
-        const o = { x, z, y: rule.y ?? hAt(x, z) + (rule.dy || 0), rot, s: 1, sz };
+        let y = rule.y ?? hAt(x, z) + (rule.dy || 0);
+        // 台阶类：以下坡那一头（下一级平台）的地面高度为底，避免悬空
+        if (rule.base === 'bottom') { const e = 1.5 * (sz || 1) + 0.35; y = hAt(x + Math.sin(rot) * e, z + Math.cos(rot) * e); }
+        const o = { x, z, y, rot, s: 1, sz };
         add(rule.id, v, o); taken.push([x, z, 1.4, rule.id]);
       });
       continue;

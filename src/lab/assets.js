@@ -1128,13 +1128,14 @@ function stairs(v, seed, W = 2.2, RUN = 3, RISE = LH) {
   const k = new Kit(), n = 7, stone = (g) => faceted(lumpy(g, 0.025, 5, seed));
   for (let i = 0; i < n; i++) {
     const h = (i + 1) * RISE / n, d = RUN / n;
-    k.add(stone(G.box(W, h, d + 0.02)), grad(v ? '#a89a88' : '#b4aea8', 0.72, 1.06, 0.12, i), { at: [0, h / 2, RUN / 2 - d * (i + 0.5)] });
+    // 每级都一直埋到地下 2 米：地面比台阶低的地方露出的是实心石砌，不会悬空
+    k.add(stone(G.box(W, h + 2, d + 0.02)), grad(v ? '#a89a88' : '#b4aea8', 0.72, 1.06, 0.12, i), { at: [0, (h - 2) / 2, RUN / 2 - d * (i + 0.5)] });
   }
   // 两侧矮墙 + 墙头小石柱
   for (const sx of [-1, 1]) {
     for (let i = 0; i < n; i++) {
       const h = (i + 1) * RISE / n + 0.3, d = RUN / n;
-      k.add(stone(G.box(0.28, h, d + 0.02)), grad('#9a948e', 0.65, 1.0, 0.15, i + 9), { at: [sx * (W / 2 + 0.14), h / 2, RUN / 2 - d * (i + 0.5)] });
+      k.add(stone(G.box(0.28, h + 2, d + 0.02)), grad('#9a948e', 0.65, 1.0, 0.15, i + 9), { at: [sx * (W / 2 + 0.14), (h - 2) / 2, RUN / 2 - d * (i + 0.5)] });
     }
     k.add(stone(G.box(0.36, 0.5, 0.36)), grad('#8a847e', 0.7, 1.05), { at: [sx * (W / 2 + 0.14), 0.25 + 0.3 + RISE / n, RUN / 2 - RUN / n / 2] });
   }
@@ -1148,7 +1149,9 @@ function logSteps(v, seed, W = 1.9, RUN = 3, RISE = LH) {
   for (let i = 0; i < n; i++) {
     const y = (i + 0.5) * RISE / n, z = RUN / 2 - (i + 0.5) * RUN / n, L = W * (0.85 + r() * 0.2);
     k.add(new THREE.CylinderGeometry(0.13, 0.14, L, 8).rotateZ(Math.PI / 2), (g) => paint(g, (p, nn, out) => out.set(Math.abs(p.x) > L / 2 - 0.02 ? '#d8b078' : bark).multiplyScalar(0.7 + 0.35 * Math.max(0, nn.y + 0.3))), { at: [(r() - 0.5) * 0.15, y - 0.02, z], rot: [0, (r() - 0.5) * 0.12, 0] });
-    for (const sx of [-1, 1]) k.add(G.cyl(0.04, 0.05, 0.35, 5), grad('#5a3a26'), { at: [sx * (L / 2 - 0.1), y - 0.25, z + 0.16] });
+    for (const sx of [-1, 1]) k.add(G.cyl(0.04, 0.05, 0.6, 5), grad('#5a3a26'), { at: [sx * (L / 2 - 0.1), y - 0.5, z + 0.16] });
+    // 横木后面填的夯土台面（一直埋到地下），踩上去是平的
+    k.add(G.box(L * 0.95, 2, RUN / n), grad('#8a6a48', 0.7, 1.0, 0.15, i), { at: [0, y + 0.06 - 1, z - 0.02] });
   }
   return k.build();
 }
