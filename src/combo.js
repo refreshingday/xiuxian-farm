@@ -60,8 +60,9 @@ export const ROUTES = [
 ];
 
 export class ComboRunner {
-  constructor(tune = TUNE) {
-    this.tune = tune;
+  // moves / tree 可换成别的招式表（试炼场实验新招用），默认就是上面这套
+  constructor(tune = TUNE, moves = MOVES, tree = TREE) {
+    this.tune = tune; this.moves = moves; this.tree = tree;
     this.clock = 0;       // 自己的时钟（受慢放/顿帧影响，判定与画面一致）
     this.path = null;     // 当前连段路径；null = 未在连段中
     this.move = null; this.t = 0; this.hitIdx = 0;
@@ -72,7 +73,7 @@ export class ComboRunner {
   }
 
   get open() {
-    return this.path !== null && !MOVES[TREE[this.path]].end && this.clock - this.readyAt <= this.tune.slowWin;
+    return this.path !== null && !this.moves[this.tree[this.path]].end && this.clock - this.readyAt <= this.tune.slowWin;
   }
 
   click() {
@@ -90,11 +91,11 @@ export class ComboRunner {
 
   advance(type) {
     const key = this.path + type;
-    if (TREE[key]) this.start(key, type); else this.start('', '起');
+    if (this.tree[key]) this.start(key, type); else this.start('', '起');
   }
 
   start(path, type) {
-    this.path = path; this.move = MOVES[TREE[path]];
+    this.path = path; this.move = this.moves[this.tree[path]];
     this.t = 0; this.hitIdx = 0; this.buf = false;
     this.chain = path === '' ? 1 : this.chain + 1;
     this.on.start?.(this.move, path, type);
