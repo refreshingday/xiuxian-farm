@@ -876,11 +876,12 @@ function swampTree(v, seed) {
   const bend = (r() - 0.5) * 0.8;
   k.add(G.tube([[0, 0.8, 0], [bend * 0.5, H * 0.55, 0.1], [bend, H, 0]], 0.2, 0.1, 7), grad('#4a4234', 0.6, 1, 0.15));
   const crown = [[bend, H + 0.2, 0, 1.0], [bend + 0.9, H - 0.05, 0.2, 0.75], [bend - 0.85, H, -0.1, 0.8], [bend, H, 0.8, 0.7]];
-  k.add(G.blobs(crown, 2, seed + v), crownPaint('#5a6a34', '#7a8a40', seed + v, 0.08), { s: [1, 0.55, 1], kind: 'leaf' });
+  // 压扁树冠要绕树冠中心缩放，不然整团会掉到树干中间
+  k.add(G.blobs(crown, 2, seed + v).translate(0, -H, 0).scale(1, 0.55, 1).translate(0, H, 0), crownPaint('#5a6a34', '#7a8a40', seed + v, 0.08), { kind: 'leaf' });
   // 垂挂的苔藓
   for (let i = 0; i < 16; i++) {
     const c = crown[i % crown.length], a = r() * TAU, d = c[3] * (0.5 + r() * 0.5), L = 0.5 + r() * 0.9;
-    k.add(G.cone(0.05, L, 4).rotateX(Math.PI).translate(0, L, 0), grad('#8a9a5a', 0.7, 1.1), { at: [c[0] + Math.cos(a) * d, c[1] - c[3] * 0.4 - L, c[2] + Math.sin(a) * d], kind: 'leaf' }); // 与树冠同一摇摆，不会脱节
+    k.add(G.cone(0.05, L, 4).rotateX(Math.PI).translate(0, L, 0), grad('#8a9a5a', 0.7, 1.1), { at: [c[0] + Math.cos(a) * d, H + (c[1] - H) * 0.55 - c[3] * 0.3 - L, c[2] + Math.sin(a) * d], kind: 'leaf' }); // 与树冠同一摇摆，不会脱节
   }
   return k.build();
 }
@@ -1049,10 +1050,10 @@ function wisteria(v, seed) {
   const k = new Kit(), r = rnd(seed + v), col = v ? '#f0e8ff' : '#b08af0';
   k.add(G.tube([[0, 0, 0], [0.3, 1.2, 0], [-0.1, 2.2, 0.1], [0.2, 2.8, 0]], 0.18, 0.09, 7), grad('#6a5040', 0.6, 1.05, 0.15));
   const crown = [[0.2, 3.1, 0, 1.1], [1.0, 2.9, 0.2, 0.8], [-0.7, 2.95, -0.2, 0.85], [0.2, 3.0, 0.9, 0.75]];
-  k.add(G.blobs(crown, 2, seed + v), crownPaint('#5aa040', '#7ac050', seed), { s: [1, 0.6, 1], kind: 'leaf' });
+  k.add(G.blobs(crown, 2, seed + v).translate(0, -3, 0).scale(1, 0.6, 1).translate(0, 3, 0), crownPaint('#5aa040', '#7ac050', seed), { kind: 'leaf' });
   for (let i = 0; i < 26; i++) {
     const c = crown[i % crown.length], a = r() * TAU, d = c[3] * (0.3 + r() * 0.7), L = 0.6 + r() * 0.8;
-    const x = c[0] + Math.cos(a) * d, z = c[2] + Math.sin(a) * d, y = c[1] - c[3] * 0.35;
+    const x = c[0] + Math.cos(a) * d, z = c[2] + Math.sin(a) * d, y = 3 + (c[1] - 3) * 0.6 - c[3] * 0.3;
     for (let s = 0; s < 5; s++) k.add(G.sph(0.09 * (1 - s * 0.14), 5, 4), grad(col, 0.8, 1.15), { at: [x, y - s * L / 5, z], kind: 'bloom' });
   }
   return k.build();
