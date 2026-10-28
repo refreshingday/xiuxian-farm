@@ -432,6 +432,7 @@ function textures() {
   };
   if (PNG.wood_planks) TEX.plank = PNG.wood_planks;
   if (PNG.roof_tiles) TEX.tile = PNG.roof_tiles;
+  if (PNG.tilled_soil) TEX.soil = PNG.tilled_soil;
   return TEX;
 }
 

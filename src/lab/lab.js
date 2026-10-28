@@ -10,6 +10,7 @@ import { createChibi, animChibi } from '../chibi.js';
 import { TouchControls } from '../touch.js';
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
+import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
 import { BIOMES, R } from './biomes.js';
 
 // ======================================================================
@@ -99,8 +100,8 @@ scene.add(sky);
 
 // ---------- 状态 ----------
 const S = {
-  biome: 0, mode: 'scene', time: 10, seed: 1,
-  outline: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false,
+  biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
+  outline: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false,
 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('xxlab') || '{}')); } catch { /* 无痕模式等 */ }
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
@@ -484,8 +485,8 @@ function placeAll(b, hAt) {
   }
   // 少量或需要动画的用克隆，多的用实例化
   for (const [id, vs] of groups) for (const [v, list] of vs) {
-    const proto = getAsset(id, v), light = proto.userData.light;
-    if (list.length <= 4 || list[0].bob !== undefined) {
+    const proto = assetOf(id, v), light = proto.userData.light;
+    if (list.length <= 4 || list[0].bob !== undefined || proto.userData.noInstance) {
       for (const o of list) {
         const c = proto.clone(); c.position.set(o.x, o.y, o.z); c.rotation.y = o.rot || 0; c.scale.set(o.s, o.sy ?? o.s, o.sz ?? o.s);
         if (o.bob !== undefined) { c.userData.bob = o.bob; c.userData.y0 = o.y; bobbers.push(c); }
@@ -517,16 +518,27 @@ function contactShadows(taken) {
 // ======================================================================
 // 图鉴模式：所有素材 × 所有变体排成网格，便于逐个检查
 // ======================================================================
-function buildCatalog(ids) {
-  const rows = ids.map((id) => {
-    const A = ASSETS[id], items = [];
+// 素材来源：Claude 自己建的（./assets.js）和 Codex 建的（./codex/*.js）严格分开；
+// 图鉴里每一行都带来源标签，并且铺不同颜色的底板（Claude 暖黄 / Codex 青绿）
+const SRC = {
+  claude: { tag: 'Claude', strip: '#f0d9a6', get: (id) => ASSETS[id], build: getAsset },
+  codex: { tag: 'Codex', strip: '#a9dcd6', get: (id) => CODEX[id], build: getCodexAsset },
+};
+const assetOf = (id, v) => (S.src === 'codex' && CODEX[id] ? getCodexAsset(id, v) : getAsset(id, v));
+function buildCatalog(ids, mode = 'catalog') {
+  const srcs = mode === 'codex' ? ['codex'] : mode === 'compare' ? ['claude', 'codex'] : ['claude'];
+  const rows = [];
+  for (const id of ids) for (const sk of srcs) {
+    const A = SRC[sk].get(id); if (!A) continue;
+    const items = [];
     for (let v = 0; v < A.n; v++) {
-      const g = getAsset(id, v), box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3());
+      const g = SRC[sk].build(id, v), box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3());
       items.push({ g, v, w: Math.max(1.4, size.x, size.z), h: size.y, box });
     }
-    return { id, name: A.name, items, w: items.reduce((s, it) => s + it.w + 0.9, 0), d: Math.max(...items.map((it) => it.w)), hgt: Math.max(...items.map((it) => it.h)) };
-  });
-  const perCol = ids.length > 16 ? Math.ceil(ids.length / Math.ceil(ids.length / 14)) : ids.length;
+    rows.push({ id, sk, name: A.name, items, w: items.reduce((s, it) => s + it.w + 0.9, 0), d: Math.max(...items.map((it) => it.w)), hgt: Math.max(...items.map((it) => it.h)) });
+  }
+  let perCol = rows.length > 16 ? Math.ceil(rows.length / Math.ceil(rows.length / 14)) : rows.length;
+  if (srcs.length === 2 && perCol % 2) perCol++; // 成对的行不拆到两列
   const cols = [];
   for (let i = 0; i < rows.length; i += perCol) cols.push(rows.slice(i, i + perCol));
   const colW = cols.map((c) => Math.max(...c.map((r) => r.w)));
@@ -537,7 +549,9 @@ function buildCatalog(ids) {
     for (const row of col) {
       z += row.d / 2 + row.hgt * 0.45; // 高的素材多留一点前后距离，斜俯视时不互相遮挡
       let x = x0;
-      const lbl = mkLabel(`${row.name} <i>×${row.items.length}</i>`, 'row');
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(row.w + 0.1, row.d + 0.9).rotateX(-Math.PI / 2), toon(SRC[row.sk].strip, { unique: true }));
+      strip.position.set(x0 + (row.w - 0.9) / 2, 0.004, z); strip.receiveShadow = true; root.add(strip);
+      const lbl = mkLabel(`${row.name} <i>×${row.items.length}</i> <b class="tag ${row.sk}">${SRC[row.sk].tag}</b>`, 'row');
       lbl.pos = new THREE.Vector3(x0 - 0.4, 0.05, z + row.d / 2 + 0.2);
       for (const it of row.items) {
         const c = it.g.clone(), cx = (it.box.min.x + it.box.max.x) / 2, cz = (it.box.min.z + it.box.max.z) / 2;
@@ -682,7 +696,7 @@ function build() {
     for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
     const ids = S.mode === 'all' ? [...new Set(BIOMES.flatMap((x) => x.catalog))] : b.catalog;
-    span = buildCatalog(ids);
+    span = buildCatalog(ids, S.mode);
     hAtCur = () => 0;
   }
   const sm = smoke(emitters.filter((e) => e.smoke)); if (sm) { root.add(sm); particleSys.push(sm); }
@@ -708,7 +722,9 @@ function build() {
 }
 function countAssets() {
   const ids = S.mode === 'scene' ? [...new Set(BIOMES[S.biome].scatter.map((r) => r.id))] : S.mode === 'all' ? [...new Set(BIOMES.flatMap((x) => x.catalog))] : BIOMES[S.biome].catalog;
-  return { types: ids.length, variants: ids.reduce((s, id) => s + ASSETS[id].n, 0) };
+  const src = S.mode === 'codex' || (S.mode === 'scene' && S.src === 'codex') ? CODEX : null;
+  const have = src ? ids.filter((id) => src[id]) : ids;
+  return { types: have.length, variants: have.reduce((s, id) => s + (src || ASSETS)[id].n, 0) };
 }
 function frame(reset = true) {
   if (!reset) return;
@@ -781,9 +797,11 @@ function applyToggles() {
 function ui() {
   document.querySelectorAll('#biomes button').forEach((b, i) => b.classList.toggle('on', i === S.biome));
   document.querySelectorAll('#modes button').forEach((b) => b.classList.toggle('on', b.dataset.m === S.mode));
+  document.querySelectorAll('[data-src]').forEach((b) => b.classList.toggle('on', b.dataset.src === S.src));
   document.querySelectorAll('[data-t]').forEach((b) => b.classList.toggle('on', !!S[b.dataset.t]));
   const b = BIOMES[S.biome];
-  $('#title').innerHTML = S.mode === 'all' ? '全部素材 <small>所有区域的图鉴</small>' : `${b.name} <small>${b.sub}</small>`;
+  const who = S.mode === 'codex' ? ' · <span class="tag codex">Codex</span>' : S.mode === 'compare' ? ' · <span class="tag claude">Claude</span> vs <span class="tag codex">Codex</span>' : S.mode === 'scene' ? ` · <span class="tag ${S.src}">${SRC[S.src].tag} 素材</span>` : S.mode === 'catalog' ? ' · <span class="tag claude">Claude</span>' : '';
+  $('#title').innerHTML = (S.mode === 'all' ? '全部素材 <small>所有区域的图鉴</small>' : `${b.name} <small>${b.sub}</small>`) + who;
   $('#time').value = S.time;
 }
 function setupUI() {
@@ -794,6 +812,7 @@ function setupUI() {
     bx.appendChild(el);
   });
   document.querySelectorAll('#modes button').forEach((el) => el.onclick = () => { S.mode = el.dataset.m; save(); rebuild(true); });
+  document.querySelectorAll('[data-src]').forEach((el) => el.onclick = () => { S.src = el.dataset.src; save(); rebuild(false); });
   document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { S[el.dataset.t] = !S[el.dataset.t]; save(); applyToggles(); ui(); });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
@@ -807,6 +826,7 @@ function setupUI() {
     if (e.target.tagName === 'INPUT') return;
     const n = e.key === '0' ? 10 : +e.key; if (n >= 1 && n <= BIOMES.length) { S.biome = n - 1; if (S.mode === 'all') S.mode = 'catalog'; save(); rebuild(true); }
     if (e.key === 'c' || e.key === 'C') { S.mode = S.mode === 'scene' ? 'catalog' : 'scene'; save(); rebuild(true); }
+    if (e.key === 'x' || e.key === 'X') { S.mode = { scene: 'scene', catalog: 'codex', codex: 'compare', compare: 'catalog', all: 'codex' }[S.mode]; if (S.mode === 'scene') S.src = S.src === 'codex' ? 'claude' : 'codex'; save(); rebuild(S.mode !== 'scene'); }
     if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
     if (e.key === 'r' || e.key === 'R') { S.seed++; save(); rebuild(false); }
     if (e.key === 'o' || e.key === 'O') { S.outline = !S.outline; save(); applyToggles(); ui(); }
@@ -820,7 +840,7 @@ function updateStats(dt) {
   if (stats.acc > 0.5) {
     stats.fps = Math.round(stats.n / stats.acc); stats.acc = 0; stats.n = 0;
     const i = renderer.info.render;
-    $('#stats').textContent = `${stats.fps} fps · ${i.calls} draw · ${(i.triangles / 1000).toFixed(0)}k tri · ${stats.counts.types} 种素材 / ${stats.counts.variants} 个变体`;
+    $('#stats').textContent = `${stats.fps} fps · ${i.calls} draw · ${(i.triangles / 1000).toFixed(0)}k tri · ${stats.counts.types} 种素材 / ${stats.counts.variants} 个变体 · Codex 已有 ${Object.keys(CODEX).length}/${Object.keys(ASSETS).length} 种${CODEX_ERRORS.length ? ' · ⚠ Codex 出错 ' + CODEX_ERRORS.length + ' 处(见控制台)' : ''}`;
   }
 }
 
@@ -909,7 +929,8 @@ function storm(dt) {
 }
 
 status('加载贴图…', 25);
-await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 } });
+await loadCodex();
+await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 }, ...CODEX_TEXTURES });
 status('生成地形与素材…', 55);
 await nextFrame();
 setupUI();

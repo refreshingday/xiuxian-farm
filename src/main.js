@@ -106,7 +106,7 @@ const cfx = new ComboFX(scene, fx, { soft: true });
 const sfx = new SFX(); g.sfx = sfx;
 await loadTextures({
   grass_ground: { normal: 2 }, dirt_path: { normal: 2.5 }, stone_plaza: {},
-  roof_tiles: { norm: 0.88, rep: 0.5 }, wood_planks: { norm: 0.88, rep: 0.5 },
+  roof_tiles: { norm: 0.88, rep: 0.5 }, wood_planks: { norm: 0.88, rep: 0.5 }, tilled_soil: { norm: 0.9 },
   cliff_rock: { norm: 0.9 }, foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 },
   leaf_cards: { norm: 0.9, key: true }, grass_blades: { norm: 0.9, key: true }, blossom_cards: { norm: 0.9, key: true },
 });

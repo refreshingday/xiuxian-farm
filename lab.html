@@ -33,6 +33,9 @@
   .lbl { position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform; }
   .lbl.row { font-size: 13px; color: #3a2a1a; font-weight: bold; transform-origin: 0 0; margin: -10px 0 0 0; background: rgba(255, 248, 228, .85); border: 1px solid rgba(120, 90, 40, .4); border-radius: 3px; padding: 1px 6px; }
   .lbl.row i { font-style: normal; font-weight: normal; opacity: .6; font-size: 11px; }
+  .tag { display: inline-block; font: bold 10px/1.5 "Microsoft YaHei", sans-serif; letter-spacing: .5px; border-radius: 3px; padding: 0 5px; vertical-align: 1px; font-style: normal; }
+  .tag.claude { background: #e8c25a; color: #3a2a08; }
+  .tag.codex { background: #46b8aa; color: #06302b; }
   .lbl.var { font: 11px monospace; color: #fff; background: rgba(20, 24, 30, .6); border-radius: 8px; padding: 0 5px; margin: -8px 0 0 -8px; }
   body.clean #top, body.clean #side, body.clean #help, body.clean #labels { display: none; }
   #loading { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; background: #0d1224; z-index: 20; padding: 24px; text-align: center; }
@@ -115,7 +118,13 @@
   <div class="panel">
     <h4>模式</h4>
     <div class="row" id="modes">
-      <button data-m="scene">场景</button><button data-m="catalog">图鉴</button><button data-m="all">全部素材</button>
+      <button data-m="scene">场景</button><button data-m="catalog">图鉴 <span class="tag claude">Claude</span></button><button data-m="codex">图鉴 <span class="tag codex">Codex</span></button><button data-m="compare">对比 <kbd>X</kbd></button><button data-m="all">全部素材</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h4>场景用的素材</h4>
+    <div class="row">
+      <button data-src="claude"><span class="tag claude">Claude</span> 版</button><button data-src="codex"><span class="tag codex">Codex</span> 版</button>
     </div>
   </div>
   <div class="panel">

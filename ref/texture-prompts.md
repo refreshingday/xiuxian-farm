@@ -82,3 +82,13 @@ Game texture atlas, 1024x1024 PNG with TRANSPARENT background (if transparency i
 ```
 Game texture, 1024x512 PNG with TRANSPARENT background (if transparency is impossible, use a solid flat pure magenta #FF00FF background with no gradient). A single row of about 25-35 stylized grass blades growing straight up from the BOTTOM edge of the image, like a cozy hand-painted farming game. Blades are slender, tapered to sharp tips, slightly curved and leaning in different directions, varying heights from 40% to 95% of the image height, some overlapping. Every blade must touch the bottom edge; nothing touches the top or the left/right edges. Fresh greens (#4f9a34 at the base to #c4e870 at the tips), darker at the base, lighter at the tips, soft painterly shading, a few blades slightly yellow-green. No flowers, no soil, no ground line, no drop shadow, no outline, no text.
 ```
+
+---
+
+# 第四批：农田（Claude 经 Codex CLI 直接生成，模型 gpt-6.1-sol）
+
+## 12. tilled_soil.png — 开垦后的田土
+
+```
+Seamless tileable texture, 512x512 PNG, top-down orthographic view of freshly tilled farm soil for a cozy xianxia (Chinese immortal cultivation) farming game. Neat parallel furrow rows running horizontally, about 8 rows across the image, raised ridges lighter on top and darker moist soil in the grooves. Rich dark brown tones (#5a3a22 to #8a5a36) with small clods and a few tiny pebbles, no plants, no grass. Hand-painted pixel-art style with soft painterly shading, matching a warm ochre dirt path texture. Even flat lighting, no cast shadows, no perspective, no text, no border. Edges must tile seamlessly on all four sides; rows must line up across the top and bottom edges.
+```
