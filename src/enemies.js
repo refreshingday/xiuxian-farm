@@ -278,7 +278,7 @@ export class Enemies {
     for (const [id, p] of e.T.drops) if (Math.random() < p * luck) g.addItem(id, Math.random() < p * luck - 1 ? 2 : 1, { x: e.pos.x, z: e.pos.z + 0.5 * k++ });
     if (e.T.stones) { const [a, b] = e.T.stones; g.addStones(Math.round((a + Math.random() * (b - a)) * luck), e.pos); }
     if (e.boss) {
-      g.addItem(e.T.drop, 1, e.pos); g.addItem('yaodan', 2 + Math.floor(e.lvl / 4), { x: e.pos.x, z: e.pos.z + 0.5 });
+      g.addItem(e.T.drop, e.doubleDrop ? 2 : 1, e.pos); g.addItem('yaodan', 2 + Math.floor(e.lvl / 4), { x: e.pos.x, z: e.pos.z + 0.5 });
       g.addStones(8 + e.lvl * 2, { x: e.pos.x, z: e.pos.z + 1 });
       if (e.T.recipe && !g.alchemy?.known.has(e.T.recipe)) g.alchemy?.learn(e.T.recipe);
       if (e.lair) e.lair.deadDay = g.day;
@@ -309,6 +309,7 @@ export class Enemies {
       // 赤枫狼王：狼群强度跟着月亮变，满月最凶（GDD 独特地点 2）
       if (T.moon) { const m = g.moonK?.() ?? 0; this.boss.hp = this.boss.maxHp *= 1 + m * 0.4; this.boss.dmg *= 1 + m * 0.3; }
       g.toast(`${T.name} 苏醒了！`, 3); g.shake(0.8);
+      g.emit?.('bossWake', this.boss); // 独特地点可以改妖王（毒龙潭的水位……）
       return;
     }
   }
@@ -338,7 +339,7 @@ export class Enemies {
       if (e.boss) this.bossAI(e, dt, dist, toP);
       else if (!held) {
         if (e.state === 'idle') {
-          if (dist < aggro && !P.dead) e.state = 'chase';
+          if (dist < aggro && !P.dead && !g.peaceful?.(e)) e.state = 'chase';
           if (e.st <= 0) { e.st = 2 + Math.random() * 3; const a = Math.random() * 6.28, r = Math.random() * 5; e.tx = e.home.x + Math.cos(a) * r; e.tz = e.home.y + Math.sin(a) * r; }
           const wx = e.tx - e.pos.x, wz = e.tz - e.pos.z, wd = Math.hypot(wx, wz);
           if (wd > 0.4) { mx = wx / wd; mz = wz / wd; spd = e.speed * 0.4; }

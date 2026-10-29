@@ -35,6 +35,7 @@ export class Events {
     if (g.bloodMoon && !this.bloodShown) { this.bloodShown = true; g.toast('血月当空！\n今夜妖兽更凶，掉落翻倍', 4); g.shake(0.4); }
     if (g.day === this.raidDay && h >= 21 && !this.raid) this.startRaid();
     if (this.raid) this.updateRaid(dt);
+    if (g.day === this.tideDay && g.quests?.flags.has('beastPeace')) this.tideDay = g.day + 30; // 万妖谷调停过：兽潮不再来
     if (g.day === this.tideDay && h >= 14 && !this.tide) this.startTide('tide');
     if (g.day === this.invadeDay && h >= 21 && !this.tide) this.startTide('invade');
     if (this.tide) this.updateTide(dt);

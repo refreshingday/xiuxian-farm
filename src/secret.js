@@ -63,8 +63,15 @@ export class SecretRealms {
     this.run = { L, sand, maze, floor: 1, wave: 0, state: 'fight', loot: {}, t: SAND_T, obs: [], chest: null, lvl: Math.floor(dangerFor(L.x, L.z)) + 1, ring: Math.max(0, ringAt(L.x, L.z)) };
     for (const e of [...g.enemies.list]) if (!e.boss && Math.hypot(e.pos.x - L.x, e.pos.z - L.z) < R + 4) g.enemies.remove(e);
     this.layout();
+    if (L.name === '古战场秘境' && !this.history) { this.chooseSide(); return; }
     this.spawnWave();
     g.toast(`进入秘境：${L.name}${sand ? '\n沙漏开始流了——别贪' : maze ? '\n竹阵重排……用神识（V）看清真路' : ''}`, 3.5);
+  }
+  // 古战场秘境（GDD 独特地点 11）：历史重演，选一边参战；表现改变「历史」，解锁不同奖励（只能改一次）
+  chooseSide() {
+    const g = this.g, go = (side) => { this.run.side = side; this.spawnWave(); g.toast(side === 'zheng' ? '你站到了正道联军一边' : '你站到了魔道一边', 2); };
+    g.ui.dialog({ narrate: true, lines: ['四周的景象忽然变了——千年前的那场大战，在你眼前重演。', '正道联军与魔道大军杀成一团。你要站在哪一边？'],
+      choices: [{ label: '⚔ 正道联军（镇魂之力：对鬼物行尸伤害大增）', fn: () => go('zheng') }, { label: '🩸 魔道大军（血煞之力：吸血，但业力 +10）', fn: () => go('xie') }] });
   }
   // 每次进来布局都不一样：石柱 / 竹墙
   layout() {
@@ -136,6 +143,13 @@ export class SecretRealms {
     } else {
       this.give(); g.toast(`秘境宝箱：${text}`, 4);
       this.cleared = g.day; run.state = 'done';
+      if (run.side && !this.history) {
+        this.history = run.side;
+        const P = g.player;
+        if (run.side === 'zheng') { P.atkBonus += 0.05; g.quests?.flags.add('historyZheng'); }
+        else { P.atkBonus += 0.1; g.realm?.addKarma(10); g.quests?.flags.add('historyXie'); }
+        g.ui.dialog({ narrate: true, line: run.side === 'zheng' ? '战场的结局改写了：正道守住了阵线。一缕镇魂之力留在了你身上。' : '战场的结局改写了：魔道破阵而入。一股血煞之气钻进了你的经脉。', info: run.side === 'zheng' ? '攻击 +5%（历史已改写，不能再改）' : '攻击 +10%，业力 +10（历史已改写，不能再改）' });
+      }
     }
   }
   deeper() {
@@ -164,6 +178,6 @@ export class SecretRealms {
     }
     this.run = null;
   }
-  save() { return { cleared: this.cleared }; }
-  load(s) { this.cleared = s.cleared ?? -1; if (this.run) this.end('dead'); }
+  save() { return { cleared: this.cleared, history: this.history || null }; }
+  load(s) { this.cleared = s.cleared ?? -1; this.history = s.history || null; if (this.run) this.end('dead'); }
 }

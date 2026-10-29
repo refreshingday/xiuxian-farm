@@ -22,6 +22,16 @@ export class Places {
     this.g = g;
     const find = (n) => landmarks.list.find((L) => L.name === n);
     this.ghost = find('鬼市'); this.tomb = find('古剑冢'); this.crater = find('天火陨坑'); this.peak = find('天劫峰');
+    this.pool = find('毒龙潭'); this.valley = find('万妖谷');
+    this.favor = 0; // 万妖谷妖族好感：0..100
+    this.buildPool();
+    // 万妖谷：神龛供妖丹
+    g.life.on((P) => this.valley && near(P, this.valley, 4) !== false && { label: `万妖谷神龛 · 供奉妖丹（妖族好感 ${this.favor}）`, act: () => this.offer(), d: 1 });
+    // 妖族好感高了：万妖谷一带的妖兽不主动攻击（被打了照样还手）
+    g.peaceful = (e) => this.favor >= 60 && this.valley && !e.boss && Math.hypot(e.pos.x - this.valley.x, e.pos.z - this.valley.z) < 140;
+    g.on('kill', (e) => { if (this.valley && !e.boss && Math.hypot(e.pos.x - this.valley.x, e.pos.z - this.valley.z) < 140) this.favor = Math.max(0, this.favor - 4); });
+    // 毒龙潭：沼蛟按水位变
+    g.on('bossWake', (b) => this.poolBoss(b));
     TYPES.heartdemon = { ...TYPES.bandit, name: '心魔', c: ['#3a2a5a', '#1a1030', '#ff4aff'], hp: 220, dmg: 22, speed: 4.4, drops: [['yaodan', 0.6]], stones: [2, 4] };
     TYPES.swordghost = { ...TYPES.bandit, name: '剑冢残影', c: ['#c8d8ff', '#6a7ab8', '#9ef0ff'], hp: 380, dmg: 26, speed: 4.8, drops: [], stones: [6, 10] };
     this.tombWins = 0; this.tombDay = -1; this.duel = null;
@@ -93,6 +103,36 @@ export class Places {
     });
   }
 
+  // ---------- 毒龙潭（GDD 独特地点 7）：水位跟季节、天气变；雨季沼蛟藏在水下偷袭，难但掉落更好；旱季困在泥滩上好打 ----------
+  waterHigh() { const g = this.g, s = dateOf(g.day).season; return s === 1 || g.weatherToday === 'rain'; }
+  buildPool() {
+    if (!this.pool) return;
+    const m = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#2a5a4a', transparent: true, opacity: 0.75 }));
+    m.position.set(this.pool.x, 0.05, this.pool.z); this.g.scene.add(m); this.poolMesh = m;
+  }
+  updatePool() {
+    if (!this.poolMesh) return;
+    const r = this.waterHigh() ? 16 : 7, s = this.poolMesh.scale.x;
+    this.poolMesh.scale.setScalar(s + (r - s) * 0.02);
+  }
+  poolBoss(b) {
+    if (b.type !== 'jiaoking') return;
+    const g = this.g;
+    if (this.waterHigh()) { b.hp = b.maxHp *= 1.3; b.dmg *= 1.2; b.doubleDrop = true; g.toast('潭水高涨——沼蛟藏在水下偷袭！\n（雨季更难，掉落翻倍）', 3.5); }
+    else { b.speed *= 0.7; g.toast('旱季水浅，沼蛟困在泥滩上', 3); }
+  }
+
+  // ---------- 万妖谷（GDD 独特地点 12）：妖族领地；好感够高，妖兽不主动攻击；再高，兽潮就从源头止住了 ----------
+  offer() {
+    const g = this.g;
+    if (g.inv.count('yaodan') < 5) { g.toast('神龛前要供 5 颗妖丹', 1.6); return; }
+    g.inv.take('yaodan', 5); this.favor = Math.min(100, this.favor + 20);
+    g.fx.burst(this.valley, '#9ef0a0', 30, { speed: 3, up: 5, life: 1, y: 1 });
+    const msg = this.favor >= 80 ? '万妖谷的妖王们愿意和你谈了——兽潮不会再从这里发起。' : this.favor >= 60 ? '谷里的妖兽看你的眼神缓和了，不再主动扑上来。' : '神龛里的妖火跳了跳。';
+    g.ui.dialog({ narrate: true, line: msg, info: `妖族好感 ${this.favor} / 100（在谷里杀妖兽会掉好感）` });
+    if (this.favor >= 80) g.quests.flags.add('beastPeace');
+  }
+
   // ---------- 古剑冢 ----------
   drawSword() {
     const g = this.g, L = this.tomb;
@@ -162,8 +202,9 @@ export class Places {
   }
 
   update(dt) {
+    this.updatePool();
     this.updateGhost(dt); this.updateTomb(); this.updateCrater(dt); this.updatePeak(); this.updateMine(dt);
   }
-  save() { return { tombWins: this.tombWins, tombDay: this.tombDay, shower: this.showerTonight, oil: this.oil }; }
-  load(s) { this.tombWins = s.tombWins || 0; this.tombDay = s.tombDay ?? -1; this.showerTonight = !!s.shower; this.oil = s.oil ?? 60; }
+  save() { return { tombWins: this.tombWins, tombDay: this.tombDay, shower: this.showerTonight, oil: this.oil, favor: this.favor }; }
+  load(s) { this.tombWins = s.tombWins || 0; this.tombDay = s.tombDay ?? -1; this.showerTonight = !!s.shower; this.oil = s.oil ?? 60; this.favor = s.favor || 0; }
 }
