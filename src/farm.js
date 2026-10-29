@@ -108,11 +108,11 @@ export class Farm {
     const work = (fn) => () => { g.player.work = 0.001; fn(); this.paint(t); g.fx.burst({ x: t.x, z: t.z }, '#c8a070', 8, { speed: 2, y: 0.1, bright: 0.8 }); };
     if (t.state === 0) return { label: '开垦', act: work(() => { t.state = 1; }) };
     if (t.state === 3) return { label: '清除枯苗', act: work(() => this.clear(t)) };
-    if (it?.soilQi && t.qi < QI_MAX) return { label: `补灵气 · ${it.name}（+${it.soilQi}，现有 ${t.qi}）`, act: work(() => { inv.take(sel); t.qi = Math.min(QI_MAX, t.qi + it.soilQi); g.fx.burst({ x: t.x, z: t.z }, '#7dffe0', 14, { speed: 1.5, up: 3, life: 0.7 }); }) };
+    if (it?.soilQi && t.qi < QI_MAX) return { label: `补灵气 · ${it.name}（+${it.soilQi}，现有 ${t.qi}）`, act: work(() => { inv.take(sel); t.qi = Math.min(QI_MAX, t.qi + it.soilQi); g.emit?.('soilQi'); g.fx.burst({ x: t.x, z: t.z }, '#7dffe0', 14, { speed: 1.5, up: 3, life: 0.7 }); }) };
     if (t.state === 1) {
       if (it?.cat === 'seed') {
         const c = CROPS[it.crop], ok = c.seasons.includes(this.season);
-        return { label: `播种 · ${it.name}${ok ? '' : '（不合时令，种了不长）'}${c.qi && !t.qi ? '（地里没灵气）' : ''}`, act: work(() => { inv.take(sel); Object.assign(t, { state: 2, crop: it.crop, g: 0, n: 0, age: 0, w: g.weatherToday === 'rain' }); }) };
+        return { label: `播种 · ${it.name}${ok ? '' : '（不合时令，种了不长）'}${c.qi && !t.qi ? '（地里没灵气）' : ''}`, act: work(() => { inv.take(sel); Object.assign(t, { state: 2, crop: it.crop, g: 0, n: 0, age: 0, w: g.weatherToday === 'rain' }); g.emit?.('plant', it.crop); }) };
       }
       return { label: `空地${t.qi ? ` · 灵气 ${t.qi}` : ''} · 快捷栏选中种子后按 F 播种` };
     }
@@ -130,7 +130,7 @@ export class Farm {
   }
   get season() { return Math.floor((this.g.day - 1) / 14) % 4; }
   water(t) {
-    this.can--; t.w = true;
+    this.can--; t.w = true; this.g.emit?.('water');
     this.g.fx.burst({ x: t.x, z: t.z }, '#8ad8ff', 10, { speed: 1.5, up: 2, life: 0.5, y: 0.6 });
     this.g.inv.onChange?.();
   }
@@ -138,7 +138,7 @@ export class Farm {
   harvest(t) {
     const c = CROPS[t.crop], id = this.yieldId(t), n = c.kind === 'crop' && Math.random() < 0.2 ? 2 : 1;
     this.g.addItem(id, n, t);
-    this.g.onHarvest?.(id, n);
+    this.g.emit?.('harvest', id, n);
     if (c.regrow) { t.g = c.days - c.regrow; t.w = false; }
     else this.clear(t);
   }

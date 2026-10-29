@@ -162,6 +162,7 @@ export class Village {
     const g = this.g, P = g.player;
     v.talking = 4;
     if (!v.talked) { v.talked = true; v.addAff(10); }
+    if (!line) g.emit?.('talk', v);
     const choices = [];
     if (!v.gifted) choices.push({ label: '🎁 送礼', fn: () => this.giftMenu(v) });
     if (v.d.shop) {

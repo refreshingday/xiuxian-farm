@@ -127,7 +127,7 @@ export class Life {
     if (!(it.heal || it.qiHeal || it.xp)) return false;
     if (P.pillCd > 0) return false;
     inv.take(id); P.pillCd = 0.8;
-    const k = it.cat === 'pill' ? 0.7 ** (this.tox[id] = (this.tox[id] || 0) + 1, this.tox[id] - 1) : 1;
+    const tk = it.base || id, k = it.cat === 'pill' ? 0.7 ** (this.tox[tk] = (this.tox[tk] || 0) + 1, this.tox[tk] - 1) : 1;
     if (it.heal) { const v = Math.round(it.heal * k); P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + v, 'heal'); }
     if (it.qiHeal) P.qi = Math.min(P.maxQi, P.qi + it.qiHeal * k * P.maxQi / 100);
     if (it.xp) g.addXP(it.xp * k * (g.rootMul?.() ?? 1), P.pos);

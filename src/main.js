@@ -13,6 +13,8 @@ import { Enemies } from './enemies.js';
 import { realmText } from './npc.js';
 import { Village, loadVillageData } from './village.js';
 import { Farm } from './farm.js';
+import { Alchemy } from './alchemy.js';
+import { Quests, loadQuestData } from './quests.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { KE } from './comboKit.js';
@@ -105,6 +107,8 @@ const g = {
   scene, camera, time: 0, hours: DAY_START, day: 1, weatherToday: 'clear', nightK: 0, scheduled: [], paused: true,
   after(sec, fn) { this.scheduled.push({ t: this.time + sec, fn }); },
   shakeV: 0, shake(v) { this.shakeV = Math.max(this.shakeV, v); },
+  // 事件：kill / harvest / plant / water / soilQi / craft / talk …（任务进度等靠它推进）
+  handlers: {}, on(t, f) { (this.handlers[t] ??= []).push(f); }, emit(t, ...a) { for (const f of this.handlers[t] || []) f(...a); },
   toast(msg, sec = 2.2) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), sec * 1000); },
 };
 const fx = new FX(scene, camera); g.fx = fx;
@@ -127,7 +131,7 @@ const P = {
   c: createChibi({ skin: '#f8d8bc', hair: '#4a2e22', hairStyle: 2, robe: '#f2f4f6', robe2: '#4f7fb0', belt: '#3a5a78', pants: '#3a4250', sword: true }),
   r: 0.4, yaw: 0, vy: 0, vel: new THREE.Vector3(), kx: 0, kz: 0,
   hp: 100, maxHp: 100, qi: 100, maxQi: 100, layer: 1, xp: 0, grade: 2, elem: '金',
-  work: 0, dashT: 0, dashCd: 0, dashDir: 0, iframe: 0, pillCd: 0,
+  work: 0, dashT: 0, dashCd: 0, dashDir: 0, iframe: 0, pillCd: 0, atkBonus: 0,
   dead: false,
 };
 const inv = new Inventory(); g.inv = inv;
@@ -139,7 +143,7 @@ g.player = P;
 
 const xpNeed = () => 40 + P.layer * 30;
 g.xpNeed = xpNeed;
-const atkMul = () => 1 + P.layer * 0.25;  // 招式伤害按炼气一层设计，随境界放大
+const atkMul = () => (1 + P.layer * 0.25) * (1 + P.atkBonus);  // 招式伤害按炼气一层设计，随境界放大；兵器淬火另算
 
 P.hurt = (dmg, fx0, fz0, knock = 6) => {
   if (P.iframe > 0 || P.dead) return false;
@@ -240,6 +244,7 @@ addEventListener('keydown', (e) => {
   if (gui.panelOpen) { if (e.code === 'Tab' || e.code === 'KeyB') gui.closePanel(); return; }
   if (e.code === 'KeyF') interact();
   if (e.code === 'Tab' || e.code === 'KeyB') openBag();
+  if (e.code === 'KeyL') quests.openLog();
   if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
   const si = SKILL_KEYS.indexOf(e.code);
@@ -272,6 +277,7 @@ touch.bind(document.getElementById('skWeap'), tap(cycleWeapon));
 document.getElementById('hotbar').addEventListener('pointerdown', (e) => { const s = e.target.closest('.hs'); if (!s) return; e.stopPropagation(); sfx.unlock(); hotKey(+s.dataset.i); });
 document.getElementById('bagBtn').addEventListener('click', () => openBag());
 document.getElementById('menuBtn').addEventListener('click', () => openMenu());
+document.getElementById('questBtn').addEventListener('click', () => quests.openLog());
 touch.bind(document.getElementById('prompt'), tap(interact));
 touch.bind(document.getElementById('mobTime'), { hold: 'time' });
 touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
@@ -382,6 +388,10 @@ life.on((P) => {
 // 灵田（farm.js）：开垦、播种、浇水、补灵气、收获
 const farm = new Farm(g); g.farm = farm;
 inv.countText = (id) => (id === 'can' ? farm.can : undefined); // 快捷栏上水壶显示剩多少水
+// 炼丹（alchemy.js）与任务（quests.js：主线教学、村民委托、委托板）
+const alchemy = new Alchemy(g); g.alchemy = alchemy;
+const quests = new Quests(g, await loadQuestData()); g.quests = quests;
+g.onKill = (e) => g.emit('kill', e);
 function interact() {
   if (gui.blocking || P.dead || g.paused) return;
   life.find()?.act?.();
@@ -394,6 +404,7 @@ function openMenu() {
   gui.panel('菜单', (body) => {
     const info = saveInfo();
     body.append(btn('🎒 背包', () => { gui.closePanel(); openBag(); }, 'wide'));
+    body.append(btn('📜 任务', () => { gui.closePanel(); quests.openLog(); }, 'wide'));
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('❓ 操作说明', () => { gui.closePanel(); document.getElementById('help').classList.remove('hidden'); }, 'wide'));
@@ -406,15 +417,17 @@ register('time', () => ({ day: g.day, hours: g.hours }), (s) => {
   g.day = s.day; g.hours = s.hours; world.day = g.day;
   g.weatherToday = rollWeather(g.day); weather.setDay(g.weatherToday === 'rain');
 });
-register('player', () => ({ x: P.pos.x, z: P.pos.z, hp: P.hp, maxHp: P.maxHp, qi: P.qi, maxQi: P.maxQi, layer: P.layer, xp: P.xp, elem: P.elem, kit: combat.kitI }), (s) => {
+register('player', () => ({ x: P.pos.x, z: P.pos.z, hp: P.hp, maxHp: P.maxHp, qi: P.qi, maxQi: P.maxQi, layer: P.layer, xp: P.xp, elem: P.elem, kit: combat.kitI, atk: P.atkBonus }), (s) => {
   P.pos.set(s.x, 0, s.z); focus.copy(P.pos);
-  Object.assign(P, { hp: s.hp, maxHp: s.maxHp, qi: s.qi, maxQi: s.maxQi, layer: s.layer, xp: s.xp, elem: s.elem, dead: false });
+  Object.assign(P, { hp: s.hp, maxHp: s.maxHp, qi: s.qi, maxQi: s.maxQi, layer: s.layer, xp: s.xp, elem: s.elem, atkBonus: s.atk || 0, dead: false });
   P.c.root.visible = true; combat.setKit(s.kit || 0);
   for (const e of [...enemies.list]) enemies.remove(e);
 });
 register('inv', () => inv.save(), (s) => inv.load(s));
 register('life', () => life.save(), (s) => life.load(s));
 register('village', () => village.save(), (s) => village.load(s));
+register('alchemy', () => alchemy.save(), (s) => alchemy.load(s));
+register('quests', () => quests.save(), (s) => quests.load(s));
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
 
@@ -500,6 +513,8 @@ function tick(dt) {
   world.update(P.pos, dt, g.nightK, g.day * 24 + g.hours);
   life.update(dt);
   farm.update();
+  alchemy.update(dt);
+  quests.update(dt);
   village.update(dt);
   enemies.update(dt);
   combat.updateEffects(dt);
@@ -661,15 +676,22 @@ updateKitUI();
 if (innerHeight < 720) document.getElementById('help').classList.add('hidden');
 
 // ---------- 标题：继续 / 新的开始 ----------
+// 新的开始（GDD「第一个小时」）：背着包袱走到青竹村外，迎面就撞上野猪妖
 function newGame() {
-  inv.money = 200; inv.add('can'); inv.add('seed_radish', 6); inv.add('seed_lingcao', 3); inv.add('lingcao', 3); inv.add('shard', 3);
-  g.weatherToday = rollWeather(g.day); weather.setDay(g.weatherToday === 'rain');
-  g.onNewGame?.();
+  inv.money = 200; inv.add('can'); inv.add('seed_radish', 6); inv.add('lingcao', 3);
+  g.weatherToday = 'clear'; weather.setDay(false);
+  quests.newDay();
+  P.pos.set(31, 0, 16); P.yaw = -Math.PI / 2; focus.copy(P.pos);
+  g.intro = true;
 }
 function startPlay() {
   g.title = false; g.paused = false;
   document.getElementById('title').classList.add('hidden');
   gui.renderHotbar(inv);
+  if (g.intro) {
+    g.intro = false;
+    gui.dialog({ narrate: true, lines: ['你背着包袱，走了三天山路。', '远远地，已经能望见青竹村的炊烟。', '就在这时，路边的林子里传来一阵低吼——'], onClose: () => quests.accept('s1', 'story') });
+  }
   g.toast(touch.on ? '左下摇杆移动 · 右下按钮出招（自动瞄准）· 拖动画面转镜头 · 点提示交互' : '左键连招（松开出招，快慢分支）· QERC 技能 · X 换武 · F 交互 · Tab 背包 · H 操作说明', 4);
 }
 {

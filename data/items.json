@@ -46,6 +46,14 @@
     "pill_break": { "name": "破境丹", "icon": "🟣", "cat": "pill", "sell": 3000, "desc": "用妖王材料炼成。修为圆满后服下，劫云出现，渡过天劫即可突破大境界。" },
     "pill_avert": { "name": "避劫丹", "icon": "⚪", "cat": "pill", "sell": 600, "desc": "渡劫时服下，天劫伤害大幅降低。" }
   },
+  "recipes": {
+    "_note": "丹方（GDD 第 8 节）。in = 主料（多套写成数组，任选一套）；控火小游戏得分定品质：下品 1 颗、中品 2 颗、上品 2 颗（药力 ×1.3）、极品 3 颗带丹纹（药力 ×1.6）。同一丹方炼过 10 次后可以一键炼制，固定出中品。",
+    "pill_heal": { "in": { "lingcao": 2, "yaodan": 1 }, "speed": 1 },
+    "pill_qi": { "in": { "ninglu": 2, "yaodan": 1 }, "speed": 1.1 },
+    "pill_xp": { "in": [{ "renshen@100": 1, "yaodan": 2, "lingcao": 2 }, { "renshen@10": 2, "yaodan": 3, "chiyang": 1 }], "speed": 1.3 },
+    "pill_avert": { "in": { "chiyang": 2, "yuehua": 2, "yaodan": 2 }, "speed": 1.4 },
+    "pill_break": { "in": [{ "wolf_fang": 1, "yaodan": 3, "renshen": 1 }, { "heart": 1, "yaodan": 3, "renshen": 1 }], "speed": 1.6 }
+  },
   "shops": {
     "merchant": { "name": "钱记杂货", "sells": ["seed_radish", "seed_cabbage", "seed_potato", "seed_strawberry", "seed_corn", "seed_pepper", "seed_eggplant", "seed_melon", "seed_rice", "seed_pumpkin", "seed_yam", "seed_grape", "bun", "talisman_paper", "spring"], "buys": ["crop", "food", "mat"] },
     "doctor": { "name": "苏氏药铺", "sells": ["seed_lingcao", "seed_ninglu", "seed_chiyang", "seed_yuehua", "seed_renshen", "seed_xuanbing", "pill_heal", "pill_qi", "lingtu"], "buys": ["herb", "pill", "mat"] },

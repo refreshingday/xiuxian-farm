@@ -2,13 +2,13 @@
 // 灵草的药龄变体（@10 十年 / @100 百年）按需生成。
 import { SEASONS } from './calendar.js';
 
-export const ITEMS = {}, CROPS = {}, SHOPS = {};
+export const ITEMS = {}, CROPS = {}, SHOPS = {}, RECIPES = {};
 const CAT_ORDER = ['tool', 'seed', 'herb', 'crop', 'food', 'pill', 'mat', 'boss'];
 export const CAT_NAME = { tool: '工具', seed: '种子', herb: '灵草', crop: '作物', food: '食物', pill: '丹药', mat: '材料', boss: '妖王材料' };
 
 export async function loadItems() {
   const d = await (await fetch('data/items.json')).json();
-  Object.assign(CROPS, d.crops); Object.assign(SHOPS, d.shops);
+  Object.assign(CROPS, d.crops); Object.assign(SHOPS, d.shops); Object.assign(RECIPES, d.recipes); delete RECIPES._note;
   for (const [id, c] of Object.entries(d.crops)) {
     c.id = id;
     const when = c.seasons.map((s) => SEASONS[s]).join('/');
@@ -20,13 +20,18 @@ export async function loadItems() {
   for (const [id, it] of Object.entries(ITEMS)) it.id = id;
 }
 
-// 取物品定义；药龄变体（如 renshen@100）第一次用到时生成
+// 取物品定义；变体第一次用到时生成：药龄 renshen@10 / @100，丹药品质 pill_heal+1 上品 / +2 极品（带丹纹）
 export function item(id) {
   if (ITEMS[id]) return ITEMS[id];
-  const [base, age] = id.split('@'), b = ITEMS[base];
-  if (!b || !age) return null;
-  const old = age === '100';
-  return (ITEMS[id] = { ...b, id, base, age: +age, name: (old ? '百年' : '十年') + b.name, sell: b.sell * (old ? 5 : 2), heal: (b.heal || 0) * (old ? 3 : 1.5), qiHeal: (b.qiHeal || 0) * (old ? 3 : 1.5) });
+  const m = /^([^@+]+)(?:@(\d+))?(?:\+(\d))?$/.exec(id), b = m && ITEMS[m[1]];
+  if (!b || !(m[2] || m[3])) return null;
+  let k = 1, sell = 1, name = b.name;
+  if (m[2]) { const old = m[2] === '100'; k = old ? 3 : 1.5; sell = old ? 5 : 2; name = (old ? '百年' : '十年') + name; }
+  if (m[3]) { const top = m[3] === '2'; k = top ? 1.6 : 1.3; sell = top ? 2.5 : 1.5; name = (top ? '极品' : '上品') + name; }
+  const v = { ...b, id, base: m[1], age: m[2] ? +m[2] : 0, grade: m[3] ? +m[3] : 0, name, sell: Math.round(b.sell * sell) };
+  for (const f of ['heal', 'qiHeal', 'xp']) if (b[f]) v[f] = Math.round(b[f] * k);
+  if (m[3] === '2') v.desc = (b.desc || '') + ' 丹纹：药力更强。';
+  return (ITEMS[id] = v);
 }
 export const itemName = (id) => item(id)?.name ?? id;
 export const itemIcon = (id) => item(id)?.icon ?? '❔';
