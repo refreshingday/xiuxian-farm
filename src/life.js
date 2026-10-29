@@ -66,13 +66,13 @@ export class Life {
         P.hp = Math.round(P.maxHp * 0.6); P.qi = P.maxQi;
         note = `你昏倒在外，被村民背了回来${lost ? `，丢了 ${lost} 文` : ''}`;
       }
-      this.newDay();
+      const notes = this.newDay();
       P.pos.set(this.bed.x + 1.3, 0, this.bed.z + 0.6); P.vy = 0; P.dead = false; P.c.root.visible = true;
       g.save?.();
       fade.classList.remove('on');
       g.paused = false; this.ending = false;
       const d = dateOf(g.day);
-      g.toast(`${d.seasonName}季 第${d.dayOfSeason}天 · ${d.weekName} ${d.moonIcon}${d.event ? ' · ' + d.event : ''}${g.weatherToday === 'rain' ? ' · 下雨' : ''}\n${note}`, 4);
+      g.toast([`${d.seasonName}季 第${d.dayOfSeason}天 · ${d.weekName} ${d.moonIcon}${d.event ? ' · ' + d.event : ''}${g.weatherToday === 'rain' ? ' · 下雨' : ''}`, note, ...notes].filter(Boolean).join('\n'), 5);
     }, 900);
   }
   newDay() {
@@ -83,7 +83,7 @@ export class Life {
     this.clearLoot();
     for (const e of [...g.enemies.list]) if (!e.boss) g.enemies.remove(e);
     const d = dateOf(g.day);
-    for (const f of this.dayHooks) f(d);
+    return this.dayHooks.map((f) => f(d)).filter(Boolean); // 各系统的早报（灵田、委托……）
   }
 
   // ---------- 死亡掉落 ----------

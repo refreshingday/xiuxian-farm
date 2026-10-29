@@ -87,7 +87,7 @@ export class UI {
         const it = item(id);
         if (it.cat !== cat) { cat = it.cat; body.append(el('div', 'pcat', CAT_NAME[cat] || cat)); }
         const bs = [];
-        if (o.gift) bs.push(btn('送出', () => o.gift(id)));
+        if (o.gift) { if (it.cat !== 'tool') bs.push(btn('送出', () => o.gift(id))); }
         else {
           if (o.onUse && (it.heal || it.qiHeal || it.xp || it.cat === 'pill')) bs.push(btn('使用', () => { o.onUse(id); this.refresh(); }));
           const k = inv.hot.indexOf(id);
@@ -146,7 +146,7 @@ export class UI {
     [...bar.children].forEach((s, i) => {
       const id = inv.hot[i], it = id && item(id);
       s.querySelector('.hi').textContent = it ? it.icon : '';
-      s.querySelector('.hn').textContent = it ? inv.count(id) : '';
+      s.querySelector('.hn').textContent = it ? inv.countText?.(id) ?? inv.count(id) : '';
       s.title = it ? it.name : '';
       s.classList.toggle('sel', i === inv.sel);
       s.classList.toggle('empty', !it);

@@ -22,6 +22,7 @@
     "xuanbing": { "name": "玄冰莲", "icon": "❄️", "kind": "herb", "days": 6, "seasons": [3], "seed": 260, "sell": 420, "qi": 3, "elem": "水" }
   },
   "items": {
+    "can": { "name": "水壶", "icon": "🪣", "cat": "tool", "sell": 0, "desc": "浇水用，能装 20 壶水。在井边或池塘边按 F 打水。选中水壶时，熟了的灵草也会浇水（留着长药龄）。" },
     "yaodan": { "name": "妖丹", "icon": "🔮", "cat": "mat", "sell": 80, "soilQi": 6, "desc": "妖兽体内凝结的丹核。炼丹主料，也能化开补充灵田灵气。" },
     "shard": { "name": "灵石碎片", "icon": "💠", "cat": "mat", "sell": 40, "soilQi": 3, "desc": "碎掉的灵石。埋进灵田能补一点灵气。" },
     "spring": { "name": "灵泉水", "icon": "💧", "cat": "mat", "sell": 30, "soilQi": 2, "desc": "带灵气的泉水，浇进灵田补灵气。" },

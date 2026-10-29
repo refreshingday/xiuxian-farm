@@ -12,6 +12,7 @@ import { FX } from './fx.js';
 import { Enemies } from './enemies.js';
 import { realmText } from './npc.js';
 import { Village, loadVillageData } from './village.js';
+import { Farm } from './farm.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { KE } from './comboKit.js';
@@ -378,16 +379,9 @@ life.on((P) => {
   }
   return null;
 });
-life.on((P) => {
-  const fx0 = P.pos.x + Math.sin(P.yaw) * 0.9, fz0 = P.pos.z + Math.cos(P.yaw) * 0.9;
-  const t = world.farmTileAt(fx0, fz0) || world.farmTileAt(P.pos.x, P.pos.z);
-  if (!t) return null;
-  const act = (fn) => () => { P.work = 0.001; fn(); fx.burst({ x: t.x, z: t.z }, '#c8a070', 8, { speed: 2, y: 0.1, bright: 0.8 }); };
-  if (t.state === 0) return { label: '开垦', act: act(() => { t.state = 1; }), d: 1 };
-  if (t.state === 1) return { label: '播种 · 灵草种子', act: act(() => { t.state = 2; t.stage = 0; t.grow = 0; }), d: 1 };
-  if (t.stage >= 2) return { label: '收获 · 灵草', act: act(() => { t.state = 1; g.addItem('lingcao', 1 + (Math.random() < 0.35 ? 1 : 0), { x: t.x, z: t.z }); }), d: 1 };
-  return { label: `灵草生长中…（${Math.round((t.stage * 2.5 + t.grow) / 5 * 100)}%）`, d: 1 };
-});
+// 灵田（farm.js）：开垦、播种、浇水、补灵气、收获
+const farm = new Farm(g); g.farm = farm;
+inv.countText = (id) => (id === 'can' ? farm.can : undefined); // 快捷栏上水壶显示剩多少水
 function interact() {
   if (gui.blocking || P.dead || g.paused) return;
   life.find()?.act?.();
@@ -422,7 +416,7 @@ register('inv', () => inv.save(), (s) => inv.load(s));
 register('life', () => life.save(), (s) => life.load(s));
 register('village', () => village.save(), (s) => village.load(s));
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
-register('farm', () => world.farm.map((t) => [t.state, t.stage, t.grow]), (s) => s.forEach((v, i) => { const t = world.farm[i]; if (t) [t.state, t.stage, t.grow] = v; }));
+register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
 
 // ---------- 主循环 ----------
 let hitStop = 0, last = performance.now();
@@ -505,6 +499,7 @@ function tick(dt) {
   updatePlayer(dt);
   world.update(P.pos, dt, g.nightK, g.day * 24 + g.hours);
   life.update(dt);
+  farm.update();
   village.update(dt);
   enemies.update(dt);
   combat.updateEffects(dt);
@@ -667,7 +662,7 @@ if (innerHeight < 720) document.getElementById('help').classList.add('hidden');
 
 // ---------- 标题：继续 / 新的开始 ----------
 function newGame() {
-  inv.money = 200; inv.add('seed_lingcao', 5); inv.add('lingcao', 3);
+  inv.money = 200; inv.add('can'); inv.add('seed_radish', 6); inv.add('seed_lingcao', 3); inv.add('lingcao', 3); inv.add('shard', 3);
   g.weatherToday = rollWeather(g.day); weather.setDay(g.weatherToday === 'rain');
   g.onNewGame?.();
 }

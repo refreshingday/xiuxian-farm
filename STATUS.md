@@ -40,7 +40,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 
 ## 农耕
 - 耕地贴图 `tilled_soil.png`（Codex CLI · gpt-6.1-sol 生成）— 🟩 — 2026-10-28 — 替换程序垄沟贴图，程序贴图兜底
-- 开垦 → 播种 → 生长 → 收获（灵草）— 🟨 — 2026-10-27 — 只有一种作物，无浇水
+- 灵田规则（`farm.js`，GDD 第 6 节）：8×6 块地；12 种普通作物 + 6 种灵草，按天长熟、有的能多次收；每天浇水（水壶 20 壶，井 / 池塘打水，下雨免浇）；灵草每天耗土壤灵气（妖丹 / 灵石碎片 / 灵泉水 / 灵土补）；熟了的灵草继续浇水长药龄（十年 / 百年）；过季庄稼枯死、灵草停长；10 天没人管枯死；早上播报 — 🟩 — 2026-10-30
 - 野外采集灵草 — 🟩 — 2026-10-27
 
 ## 战斗
@@ -62,7 +62,6 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - ⬜ 血脉代际、道侣、婚育
 - ⬜ 建造（Harvest Moon 式有限建造）、室内（屋顶淡出）
 - ⬜ 存档（只存差异）
-- ⬜ 更多作物 / 浇水 / 季节影响
 - ⬜ 正式模型（Tripo3D）
 
 ## 素材实验场 (`lab.html` `src/lab/`)
@@ -70,6 +69,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-10-30 — 灵田规则：多种作物与灵草、浇水、土壤灵气、药龄、季节、枯死
 - 2026-10-30 — 青竹村 21 位村民、日程、好感送礼、四家店、新房子和委托板
 - 2026-10-30 — GDD 落地第一块：历法、睡觉 / 昏倒、存读档、物品背包快捷栏、妖兽掉落表、夜晚敌人 +30% / 掉落 +50%、野生灵草 3 天重生
 - 2026-10-29 — 试炼场三武器战斗搬进主世界（combat.js），妖兽加五行属性和浮空物理

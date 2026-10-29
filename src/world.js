@@ -12,7 +12,7 @@ export const MINE_R = 24;
 const MINE_ANG = Math.atan2(-MINE.y, -MINE.x); // 矿洞入口朝向村子
 export const MINE_GATE = new THREE.Vector2(MINE.x + Math.cos(MINE_ANG) * MINE_R, MINE.y + Math.sin(MINE_ANG) * MINE_R);
 export const ARENA = new THREE.Vector2(MINE.x - Math.cos(MINE_ANG) * (MINE_R - 10), MINE.y - Math.sin(MINE_ANG) * (MINE_R - 10));
-export const FARM = { x0: -19, z0: -1, cols: 6, rows: 4, size: 1.5 };
+export const FARM = { x0: -19, z0: -1, cols: 8, rows: 6, size: 1.5 }; // 灵田：地块和作物在 farm.js
 export const POND = { x: -7, z: -19, r: 4.6 };
 // 仙山：村北的石峰群；瀑布从中间那座落进小潭，再流进荷花池
 const PEAKS = [[-13, -31, 7, 2.6], [-9.5, -33, 9.5, 2.9], [-6, -31.2, 8, 2.4], [-2.4, -32.6, 10.5, 2.7], [1.2, -30.6, 6, 2], [-16.4, -28.6, 4.5, 1.8], [4, -28.4, 3.6, 1.5], [-19, -31, 6.5, 2.2]];
@@ -612,8 +612,6 @@ export class World {
     for (const o of this.ores) {
       if (!o.alive) { o.respawn -= dt; if (o.respawn <= 0) { o.alive = true; o.hp = 3; o.group.visible = true; o.col.off = false; } }
     }
-    // 农田生长（按游戏小时）
-    this.updateFarm(hours);
     // 野生灵草摆动
     for (const ch of this.chunks.values()) for (const h of ch.herbs) {
       h.mesh.children[1].rotation.y += dt;
@@ -810,17 +808,8 @@ export class World {
     this.scene.add(...this.leafClump('bush', bush).filter(Boolean));
     this.scene.add(inst(this.G.flower, this.M.plain, flw, false));
 
-    // 农田 + 篱笆
+    // 农田篱笆（地块本身由 farm.js 建）
     const F = FARM;
-    const soilG = new THREE.BoxGeometry(F.size * 0.92, 0.08, F.size * 0.92);
-    const soilM = toon('#9a6a44', { map: this.T.soil }), wetM = toon('#6a4630', { map: this.T.soil });
-    for (let c = 0; c < F.cols; c++) for (let r = 0; r < F.rows; r++) {
-      const x = F.x0 + (c + 0.5) * F.size, z = F.z0 + (r + 0.5) * F.size;
-      const soil = mesh(soilG, soilM, { cast: false, recv: true }); soil.position.set(x, 0.04, z); soil.visible = false;
-      const plant = this.makeCrop(); plant.position.set(x, 0.08, z);
-      this.scene.add(soil, plant);
-      this.farm.push({ x, z, c, r, state: 0, stage: 0, grow: 0, soil, plant, soilM, wetM });
-    }
     const postG = mergeGeometries([new THREE.BoxGeometry(0.16, 0.8, 0.16).translate(0, 0.4, 0), new THREE.ConeGeometry(0.12, 0.14, 4).rotateY(Math.PI / 4).translate(0, 0.87, 0)]);
     const railG = new THREE.BoxGeometry(1, 0.1, 0.07);
     const wood = toon('#a8743f');
@@ -839,38 +828,6 @@ export class World {
     };
     fence(fx0, F.z0 - 0.4, fx0, fz1);
     fence(fx0, fz1, fx1, fz1);
-  }
-
-  makeCrop() {
-    const g = new THREE.Group();
-    const sprout = new THREE.Group();
-    for (let i = 0; i < 2; i++) { const l = mesh(this.G.leaf, toon('#6fcf6a'), { cast: false }); l.scale.setScalar(0.6); l.position.set(i ? 0.06 : -0.06, 0.12, 0); l.rotation.z = i ? -0.6 : 0.6; sprout.add(l); }
-    const mid = new THREE.Group();
-    for (let i = 0; i < 4; i++) { const l = mesh(this.G.leaf, toon('#4fbf6a')); l.position.set(Math.cos(i * 1.57) * 0.12, 0.2, Math.sin(i * 1.57) * 0.12); l.rotation.set(Math.sin(i * 1.57) * 0.6, 0, -Math.cos(i * 1.57) * 0.6); mid.add(l); }
-    const ripe = new THREE.Group();
-    ripe.add(mesh(this.G.stem, toon('#3f9a5a')));
-    for (let i = 0; i < 5; i++) { const l = mesh(this.G.leaf, toon('#3faa6a')); l.position.set(Math.cos(i * 1.26) * 0.16, 0.22, Math.sin(i * 1.26) * 0.16); l.rotation.set(Math.sin(i * 1.26) * 0.8, 0, -Math.cos(i * 1.26) * 0.8); ripe.add(l); }
-    const b = mesh(this.G.bulb, this.M.herbGlow, { cast: false }); b.position.y = 0.6; b.scale.setScalar(1.3); ripe.add(b);
-    g.add(sprout, mid, ripe);
-    g.userData.stages = [sprout, mid, ripe];
-    for (const s of g.userData.stages) s.visible = false;
-    return g;
-  }
-
-  updateFarm(hours) {
-    if (this.lastHours === undefined) this.lastHours = hours;
-    let dh = hours - this.lastHours; this.lastHours = hours;
-    if (dh < 0) dh = 0;
-    for (const t of this.farm) {
-      t.soil.visible = t.state > 0;
-      t.soil.material = t.state === 2 ? t.wetM : t.soilM;
-      if (t.state === 2 && t.stage < 2) {
-        t.grow += dh;
-        if (t.grow >= 2.5) { t.grow = 0; t.stage++; }
-      }
-      const st = t.plant.userData.stages;
-      st.forEach((s, i) => (s.visible = t.state === 2 && t.stage === i));
-    }
   }
 
   farmTileAt(x, z) {
