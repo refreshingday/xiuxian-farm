@@ -79,7 +79,7 @@ export class Quests {
     for (const [id, n] of Object.entries(r.items || {})) g.inv.add(id, n);
     for (const [id, n] of Object.entries(r.aff || {})) g.village.byId[id]?.addAff(n);
     if (r.atk) P.atkBonus += r.atk;
-    if (r.hp) { P.maxHp += r.hp; P.hp += r.hp; }
+    if (r.hp) { P.hpBonus += r.hp; g.realm.recalc(); P.hp += r.hp; }
     if (r.recipe) g.alchemy.learn(r.recipe, true);
     if (r.flag) this.flags.add(r.flag);
   }

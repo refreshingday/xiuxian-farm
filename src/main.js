@@ -10,7 +10,7 @@ import { Weather } from './weather.js';
 import { World, configureVillage, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
 import { FX } from './fx.js';
 import { Enemies } from './enemies.js';
-import { realmText } from './npc.js';
+import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
 import { Farm } from './farm.js';
 import { Alchemy } from './alchemy.js';
@@ -141,9 +141,10 @@ P.pos.set(0, 0, 4);
 scene.add(P.c.root);
 g.player = P;
 
-const xpNeed = () => 40 + P.layer * 30;
+const xpNeed = () => realmXP(P.layer);
 g.xpNeed = xpNeed;
-const atkMul = () => (1 + P.layer * 0.25) * (1 + P.atkBonus);  // 招式伤害按炼气一层设计，随境界放大；兵器淬火另算
+// 招式伤害按炼气一层设计，随境界放大（每进一个大境界再跳一截）；兵器淬火另算
+const atkMul = () => (1 + P.layer * 0.25 + levelInfo(P.layer).realm * 0.5) * (1 + P.atkBonus);
 
 P.hurt = (dmg, fx0, fz0, knock = 6) => {
   if (P.iframe > 0 || P.dead) return false;
@@ -156,7 +157,7 @@ P.hurt = (dmg, fx0, fz0, knock = 6) => {
   sfx.impact({ heavy: 0.6 });
   g.shake(0.35);
   const h = document.getElementById('hurt'); h.classList.remove('on'); void h.offsetWidth; h.classList.add('on');
-  if (P.hp <= 0) die();
+  if (P.hp <= 0) { if (realm.trib) realm.failTrib(); else die(); }
   return true;
 };
 function die() {
@@ -172,17 +173,20 @@ function die() {
     g.toast('你在家中醒来，伤势已愈' + (lost ? '\n' + lost : ''), 4);
   });
 }
-g.addXP = (n, p, quiet) => {
-  if (P.layer >= 9) { if (!quiet) fx.num(p, '修为已满', 'xp'); return; }
-  P.xp += n; if (!quiet) fx.num({ x: p.x + 0.6, z: p.z }, `+${Math.round(n)} 修为`, 'xp');
-  while (P.xp >= xpNeed() && P.layer < 9) {
-    P.xp -= xpNeed(); P.layer++;
-    P.maxHp += 12; P.maxQi += 8; P.hp = P.maxHp; P.qi = P.maxQi;
-    fx.burst(P.pos, '#9ef0ff', 50, { speed: 3, up: 6, life: 1.2, grav: -2 });
-    fx.shockRing(P.pos.x, P.pos.z, 5, '#9ef0ff', 0.6);
-    g.toast(P.layer === 9 ? '炼气圆满！需渡天劫方可筑基（未实装）' : `突破！${realmText(1, P.layer)}`, 3);
-  }
-};
+// 境界、灵根、神识、天劫、御剑（realm.js）
+const realm = new Realm(g); g.realm = realm;
+g.addXP = (n, p, quiet) => realm.addXP(n, p, quiet);
+// 御剑：脚下一把发光的飞剑
+const flySword = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 1.6), glow('#9ef0ff', 2.2));
+flySword.position.y = -0.05; flySword.visible = false; P.c.root.add(flySword);
+// 神识扫描：10 秒内周围 40 米的妖兽和野生灵草冒出灵光
+let scanTick = 0;
+function scanMarks(dt) {
+  if (realm.scanT <= 0 || (scanTick -= dt) > 0) return;
+  scanTick = 0.25;
+  for (const e of enemies.list) if (e.pos.distanceTo(P.pos) < 40) fx.mote(e.pos.x, 2.4, e.pos.z, '#ff6a8a', { life: 0.5, size: 2.2, vy: 0.4, bright: 3 });
+  for (const ch of world.chunks.values()) for (const h of ch.herbs) if (Math.hypot(h.x - P.pos.x, h.z - P.pos.z) < 40) fx.mote(h.x, 1.4, h.z, '#7dffe0', { life: 0.5, size: 1.6, vy: 1, bright: 3 });
+}
 g.addItem = (id, n, p) => { inv.add(id, n); if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} ${itemName(id)}`, 'item'); };
 g.addStones = (n, p) => { inv.stones += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 灵石`, 'item'); };
 g.addMoney = (n, p) => { inv.money += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 文`, 'item'); };
@@ -245,6 +249,8 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') interact();
   if (e.code === 'Tab' || e.code === 'KeyB') openBag();
   if (e.code === 'KeyL') quests.openLog();
+  if (e.code === 'KeyG') realm.toggleFly();
+  if (e.code === 'KeyV') realm.scan();
   if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
   const si = SKILL_KEYS.indexOf(e.code);
@@ -272,6 +278,8 @@ touch.bind(document.getElementById('sk0'), { down: () => { sfx.unlock(); mouseDo
 const slotEls = [...document.querySelectorAll('#skills [data-slot]')];
 for (const el of slotEls) touch.bind(el, tap(() => useSkill(+el.dataset.slot)));
 touch.bind(document.getElementById('skDash'), tap(dash));
+touch.bind(document.getElementById('skScan'), tap(() => realm.scan()));
+touch.bind(document.getElementById('skFly'), tap(() => realm.toggleFly()));
 touch.bind(document.getElementById('skWeap'), tap(cycleWeapon));
 // 快捷栏：点一下选中（能吃的直接吃）；背包 / 菜单按钮
 document.getElementById('hotbar').addEventListener('pointerdown', (e) => { const s = e.target.closest('.hs'); if (!s) return; e.stopPropagation(); sfx.unlock(); hotKey(+s.dataset.i); });
@@ -335,11 +343,11 @@ const runner = combat.runner;
 g.onSlam = (e) => combat.slamAround(e);
 
 function attackClick() {
-  if (P.dead || gui.blocking || g.paused || P.dashT > 0 || P.work > 0) return;
+  if (P.dead || gui.blocking || g.paused || P.dashT > 0 || P.work > 0 || realm.fly) return;
   combat.click();
 }
 function useSkill(i) {
-  if (P.dead || gui.blocking || g.paused || P.work > 0) return;
+  if (P.dead || gui.blocking || g.paused || P.work > 0 || realm.fly) return;
   combat.useSkill(i);
 }
 function cycleWeapon() { combat.cycle(); }
@@ -411,7 +419,7 @@ function openMenu() {
     body.append(btn('🔄 重新开始', () => { if (confirm('放弃当前进度，从头开始？')) { clearSave(); location.reload(); } }, 'wide'));
   });
 }
-const metaText = () => { const d = dateOf(g.day); return `${d.seasonName}季第${d.dayOfSeason}天 ${clockText(g.hours)} · ${realmText(1, P.layer)}`; };
+const metaText = () => { const d = dateOf(g.day); return `${d.seasonName}季第${d.dayOfSeason}天 ${clockText(g.hours)} · ${levelInfo(P.layer).name}`; };
 g.save = () => writeSave({ text: metaText() });
 register('time', () => ({ day: g.day, hours: g.hours }), (s) => {
   g.day = s.day; g.hours = s.hours; world.day = g.day;
@@ -426,6 +434,7 @@ register('player', () => ({ x: P.pos.x, z: P.pos.z, hp: P.hp, maxHp: P.maxHp, qi
 register('inv', () => inv.save(), (s) => inv.load(s));
 register('life', () => life.save(), (s) => life.load(s));
 register('village', () => village.save(), (s) => village.load(s));
+register('realm', () => realm.save(), (s) => realm.load(s));
 register('alchemy', () => alchemy.save(), (s) => alchemy.load(s));
 register('quests', () => quests.save(), (s) => quests.load(s));
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
@@ -434,7 +443,7 @@ register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s)
 // ---------- 主循环 ----------
 let hitStop = 0, last = performance.now();
 const focus = new THREE.Vector3().copy(P.pos);
-const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'timeText', 'regionText', 'money', 'prompt', 'skDash', 'atkName', 'weapName', 'hotbar'].map((k) => [k, document.getElementById(k)]));
+const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'senseFill', 'senseText', 'rootTag', 'timeText', 'regionText', 'money', 'prompt', 'skDash', 'skFly', 'atkName', 'weapName', 'hotbar'].map((k) => [k, document.getElementById(k)]));
 
 world.update(P.pos, 0, 0, g.day * 24 + g.hours, true);
 document.getElementById('loading').classList.add('hidden');
@@ -512,6 +521,8 @@ function tick(dt) {
   updatePlayer(dt);
   world.update(P.pos, dt, g.nightK, g.day * 24 + g.hours);
   life.update(dt);
+  realm.update(dt);
+  scanMarks(dt);
   farm.update();
   alchemy.update(dt);
   quests.update(dt);
@@ -535,8 +546,10 @@ function updatePlayer(dt) {
   updateAim();
   const mv = moveInput();
   if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
-  // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里
-  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, 6);
+  // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里；御剑飞行时走得快、悬在半空
+  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 : 6 * (1 + realm.passive('风') * 0.5));
+  if (realm.fly) { st.y = 1.1 + Math.sin(g.time * 3) * 0.08; P.vy = 0; st.ghost = true; }
+  flySword.visible = realm.fly;
   let vx = st.vx, vz = st.vz;
   if (P.dashT > 0) {
     P.dashT -= dt;
@@ -615,6 +628,9 @@ function updateLights(h) {
   weatherU.sky.value.copy(_fog).lerp(hemi.color, 0.5);
   const fogPush = 21 * (camZoom - 1);   // 镜头拉远时雾也往后推，别把主角雾掉
   scene.fog.near = lerp(lerp(48, 30, r), 16, m) + fogPush; scene.fog.far = lerp(lerp(95, 70, r), 38, m) + fogPush * 1.4;
+  // 天劫：劫云压顶，天色变暗发紫
+  const tk = realm.dark;
+  if (tk > 0.01) { sun.intensity *= 1 - 0.8 * tk; hemi.intensity *= 1 - 0.5 * tk; _fog.lerp(_ca.setHex(0x2a2440), tk * 0.8); scene.fog.color.copy(_fog); scene.background.copy(_fog); }
   if (g.debugCam) { scene.fog.near = 1e4; scene.fog.far = 2e4; }
   const sh = sun.shadow.camera, ext = 30 * camZoom;
   if (Math.abs(sh.right - ext) > 0.5) { Object.assign(sh, { left: -ext, right: ext, top: ext, bottom: -ext }); sh.updateProjectionMatrix(); }
@@ -648,8 +664,13 @@ function updateUI() {
   ui.hpText.textContent = `${Math.ceil(P.hp)} / ${P.maxHp}`;
   ui.qiFill.style.width = (P.qi / P.maxQi * 100) + '%';
   ui.qiText.textContent = `${Math.floor(P.qi)} / ${P.maxQi}`;
-  ui.xpFill.style.width = (P.layer >= 9 ? 100 : P.xp / xpNeed() * 100) + '%';
-  ui.realm.textContent = realmText(1, P.layer) + (P.layer >= 9 ? '（圆满）' : `　修为 ${Math.floor(P.xp)}/${xpNeed()}`);
+  const L = levelInfo(P.layer), full = L.top && P.xp >= xpNeed();
+  ui.xpFill.style.width = Math.min(100, P.xp / xpNeed() * 100) + '%';
+  ui.realm.textContent = L.name + (full ? '（圆满 · 待渡劫）' : `　修为 ${Math.floor(P.xp)}/${xpNeed()}`);
+  ui.senseFill.style.width = (P.sense / realm.senseMax * 100) + '%';
+  ui.senseText.textContent = `神识 ${Math.floor(P.sense)} / ${realm.senseMax}`;
+  ui.rootTag.textContent = P.roots.map((r) => r.e).join('') + '灵根 · ' + ['凡品', '良品', '上品', '极品'][P.roots[0].grade];
+  ui.skFly.classList.toggle('hidden', L.realm < 1); ui.skFly.classList.toggle('on', realm.fly);
   const d = dateOf(g.day);
   ui.timeText.textContent = `${d.seasonName}季 ${d.dayOfSeason}日 ${d.weekName}　${d.moonIcon} ${clockText(g.hours)}${g.weatherToday === 'rain' ? ' 🌧' : g.nightK > 0.5 ? ' 🌙' : ' ☀'}`;
   ui.regionText.textContent = regionName(P.pos.x, P.pos.z);
@@ -690,7 +711,13 @@ function startPlay() {
   gui.renderHotbar(inv);
   if (g.intro) {
     g.intro = false;
-    gui.dialog({ narrate: true, lines: ['你背着包袱，走了三天山路。', '远远地，已经能望见青竹村的炊烟。', '就在这时，路边的林子里传来一阵低吼——'], onClose: () => quests.accept('s1', 'story') });
+    // GDD：开局选一种五行灵根（凡品）
+    const pickRoot = (e) => {
+      P.roots = [{ e, grade: 0 }]; P.elem = e; realm.recalc(true);
+      gui.dialog({ narrate: true, lines: ['你背着包袱，走了三天山路。', '远远地，已经能望见青竹村的炊烟。', '就在这时，路边的林子里传来一阵低吼——'], onClose: () => quests.accept('s1', 'story') });
+    };
+    gui.dialog({ narrate: true, line: '测灵石上亮起一道光——你的灵根是？', info: '五行相克：金克木、木克土、土克水、水克火、火克金（克制 ×1.5）。每种灵根还带一个生活被动。',
+      choices: ['金', '木', '水', '火', '土'].map((e) => ({ label: `${e}（${ROOT_LIFE[e]}）`, fn: () => pickRoot(e) })) });
   }
   g.toast(touch.on ? '左下摇杆移动 · 右下按钮出招（自动瞄准）· 拖动画面转镜头 · 点提示交互' : '左键连招（松开出招，快慢分支）· QERC 技能 · X 换武 · F 交互 · Tab 背包 · H 操作说明', 4);
 }

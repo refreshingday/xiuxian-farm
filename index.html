@@ -40,6 +40,10 @@
   .bar span { position: absolute; inset: 0; font-size: 11px; line-height: 16px; text-align: center; text-shadow: 0 1px 2px #000; }
   .hp > div { background: linear-gradient(90deg, #b8302a, var(--hp)); }
   .qi > div { background: linear-gradient(90deg, #2a78b8, var(--qi)); }
+  .bar.sense { height: 10px; margin-top: 5px; } .bar.sense span { line-height: 10px; font-size: 9px; }
+  .sense > div { background: linear-gradient(90deg, #6a4ab8, #c8a8ff); }
+  #tribBar { display: none; position: fixed; left: 50%; top: 64px; transform: translateX(-50%); font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; color: #e8d8ff; text-shadow: 0 0 12px #8a5aff, 0 2px 6px #000; pointer-events: none; z-index: 3; }
+  body.trib #tribBar { display: block; }
   .xp { height: 5px; margin-top: 5px; } .xp > div { background: var(--xp); }
   .realm { font-size: 12px; margin-top: 7px; color: #ffe7a8; }
   #clock { position: fixed; right: 16px; top: 16px; text-align: right; min-width: 200px; }
@@ -169,6 +173,9 @@
   body.mobile #skills [data-slot="2"] { right: 78px; bottom: 160px; }
   body.mobile #skills [data-slot="3"] { right: 21px; bottom: 171px; }
   body.mobile #skWeap { right: 0; bottom: 236px; }
+  body.mobile #skScan { right: 58px; bottom: 236px; }
+  body.mobile #skFly { right: 116px; bottom: 236px; }
+  #skFly.on { border-color: #9ef0ff; box-shadow: inset 0 0 0 2px #9ef0ff; }
   body.mobile #prompt { bottom: 24px; padding: 10px 18px; font-size: 15px; z-index: 4; touch-action: none; }
   body.mobile #prompt::before { content: '👆 '; }
   body.mobile #comboName { bottom: 76px; font-size: 22px; }
@@ -176,6 +183,8 @@
   @media (max-height: 500px) {
     body.mobile #skills { width: 290px; height: 230px; }
     body.mobile #skWeap { right: 232px; bottom: 30px; }
+    body.mobile #skScan { right: 232px; bottom: 88px; }
+    body.mobile #skFly { right: 232px; bottom: 146px; }
   }
   @media (max-width: 700px) {
     body.mobile #prompt { bottom: 316px; right: calc(14px + env(safe-area-inset-right)); left: auto; transform: none; }
@@ -200,6 +209,7 @@
   <div class="name">叶清玄<span class="tag" id="rootTag">金灵根 · 凡品</span></div>
   <div class="bar hp"><div id="hpFill"></div><span id="hpText"></span></div>
   <div class="bar qi"><div id="qiFill"></div><span id="qiText"></span></div>
+  <div class="bar sense"><div id="senseFill"></div><span id="senseText"></span></div>
   <div class="realm" id="realm"></div>
   <div class="bar xp"><div id="xpFill"></div></div>
 </div>
@@ -227,6 +237,8 @@
   <div class="slot" data-slot="3"><kbd>C</kbd><span class="nm"></span><small class="qc"></small><i class="cd"></i></div>
   <div class="slot" id="skDash"><kbd>空格</kbd><span>身法</span><i class="cd"></i></div>
   <div class="slot" id="skWeap"><kbd>X 换武</kbd><span id="weapName">剑</span></div>
+  <div class="slot" id="skScan"><kbd>V</kbd><span>神识</span></div>
+  <div class="slot hidden" id="skFly"><kbd>G</kbd><span>御剑</span></div>
 </div>
 
 <div id="help" class="panel">
@@ -239,11 +251,13 @@
   <b>1–8</b> 快捷栏（灵草 / 丹药直接吃）<br>
   <b>F</b> 交谈 / 种田 / 采集 / 睡觉 / 炼丹<br>
   <b>Tab</b> 背包　<b>L</b> 任务　<b>Esc</b> 菜单<br>
+  <b>V</b> 神识扫描　<b>G</b> 御剑飞行（筑基后）<br>
   <b>滚轮</b> 转镜头　<b>按住 T</b> 加速时间　<b>H</b> 隐藏说明<br>
   东北方的大路通往 <b>玄晶矿洞</b>，深处有妖王。
 </div>
 
 <div id="comboName"></div>
+<div id="tribBar"></div>
 <div id="toast"></div>
 <div id="hurt"></div>
 <div id="dead" class="hidden">重伤昏迷……</div>
