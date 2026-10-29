@@ -7,13 +7,17 @@ import { clamp, angDiff, lerpAngle, toon, mesh, at, setFlash, outlineMat, addOut
 import { createChibi, animChibi } from './chibi.js';
 import { FX } from './fx.js';
 import { TUNE, ComboRunner } from './combo.js';
-import { AIR_FX as MOVE_FX, AIR_SFX as MOVE_SFX } from './comboAir.js';
+import { AIR_FX, AIR_SFX } from './comboAir.js';
+import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
 import { KITS, SKILL_KEYS, ELEM, KE } from './comboKit.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { TouchControls } from './touch.js';
 import { animCombo } from './comboAnim.js';
 import { HealthBar, screenOf } from './hpbar.js';
+
+const MOVE_FX = { ...AIR_FX, ...KIT_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX };
+const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 
 // 试炼场：只有平台 + 木桩 + 玩家，专门打磨战斗手感，不加载大世界
 // 实验中：招式带位移、击退加强、挑空 / 空中追击 / 砸地（招式表见 comboAir.js）
@@ -130,7 +134,7 @@ function makeDummy(x, z) {
   addOutline(root, outlineMat('#2b1d14', 0.025));
   root.position.set(x, 0, z);
   scene.add(root);
-  const d = { root, yaw, tilt, model, mats, pos: root.position, home: new THREE.Vector2(x, z), base: new THREE.Vector2(x, z), r: 0.55, vx: 0, vz: 0, vy: 0, ang: 0, angV: 0, flash: 0, stun: 0, airRot: 0, airSpin: 0, spiked: false, bumpT: 0,
+  const d = { root, yaw, tilt, model, mats, pos: root.position, home: new THREE.Vector2(x, z), base: new THREE.Vector2(x, z), r: 0.55, vx: 0, vz: 0, vy: 0, ang: 0, angV: 0, flash: 0, stun: 0, airRot: 0, airSpin: 0, spiked: false, bumpT: 0, stuck: [], rootT: 0,
     name: '试炼木桩 · ' + NUMS[dummies.length] + ' · ' + elem, elem, max: opt.dummyHp, hp: opt.dummyHp, dead: false, deathT: 0, spawnT: 1 };
   d.bar = new HealthBar({ parent: hpLayer, max: d.max, tick: 50 });
   dummies.push(d);
@@ -144,7 +148,7 @@ let focusD = null;
 const live = () => dummies.filter((d) => !d.dead);
 function setDummyMax(d, max) { d.hp = d.dead ? 0 : Math.min(max, d.hp + Math.max(0, max - d.max)); d.max = max; d.bar.snap(d.hp, max); }
 function layout(n) {
-  for (const d of dummies) { scene.remove(d.root); for (const m of d.mats) m.dispose(); d.bar.remove(); }
+  for (const d of dummies) { clearStuck(d); scene.remove(d.root); for (const m of d.mats) m.dispose(); d.bar.remove(); }
   dummies.length = 0; focusD = null; targetBar.snap(1, 1, '');
   movingTargets = n === 4; layoutN = n;
   // 木桩放在玩家左边（屏幕左侧）
@@ -199,6 +203,7 @@ function killDummy(d, nx, nz) {
   d.dead = true; d.deathT = 0; d.fallYaw = Math.atan2(nx, nz);
   d.vx += nx * 6 * opt.knock; d.vz += nz * 6 * opt.knock;
   d.bar.die(); if (focusD === d) targetBar.die();
+  clearStuck(d, true); d.rootT = 0;
   stats.kills++;
   sfx.kill();
   fx.burst(d.pos, '#e8c878', 26, { speed: 7, up: 5, life: 0.6, y: 1.2 });
@@ -226,6 +231,7 @@ function updateDummies(dt, time) {
     // 挨打后一段时间（硬直）不往回走，被打飞就真飞出去；空中几乎没有阻力
     const air = airborne(d);
     d.stun -= dt; d.bumpT -= dt;
+    if (d.rootT > 0) { d.rootT -= dt; d.vx = d.vz = 0; d.stun = Math.max(d.stun, 0.05); } // 缚符：定在原地
     if (!air && d.stun <= 0) { d.vx += (d.home.x - d.pos.x) * 6 * dt; d.vz += (d.home.y - d.pos.z) * 6 * dt; }
     // 硬直中摩擦大：被打得猛、滑得短，还在连招范围里
     const k = Math.exp(-(air ? (d.pos.y > 1 ? 0.8 : 3) : d.stun > 0 ? 7 : 5) * dt); d.vx *= k; d.vz *= k;
@@ -313,6 +319,13 @@ const P = {
 P.pos = P.c.root.position;
 P.pos.set(1, 0, 0);
 scene.add(P.c.root);
+// 拳：双手一团拳劲光；符：右手夹着一张符（甩出去后一会儿再摸出一张）
+const fistGlow = P.c.arms.map((A) => {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffd27a').multiplyScalar(2), transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  A.hand.add(m); return m;
+});
+const handPaper = cfx.talisman('敕令', '#ffd27a', 0.6);
+handPaper.g.position.set(0, -0.14, 0.03); P.c.arms[0].hand.add(handPaper.g);
 
 // 当前武器（拳 / 剑 / 符）：决定连招树和技能槽，切换见 setKit
 let kit = KITS[0];
@@ -392,6 +405,7 @@ runner.on.hit = (m, h, idx) => {
       const dx = d.pos.x - P.pos.x, dz = d.pos.z - P.pos.z;
       if (!inReach(d) || Math.hypot(dx, dz) - d.r > h.range || Math.abs(angDiff(Math.atan2(dx, dz), P.yaw)) > h.arc) continue;
       hitDummy(d, h.dmg, P.pos.x, P.pos.z, h.knock, color, h); hitAny = true;
+      MOVE_FX[m.id]?.contact?.(fxCtx(m), d, h, idx);
     }
   } else if (h.shape === 'circle') {
     const cx = P.pos.x + f.x * h.at, cz = P.pos.z + f.y * h.at;
@@ -400,12 +414,14 @@ runner.on.hit = (m, h, idx) => {
     for (const d of live()) {
       if (!inReach(d) || Math.hypot(d.pos.x - cx, d.pos.z - cz) - d.r > h.r) continue;
       hitDummy(d, h.dmg, cx, cz, h.knock, color, h); hitAny = true;
+      MOVE_FX[m.id]?.contact?.(fxCtx(m, cx, cz), d, h, idx);
     }
   } else if (h.shape === 'wave') {
     debugLine(P.pos.x, P.pos.z, P.yaw, h.len, h.w);
     waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color, hit: new Set(), m: spawnWaveMesh(color) });
   } else if (h.shape === 'bolt') {
     spawnBolt(P.pos.x + f.x * 0.8, P.pos.z + f.y * 0.8, P.yaw + (h.ang || 0), h, color);
+    P.paperT = 0.2; // 手里那张符甩出去了，一会儿再摸出一张
   } else if (h.shape === 'trap') {
     const g0 = groundAt(h.at); placeBlast(g0.x, g0.z, h, color);
   } else if (h.shape === 'rain') {
@@ -414,10 +430,7 @@ runner.on.hit = (m, h, idx) => {
       const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * h.spread;
       placeBlast(g0.x + Math.cos(a) * rr, g0.z + Math.sin(a) * rr, { ...h, keep: false, delay: h.delay * (0.4 + Math.random() * 0.6) }, color);
     }
-  } else if (h.shape === 'detonate') {
-    for (const b of blasts.filter((b) => b.keep && b.armed)) explode(b, h.mul);
-  }
-  if (!MOVE_FX[m.id] && h.shape === 'arc') cfx.arc(P.pos, P.yaw, color, { tilt: idx % 2 ? 0.6 : -0.6, scale: 0.85, flip: idx % 2 === 1 });
+  } else if (h.shape === 'detonate') detonate(h, color);
   const f2 = fwd();
   MOVE_FX[m.id]?.hit?.(fxCtx(m, P.pos.x + f2.x * (h.at || 0), P.pos.z + f2.y * (h.at || 0)), h, idx);
   if (sfx.ok) MOVE_SFX[m.id]?.hit?.(sfx, h, idx, m);
@@ -460,58 +473,234 @@ function updateWaves(dt) {
   }
 }
 
-// ---------- 符：飞符、陷阱、圆形爆炸 ----------
+// ---------- 符：飞符、贴身符、陷阱、引爆、护符 ----------
 const bolts = [], blasts = [];
-const talisGeo = new THREE.BoxGeometry(0.32, 0.46, 0.03);
-const talisMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff3c0').multiplyScalar(2), toneMapped: false });
+// 右手的世界坐标（符从手里甩出去）
+const handPos = () => P.c.arms[0].hand.getWorldPosition(new THREE.Vector3());
+// 定时：later(秒, fn)，按游戏时间走（慢放 / 顿帧时一起慢）
+const timers = [];
+const later = (t, fn) => timers.push({ t, fn });
+function updateTimers(dt) { for (let i = timers.length - 1; i >= 0; i--) if ((timers[i].t -= dt) <= 0) timers.splice(i, 1)[0].fn(); }
+
+// 飞符：一张旋转的符纸，h.home 弧度 / 秒拐弯追前方最近的木桩；h.chain = 打中后电弧跳到附近另一个
 function spawnBolt(x, z, yaw, h, color) {
-  const m = new THREE.Mesh(talisGeo, talisMat); m.position.set(x, 1.1, z); m.rotation.y = yaw; scene.add(m);
-  bolts.push({ x, z, yaw, left: h.range, h, color, hit: new Set(), m });
+  const t = cfx.talisman(h.glyph || '敕', color, 1.4);
+  t.g.position.set(x, 1.1, z); scene.add(t.g);
+  bolts.push({ x, z, yaw, left: h.range, h, color, hit: new Set(), zapped: new Set(), t, spin: rand(0, TAU) });
+}
+function seekYaw(b, dt) {
+  let best = null, bd = 9;
+  for (const d of live()) {
+    if (b.hit.has(d) || d.pos.y > 2) continue;
+    const dx = d.pos.x - b.x, dz = d.pos.z - b.z, l = Math.hypot(dx, dz);
+    if (l < bd && Math.abs(angDiff(Math.atan2(dx, dz), b.yaw)) < 0.9) { bd = l; best = d; }
+  }
+  if (best) b.yaw += clamp(angDiff(Math.atan2(best.pos.x - b.x, best.pos.z - b.z), b.yaw), -b.h.home * dt, b.h.home * dt);
 }
 function updateBolts(dt) {
   for (let i = bolts.length - 1; i >= 0; i--) {
     const b = bolts[i], step = Math.min(b.left, b.h.spd * dt);
+    if (b.h.home) seekYaw(b, dt);
     b.x += Math.sin(b.yaw) * step; b.z += Math.cos(b.yaw) * step; b.left -= step;
-    b.m.position.set(b.x, 1.1, b.z);
-    if (Math.random() < 0.6) fx.mote(b.x, 1.1, b.z, b.color, { life: 0.25, size: 0.7 });
-    let done = b.left <= 0;
+    b.spin += dt * 14;
+    b.t.g.position.set(b.x, 1.1, b.z); b.t.g.rotation.y = b.yaw;
+    b.t.paper.rotation.set(-Math.PI / 2 + 0.3, 0, b.spin);
+    if (Math.random() < 0.7) fx.mote(b.x, 1.1, b.z, b.color, { life: 0.3, size: 0.7 });
+    if (b.h.chain && Math.random() < 0.5) fx.mote(b.x + rand(-0.3, 0.3), 1.1 + rand(-0.2, 0.2), b.z + rand(-0.3, 0.3), '#ffffff', { life: 0.08, size: 0.5, bright: 3 });
+    let done = b.left <= 0, stuck = false;
     for (const d of live()) {
       if (b.hit.has(d) || d.pos.y > 2 || Math.hypot(d.pos.x - b.x, d.pos.z - b.z) > d.r + 0.3) continue;
       b.hit.add(d); hitDummy(d, b.h.dmg, b.x - Math.sin(b.yaw), b.z - Math.cos(b.yaw), b.h.knock, b.color, b.h);
-      if (!b.h.pierce) { done = true; break; }
+      fx.burst({ x: b.x, z: b.z }, b.color, 6, { speed: 3, up: 1.5, life: 0.25, y: 1.1 });
+      if (b.h.chain) chainZap(d, b);
+      if (!b.h.pierce) { if (!d.dead) { stick(d, b); stuck = true; } done = true; break; }
     }
-    if (done) { fx.burst({ x: b.x, z: b.z }, b.color, 8, { speed: 4, up: 2, life: 0.3, y: 1 }); scene.remove(b.m); bolts.splice(i, 1); }
+    if (!done) continue;
+    bolts.splice(i, 1);
+    if (stuck) { scene.remove(b.t.g); b.t.gm.dispose(); } else { cfx.burn(b.t, b.color, 0.3); fx.burst({ x: b.x, z: b.z }, b.color, 6, { speed: 3, up: 2, life: 0.3, y: 1.1 }); }
   }
 }
-// 陷阱：先预警圈，延时后生效；keep 的会一直埋在地上，有人踩进去或引爆才炸，6 秒后失效
-function placeBlast(x, z, h, color) {
-  const b = { x, z, h, color, keep: !!h.keep, delay: h.delay ?? 0.2, t: 0, armed: !h.delay };
-  fx.circle(x, z, h.r, b.delay);
-  blasts.push(b);
+// 雷符：电弧跳到附近另一个木桩，打六成伤害
+function chainZap(d0, b) {
+  let best = null, bd = b.h.chain;
+  for (const d of live()) {
+    if (d === d0 || b.hit.has(d) || b.zapped.has(d)) continue;
+    const l = Math.hypot(d.pos.x - d0.pos.x, d.pos.z - d0.pos.z);
+    if (l < bd) { bd = l; best = d; }
+  }
+  if (!best) return;
+  b.zapped.add(best);
+  cfx.zap(new THREE.Vector3(d0.pos.x, d0.pos.y + 1.2, d0.pos.z), new THREE.Vector3(best.pos.x, best.pos.y + 1.2, best.pos.z), b.color, 0.35, 0.09);
+  cfx.bolt(best.pos.x, best.pos.z, b.color, 3.5);
+  hitDummy(best, b.h.dmg * 0.6, d0.pos.x, d0.pos.z, 3, b.color, {});
+  if (sfx.ok) sfx.zap();
 }
+
+// 贴身符：打中就贴在木桩身上（朝飞来的那一面），最多 6 张，6 秒后自己烧掉；引爆时一起炸
+const STUCK_MAX = 6, STUCK_LIFE = 6;
+function stick(d, b) {
+  if (d.stuck.length >= STUCK_MAX) dropStuck(d.stuck.shift());
+  const t = cfx.talisman(b.h.glyph || '敕', b.color, 0.9), nx = -Math.sin(b.yaw), nz = -Math.cos(b.yaw);
+  t.g.position.set(nx * 0.36, rand(1.0, 1.5), nz * 0.36); t.g.rotation.y = Math.atan2(nx, nz);
+  t.paper.rotation.set(0, 0, rand(-0.5, 0.5));
+  d.model.add(t.g);
+  d.stuck.push({ t, life: STUCK_LIFE });
+}
+// 从木桩身上取下来放回场景（保持世界位置），交给 burn 烧掉
+function unstick(s) {
+  const g = s.t.g, v = g.getWorldPosition(new THREE.Vector3()), q = g.getWorldQuaternion(new THREE.Quaternion());
+  g.parent?.remove(g); g.position.copy(v); g.quaternion.copy(q); g.visible = true;
+  return s.t;
+}
+const dropStuck = (s) => cfx.burn(unstick(s), '#ff8a3a', 0.3);
+function clearStuck(d, burn = false) {
+  for (const s of d.stuck) if (burn) dropStuck(s); else { s.t.g.parent?.remove(s.t.g); s.t.gm.dispose(); }
+  d.stuck.length = 0;
+}
+function updateStuck(dt) {
+  for (const d of dummies) for (let i = d.stuck.length - 1; i >= 0; i--) {
+    const s = d.stuck[i]; s.life -= dt;
+    s.t.gm.opacity = 0.45 + 0.2 * Math.sin(s.life * 8);
+    s.t.g.visible = s.life > 1 || Math.floor(s.life * 12) % 2 === 0; // 最后一秒闪
+    if (s.life <= 0) { d.stuck.splice(i, 1); dropStuck(s); }
+  }
+}
+
+// 陷阱符：mode = lob 从手里抛过去 | fall 从天上飘落 | seal 巨符压下来。落地处先亮法阵（预警），delay 秒后生效
+// keep 的会一直埋着，有人踩进去或引爆才炸，6 秒后失效
+function placeBlast(x, z, h, color) {
+  const mode = h.mode || 'lob', seal = mode === 'seal', delay = h.delay ?? 0.2;
+  const b = { x, z, h, color, mode, keep: !!h.keep, delay, t: 0, armed: false, landed: false, fuse: Infinity, mul: 1,
+    fly: mode === 'lob' ? Math.min(delay, 0.45) : delay,
+    from: mode === 'lob' ? handPos() : { x: x + (seal ? 0 : rand(-1.5, 1.5)), y: seal ? 10 : 9, z: z + (seal ? 0 : rand(-1.5, 1.5)) },
+    sigil: cfx.sigil(color), paper: cfx.talisman(h.glyph || '敕', color, seal ? 6 : 1), rot: rand(0, TAU), dim: h.n ? 0.45 : 1 }; // 符雨一次落好几张，法阵叠在一起会太亮
+  b.sigil.position.set(x, 0.05, z); b.sigil.scale.setScalar(h.r * 0.3); scene.add(b.sigil);
+  b.paper.g.position.copy(b.from); scene.add(b.paper.g);
+  blasts.push(b);
+  return b;
+}
+const lerp = (a, b, k) => a + (b - a) * k;
 function updateBlasts(dt) {
   for (let i = blasts.length - 1; i >= 0; i--) {
-    const b = blasts[i]; b.t += dt;
+    const b = blasts[i], h = b.h, p = b.paper.g.position, pp = b.paper.paper;
+    b.t += dt;
+    const k = clamp(b.t / b.fly, 0, 1), ka = clamp(b.t / b.delay, 0, 1);
+    // 符纸飞行
+    if (b.mode === 'seal') { // 巨符竖着压下来，后仰一点对着镜头
+      const e = k * k;
+      p.set(b.x, lerp(b.from.y, 1.56, e), b.z); pp.rotation.set(-0.3, 0, Math.sin(b.t * 9) * 0.05 * (1 - k));
+      if (k < 1 && Math.random() < 0.6) fx.mote(b.x + rand(-0.9, 0.9), p.y + rand(-1.5, 1.5), b.z, b.color, { life: 0.3, size: 1, vy: 3 });
+    } else if (k < 1) {
+      if (b.mode === 'lob') { // 抛物线，边飞边转
+        p.set(lerp(b.from.x, b.x, k), lerp(b.from.y, 0.06, k) + 1.6 * 4 * k * (1 - k), lerp(b.from.z, b.z, k));
+        pp.rotation.set(-Math.PI / 2 + 0.3, 0, b.t * 14);
+      } else { // 飘落：先快后慢，左右摆
+        const e = 1 - (1 - k) ** 2;
+        p.set(lerp(b.from.x, b.x, e) + Math.sin(b.t * 10) * 0.15 * (1 - k), lerp(b.from.y, 0.06, e), lerp(b.from.z, b.z, e));
+        pp.rotation.set(-1.2 + Math.sin(b.t * 12) * 0.4, b.t * 6, 0);
+      }
+      if (Math.random() < 0.5) fx.mote(p.x, p.y, p.z, b.color, { life: 0.25, size: 0.6 });
+    } else if (!b.landed) { // 落地：平贴地面
+      b.landed = true;
+      p.set(b.x, 0.06, b.z); pp.rotation.set(-Math.PI / 2, 0, b.rot);
+      fx.burst({ x: b.x, z: b.z }, b.color, 6, { speed: 2, up: 1, life: 0.3, y: 0.1 });
+    }
+    // 法阵：飞行中长出来，生效后一闪一闪地慢转
+    b.sigil.rotation.y += dt * (b.armed ? 0.6 : 2);
+    if (!b.armed) { b.sigil.scale.setScalar(h.r * (0.3 + 0.7 * (1 - (1 - ka) ** 2))); b.sigil.material.opacity = (0.25 + 0.4 * ka) * b.dim; }
+    else b.sigil.material.opacity = (0.45 + 0.2 * Math.sin(b.t * 6)) * b.dim;
+    b.paper.gm.opacity = b.armed ? 0.5 + 0.3 * Math.sin(b.t * 6) : 0.55;
+    b.fuse -= dt;
+    if (b.fuse <= 0 && b.t >= b.fly) { explode(b, b.mul); continue; } // 被引爆：落地就炸
     if (!b.armed && b.t >= b.delay) b.armed = true;
     if (!b.armed) continue;
     if (!b.keep) { explode(b); continue; }
-    if (b.t > b.delay + 6) { blasts.splice(i, 1); continue; }
-    if (live().some((d) => Math.hypot(d.pos.x - b.x, d.pos.z - b.z) - d.r < b.h.r)) explode(b);
-    else if (Math.random() < 0.15) { const a = Math.random() * Math.PI * 2; fx.mote(b.x + Math.cos(a) * b.h.r, 0.2, b.z + Math.sin(a) * b.h.r, b.color, { life: 0.5, size: 0.6, vy: 0.8 }); }
+    if (b.t > b.delay + 6) { fizzle(b); continue; }
+    if (live().some((d) => d.pos.y < 1.5 && Math.hypot(d.pos.x - b.x, d.pos.z - b.z) - d.r < h.r)) explode(b);
+    else if (Math.random() < 0.2) { const a = rand(0, TAU); fx.mote(b.x + Math.cos(a) * h.r, 0.2, b.z + Math.sin(a) * h.r, b.color, { life: 0.5, size: 0.6, vy: 0.8 }); }
   }
 }
+// 陷阱失效：符纸烧掉，法阵淡出
+function fizzle(b) {
+  blasts.splice(blasts.indexOf(b), 1);
+  cfx.burn(b.paper, '#aaaaaa', 0.4);
+  cfx.sigilFlare(b.sigil, 0.4, 1);
+}
 function explode(b, mul = 1) {
-  const h = b.h;
-  fx.shockRing(b.x, b.z, h.r, b.color, 0.3);
-  fx.burst({ x: b.x, z: b.z }, b.color, 18, { speed: 6, up: 4, life: 0.45, y: 0.3 });
-  cfx.flash(b.x, b.z, b.color, 20, 0.25);
+  const i = blasts.indexOf(b); if (i < 0) return;
+  blasts.splice(i, 1);
+  const h = b.h, x = b.x, z = b.z, seal = b.mode === 'seal';
+  b.sigil.material.opacity = 0.9 * b.dim; cfx.sigilFlare(b.sigil, seal ? 0.6 : 0.45, seal ? 1.3 : 1.6);
+  cfx.burn(b.paper, '#ff8a3a', seal ? 0.5 : 0.3);
+  fx.shockRing(x, z, h.r, b.color, 0.3);
+  fx.burst({ x, z }, b.color, 18, { speed: 6, up: 4, life: 0.45, y: 0.3 });
+  fx.burst({ x, z }, '#fbe592', 8, { speed: 3, up: 5, life: 0.9, y: 0.5, grav: -3, drag: 1, bright: 1 }); // 碎纸片飘
+  cfx.flash(x, z, b.color, seal ? 32 : 20, 0.25);
+  if (h.root) cfx.disc(x, z, h.r, b.color, 0.3, 0.3);
+  else cfx.pillar(x, z, h.r * (seal ? 0.6 : 0.4), seal ? 6 : 3, b.color, seal ? 0.45 : 0.3);
+  if (seal) {
+    cfx.dent(x, z, h.r * 0.9, b.color, { n: 10 });
+    cfx.scorch(x, z, h.r * 0.8);
+    fx.shockRing(x, z, h.r * 1.4, '#ffffff', 0.4);
+    fx.burst({ x, z }, '#b89a6a', 24, { speed: 6, up: 6, life: 0.7, y: 0.2, bright: 1 });
+  }
   for (const d of live()) {
-    if (Math.hypot(d.pos.x - b.x, d.pos.z - b.z) - d.r > h.r) continue;
-    hitDummy(d, h.dmg * mul, b.x, b.z, h.knock, b.color, h);
-    if (h.root) { d.stun = h.root; d.vx = d.vz = 0; }
+    if (Math.hypot(d.pos.x - x, d.pos.z - z) - d.r > h.r) continue;
+    hitDummy(d, h.dmg * mul, x, z, h.knock, b.color, h);
+    if (h.root && !d.dead) {
+      d.rootT = h.root; d.vx = d.vz = 0;
+      cfx.chains(() => d.pos, b.color, h.root);
+      fx.num(d.pos, '定', '');
+    }
   }
   hitFeel(h);
-  const i = blasts.indexOf(b); if (i >= 0) blasts.splice(i, 1);
+  if (sfx.ok) sfx.talisBoom(seal ? 1 : 0);
+}
+// 引爆：剑指连出灵光线，所有陷阱依次炸（还在飞的落地就炸），贴身符一起炸
+function detonate(h, color) {
+  const hp = handPos(), traps = blasts.filter((b) => b.keep).sort((a, b) => Math.hypot(a.x - hp.x, a.z - hp.z) - Math.hypot(b.x - hp.x, b.z - hp.z));
+  traps.forEach((b, i) => { b.fuse = 0.05 + 0.06 * i; b.mul = h.mul; cfx.beam(hp.x, hp.z, b.x, b.z, color, { y: 0.9, delay: i * 0.03 }); });
+  const marked = live().filter((d) => d.stuck.length);
+  for (const d of marked) { cfx.beam(hp.x, hp.z, d.pos.x, d.pos.z, color, { y: 1.2 }); later(0.08, () => blowStuck(d, h, color)); }
+  if (!traps.length && !marked.length) { fx.burst(hp, '#aaaaaa', 6, { speed: 2, up: 1, life: 0.3 }); fx.num(P.pos, '无符', ''); }
+}
+function blowStuck(d, h, color) {
+  const n = d.stuck.length;
+  if (!n || d.dead) return clearStuck(d, true);
+  clearStuck(d, true);
+  hitDummy(d, h.dmg * n, P.pos.x, P.pos.z, h.knock, color, { launch: 2 + n * 0.8 });
+  fx.num(d.pos, '爆×' + n, 'crit'); fx.nums.at(-1).p.y += d.pos.y + 0.5;
+  fx.burst(d.pos, '#ff8a5a', 10 + n * 4, { speed: 6, up: 4, life: 0.4, y: 1.2 });
+  fx.burst(d.pos, '#fbe592', 4 + n * 2, { speed: 3, up: 5, life: 0.9, y: 1.2, grav: -3, drag: 1, bright: 1 });
+  fx.shockRing(d.pos.x, d.pos.z, 1 + n * 0.2, color, 0.25);
+  cfx.flash(d.pos.x, d.pos.z, '#ff8a5a', 16, 0.2);
+  if (opt.stop) hitStop = Math.max(hitStop, 0.03 + n * 0.01);
+  g.shake(0.15 + n * 0.05);
+  if (sfx.ok) sfx.talisBoom(Math.min(1, n / 6));
+}
+// 护符：四张符绕身转 4 秒，碰到木桩就打（每个木桩 0.35 秒一次）
+let guard = null;
+function startGuard() {
+  if (guard) for (const o of guard.list) cfx.burn(o.t);
+  guard = { t: 0, dur: 4, cd: new Map(), list: [0, 1, 2, 3].map((i) => { const t = cfx.talisman('护', '#ffe7a8', 1.3); scene.add(t.g); return { t, a: i / 4 * TAU }; }) };
+}
+function updateGuard(dt) {
+  if (!guard) return;
+  guard.t += dt;
+  const R = 1.4 * Math.min(1, guard.t / 0.2), left = guard.dur - guard.t;
+  for (const o of guard.list) {
+    const a = o.a + guard.t * 4, x = P.pos.x + Math.cos(a) * R, z = P.pos.z + Math.sin(a) * R;
+    o.t.g.position.set(x, P.pos.y + 1 + Math.sin(guard.t * 3 + o.a) * 0.15, z); o.t.g.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
+    o.t.g.visible = left > 0.6 || Math.floor(left * 12) % 2 === 0;
+    if (Math.random() < 0.3) fx.mote(x, P.pos.y + 1, z, '#ffe7a8', { life: 0.3, size: 0.6 });
+    for (const d of live()) {
+      if (Math.hypot(d.pos.x - x, d.pos.z - z) > d.r + 0.35 || Math.abs(d.pos.y - P.pos.y) > 1.5 || (guard.cd.get(d) ?? 0) > guard.t) continue;
+      guard.cd.set(d, guard.t + 0.35);
+      hitDummy(d, 5, P.pos.x, P.pos.z, 5, '#ffe7a8', {});
+      fx.burst({ x, z }, '#ffe7a8', 6, { speed: 3, up: 1, life: 0.25, y: P.pos.y + 1 });
+    }
+  }
+  if (left <= 0) { for (const o of guard.list) cfx.burn(o.t, '#ffd27a'); guard = null; }
 }
 // 以一点为圆心的一圈伤害（技能用）
 function ring(r, dmg, extra, color, x = P.pos.x, z = P.pos.z) {
@@ -611,6 +800,17 @@ const SFX_LIST = [
     ['起跳', 'leap', () => sfx.leap(0.42)],
     ['起跳 + 火焰下落', 'leap fire', () => sfx.leap(0.45, true)],
     ['流星 · 爆炸', 'explode', () => sfx.explode()],
+    ['拳风', 'fistWhoosh', () => sfx.fistWhoosh({ lead: 0.08 })],
+    ['拳劲 · 小', 'airPop 0', () => sfx.airPop(0)],
+    ['拳劲 · 大', 'airPop 1', () => sfx.airPop(1)],
+    ['蹬地', 'stomp', () => sfx.stomp()],
+    ['砸地', 'groundBoom', () => sfx.groundBoom(1)],
+    ['金钟', 'bell', () => sfx.bell()],
+    ['甩符', 'paper', () => sfx.paper(0.1)],
+    ['掐诀', 'chant', () => sfx.chant(0.15)],
+    ['符炸 · 小', 'talisBoom 0', () => sfx.talisBoom(0)],
+    ['符炸 · 大', 'talisBoom 1', () => sfx.talisBoom(1)],
+    ['雷符', 'zap', () => sfx.zap()],
   ]],
   // 整招：按游戏里的时间顺序播（出招 + 每个判定帧），不含命中木桩声
   ['整招（按实战时序）', KITS.flatMap((k) => Object.values(k.moves)).map((m) => [m.name, m.id, () => {
@@ -690,7 +890,9 @@ function dash() {
 // ---------- 玩家更新 ----------
 const _v2 = new THREE.Vector2();
 function updatePlayer(dt) {
-  P.iframe -= dt; P.dashCd -= dt;
+  P.iframe -= dt; P.dashCd -= dt; P.paperT -= dt;
+  handPaper.g.visible = kit.id === 'talisman' && !(P.paperT > 0);
+  for (const m of fistGlow) { m.visible = kit.id === 'fist'; m.material.opacity = 0.3 + 0.12 * Math.sin(realTime * 7); }
   P.qiPause -= dt; if (P.qiPause <= 0) P.qi = Math.min(P.qiMax, P.qi + 22 * dt);
   for (let i = 0; i < P.skillCd.length; i++) P.skillCd[i] = Math.max(0, P.skillCd[i] - dt);
   runner.update(dt);
@@ -765,6 +967,8 @@ function updatePlayer(dt) {
 }
 
 function animate(dt, m, t, moving) {
+  if (P.skill) { P.skill.t += dt; if (m || P.skill.t > P.skill.m.cancel + 0.06) P.skill = null; }
+  if (!m && P.skill) { m = P.skill.m; t = P.skill.t; }
   if (!animCombo(P.c, dt, m, t)) animChibi(P.c, dt, { move: P.dashT > 0 ? 0 : moving, attack: -1, combo: 0, cast: 0, dash: P.dashT > 0, spin: 0, work: 0 });
 }
 
@@ -796,6 +1000,8 @@ function setKit(i) {
   if (runner.path !== null) { runner.cancel(); showMove(null); }
   runner.moves = kit.moves; runner.tree = kit.tree;
   if (P.c.sword) P.c.sword.visible = kit.id === 'sword';
+  for (const m of fistGlow) m.visible = kit.id === 'fist';
+  handPaper.g.visible = kit.id === 'talisman';
   buildRoutes();
   for (const el of slotEls) {
     const s = kit.skills[+el.dataset.slot];
@@ -812,16 +1018,50 @@ const SKILLS = {
     waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color: '#9ef0ff', hit: new Set(), m: spawnWaveMesh('#9ef0ff') });
   },
   sw_lift: () => ring(3.6, 10, { knock: 2, launch: 10, stop: 0.05 }, '#bfe8ff'),
-  ft_shock: () => ring(3, 14, { knock: 8, stop: 0.05, shake: 0.3 }, '#ffe28a'),
-  ft_bell: () => { P.iframe = Math.max(P.iframe, 0.8); cfx.flash(P.pos.x, P.pos.z, '#ffe28a', 20, 0.4, 1.2); fx.shockRing(P.pos.x, P.pos.z, 1.6, '#ffe28a', 0.35); },
-  ft_charge: () => {
-    const f = fwd();
-    P.dashT = 0.22; P.dashDir = P.yaw; P.iframe = Math.max(P.iframe, 0.25);
-    ring(2.4, 18, { knock: 10, launch: 2, stop: 0.06, shake: 0.4 }, '#ffb84a', P.pos.x + f.x * 2.2, P.pos.z + f.y * 2.2);
+  ft_shock: () => {
+    ring(3, 14, { knock: 8, stop: 0.05, shake: 0.45 }, '#ffe28a');
+    SKILL_FX.ft_shock(fxCtx({ color: '#ffe28a' }));
+    if (sfx.ok) sfx.groundBoom(1);
   },
-  tl_nova: () => ring(3, 12, { knock: 8, launch: 2, stop: 0.04 }, '#fff3c0'),
-  tl_guard: () => { P.iframe = Math.max(P.iframe, 0.8); cfx.flash(P.pos.x, P.pos.z, '#fff3c0', 20, 0.4, 1.2); fx.shockRing(P.pos.x, P.pos.z, 1.8, '#fff3c0', 0.35); },
-  tl_put: () => { const g0 = groundAt(3); placeBlast(g0.x, g0.z, { r: 2.2, dmg: 20, knock: 10, launch: 3, keep: true, delay: 0.5 }, '#ffe28a'); },
+  ft_bell: () => { // 金钟罩：1.2 秒无敌，罩下来时把贴身的木桩震开
+    P.iframe = Math.max(P.iframe, 1.2);
+    cfx.bell(() => P.pos, '#ffd27a', 1.6);
+    cfx.flash(P.pos.x, P.pos.z, '#ffd27a', 20, 0.4, 1.2);
+    SKILL_FX.ft_bell(fxCtx({ color: '#ffd27a' }));
+    later(0.1, () => ring(2.2, 6, { knock: 9, stop: 0.03, shake: 0.25 }, '#ffd27a'));
+    if (sfx.ok) sfx.bell();
+  },
+  ft_charge: () => { // 撞山：冲出去，冲到一半撞
+    P.dashT = 0.22; P.dashDir = P.yaw; P.iframe = Math.max(P.iframe, 0.3);
+    if (sfx.ok) { sfx.stomp(); sfx.fistWhoosh({ lead: 0.1, size: 1.4, pitch: 0.75 }); }
+    later(0.12, () => {
+      const f = fwd(), x = P.pos.x + f.x * 1.2, z = P.pos.z + f.y * 1.2;
+      ring(2.4, 18, { knock: 10, launch: 2, stop: 0.06, shake: 0.4 }, '#ffb84a', x, z);
+      SKILL_FX.ft_charge(fxCtx({ color: '#ffb84a' }, x, z));
+      if (sfx.ok) { sfx.airPop(1); sfx.groundBoom(0); }
+    });
+  },
+  tl_nova: () => { // 符爆：脚下开阵，八张符往四面八方飞（打中就贴上，可以接引爆）
+    const s = cfx.sigil('#ffd27a'); s.position.set(P.pos.x, 0.05, P.pos.z); s.scale.setScalar(1.6); s.material.opacity = 0.8;
+    cfx.sigilFlare(s, 0.5, 2.2);
+    for (let i = 0; i < 8; i++) {
+      const a = P.yaw + i / 8 * TAU;
+      spawnBolt(P.pos.x + Math.sin(a) * 0.6, P.pos.z + Math.cos(a) * 0.6, a, { spd: 18, range: 5.5, dmg: 12, knock: 7, home: 0, glyph: '爆' }, '#ffd27a');
+    }
+    fx.shockRing(P.pos.x, P.pos.z, 2, '#ffd27a', 0.3);
+    if (sfx.ok) { sfx.paper(0.02); sfx.talisBoom(0); }
+  },
+  tl_guard: () => {
+    P.iframe = Math.max(P.iframe, 0.5);
+    startGuard();
+    cfx.flash(P.pos.x, P.pos.z, '#fff3c0', 20, 0.4, 1.2); fx.shockRing(P.pos.x, P.pos.z, 1.8, '#fff3c0', 0.35);
+    if (sfx.ok) sfx.chant(0.02);
+  },
+  tl_put: () => {
+    const g0 = groundAt(3);
+    placeBlast(g0.x, g0.z, { r: 2.2, dmg: 20, knock: 10, launch: 3, keep: true, delay: 0.5, glyph: '火' }, '#ffb84a');
+    if (sfx.ok) sfx.paper(0.02);
+  },
   qi: () => { P.qi = Math.min(P.qiMax, P.qi + 40); },
 };
 function useSkill(i) {
@@ -830,7 +1070,9 @@ function useSkill(i) {
   P.qi -= s.qi; P.qiPause = 0.4; P.skillCd[i] = s.cd;
   P.yaw = aimYaw();
   if (runner.path !== null) { runner.cancel(); showMove(null); }
-  SKILLS[s.id]();
+  // 先摆技能动作，出手那一刻才生效
+  P.skill = { m: { pose: s.pose, hits: [{ t: s.ht }], cancel: 0.32, dur: 0.4 }, t: 0 };
+  later(s.ht, SKILLS[s.id]);
   sfx.unlock();
 }
 
@@ -926,7 +1168,7 @@ function frame(now) {
   updatePlayer(dt);
   updateDummies(dt, gameTime);
   updateWaves(dt);
-  updateBolts(dt); updateBlasts(dt);
+  updateBolts(dt); updateBlasts(dt); updateStuck(dt); updateGuard(dt); updateTimers(dt);
   updateDbg(raw);
   fx.update(raw * opt.timeScale);
   cfx.update(raw * opt.timeScale);
@@ -938,13 +1180,13 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // 控制台调试：arena.click(); arena.step(0.3) 按固定步长推进，便于脚本化测试招式
-window.arena = { sfx, cfx, touch, aim, mouse, setKit, useSkill, blasts, bolts,
+window.arena = { sfx, cfx, touch, aim, mouse, setKit, useSkill, blasts, bolts, KITS, guard: () => guard, placeBlast,
   runner, stats, dummies, P,
   click: () => runner.click(),
   step(sec, h = 1 / 60) {
     for (let t = 0; t < sec; t += h) {
       realTime += h; gameTime += h; hitStop = 0;
-      updateAim(); updatePlayer(h); updateDummies(h, gameTime); updateWaves(h); updateBolts(h); updateBlasts(h); updateDbg(h); fx.update(h); cfx.update(h);
+      updateAim(); updatePlayer(h); updateDummies(h, gameTime); updateWaves(h); updateBolts(h); updateBlasts(h); updateStuck(h); updateGuard(h); updateTimers(h); updateDbg(h); fx.update(h); cfx.update(h);
     }
     updateCamera(1); updateBars(sec); updateUI(); composer.render();
   },

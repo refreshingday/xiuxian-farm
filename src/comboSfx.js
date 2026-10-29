@@ -186,6 +186,53 @@ export class SFX {
     this.noise({ t: 0.01, type: 'lowpass', f0: 1200, f1: 60, dur: 1.6, gain: 0.9, send: 0.45 });
     for (let i = 0; i < 8; i++) this.noise({ t: rnd(0.2, 0.9), type: 'lowpass', f0: rnd(500, 1000), f1: 150, dur: 0.08, gain: rnd(0.08, 0.18), send: 0.1 });
   }
+
+  // ---------- 拳 ----------
+  fistWhoosh({ lead = 0.08, size = 1, pitch = 1 } = {}) { // 拳风：比剑风低、短、闷
+    const p = pitch * rnd(0.92, 1.08);
+    this.noise({ dur: lead + 0.07 * size, f0: 180 * p, f1: 900 * p, q: 1.1, gain: 0.32 * size, attack: lead, send: 0.04 });
+    this.noise({ dur: lead + 0.05, type: 'lowpass', f0: 300, f1: 700 * p, gain: 0.18 * size, attack: lead, send: 0 });
+  }
+  airPop(big = 0) { // 拳劲炸开：空气"啪"一声 + 低频一震
+    this.noise({ type: 'highpass', f0: 2500, f1: 1200, dur: 0.035, gain: 0.25 + big * 0.2, send: 0.03 });
+    this.noise({ f0: 1200, f1: 220, q: 0.9, dur: 0.08 + big * 0.1, gain: 0.35 + big * 0.25, send: 0.06 + big * 0.15 });
+    this.tone({ f0: 140 - big * 50, f1: 38, dur: 0.12 + big * 0.25, gain: 0.45 + big * 0.4, send: 0.05 + big * 0.2 });
+  }
+  stomp() { // 跺脚 / 蹬地
+    this.tone({ f0: 120, f1: 40, dur: 0.15, gain: 0.5, send: 0.05 });
+    this.noise({ type: 'lowpass', f0: 1500, f1: 200, dur: 0.1, gain: 0.35, send: 0.05 });
+  }
+  groundBoom(big = 0) { // 拳砸地：闷雷般的低频 + 地面隆隆 + 碎石
+    this.tone({ f0: 80, f1: 26, dur: 0.5 + big * 0.4, gain: 0.8, send: 0.25 });
+    this.noise({ type: 'lowpass', f0: 600, f1: 60, dur: 0.6 + big * 0.5, gain: 0.6, attack: 0.01, send: 0.35 });
+    this.noise({ type: 'highpass', f0: 1800, f1: 900, dur: 0.05, gain: 0.25 });
+    for (let i = 0; i < 4 + big * 4; i++) this.noise({ t: rnd(0.05, 0.35), type: 'lowpass', f0: rnd(400, 900), f1: 120, dur: 0.07, gain: rnd(0.08, 0.16) });
+  }
+  bell() { // 金钟罩：铜钟"嗡——"
+    this.noise({ type: 'lowpass', f0: 1500, f1: 300, dur: 0.08, gain: 0.3 });
+    this.ring({ f: 196, dur: 2.2, gain: 0.3, send: 0.5 });
+    this.tone({ f0: 98, dur: 1.8, gain: 0.3, send: 0.4, attack: 0.01 });
+  }
+
+  // ---------- 符 ----------
+  paper(lead = 0.1) { // 甩符：纸片"唰"一声，再抖几下
+    this.noise({ type: 'highpass', f0: 2500, f1: 5000, dur: lead + 0.06, gain: 0.16, attack: lead, send: 0.03 });
+    this.noise({ f0: 900, f1: 2400, q: 1.5, dur: lead + 0.05, gain: 0.2, attack: lead, send: 0.03 });
+    for (let i = 0; i < 3; i++) this.noise({ t: lead + 0.02 + i * 0.035, f0: rnd(2500, 4000), q: 4, dur: 0.02, gain: 0.08 });
+  }
+  chant(lead = 0.15) { // 掐诀：灵气上扬 + 一声清亮的"叮"
+    this.noise({ f0: 600, f1: 2400, q: 2, dur: lead + 0.1, gain: 0.12, attack: lead, send: 0.3 });
+    this.ring({ t: lead, f: 1320, dur: 0.6, gain: 0.07, send: 0.5 });
+  }
+  talisBoom(big = 0) { // 符炸开：火光"嘭" + 灵气余韵
+    this.noise({ type: 'lowpass', f0: 4000, f1: 300, dur: 0.18 + big * 0.2, gain: 0.55 + big * 0.2, send: 0.2 });
+    this.tone({ f0: 160, f1: 45, dur: 0.25 + big * 0.4, gain: 0.5 + big * 0.35, send: 0.2 });
+    this.ring({ t: 0.02, f: 1650 - big * 500, dur: 0.5 + big * 0.6, gain: 0.05 + big * 0.04, send: 0.5 });
+  }
+  zap() { // 雷符：电流噼啪
+    for (let i = 0; i < 6; i++) this.noise({ t: i * rnd(0.012, 0.03), type: 'highpass', f0: rnd(3000, 7000), dur: 0.02, gain: rnd(0.1, 0.2), send: 0.1 });
+    this.tone({ type: 'sawtooth', f0: 220, f1: 110, dur: 0.15, gain: 0.06, send: 0.1 });
+  }
 }
 
 // 招式 id → 音效。start(s, m, lead) 出招时；hit(s, h, i, m) 每个判定帧。
