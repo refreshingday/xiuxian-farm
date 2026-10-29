@@ -189,6 +189,7 @@
   body.mobile #comboName { bottom: 76px; font-size: 22px; }
   body.mobile #dialog { bottom: 16px; }
   @media (max-height: 500px) {
+    body.mobile #menuBtns { top: calc(54px + env(safe-area-inset-top)); left: 50%; right: auto; transform: translateX(-50%); }
     body.mobile #skills { width: 290px; height: 230px; }
     body.mobile #skWeap { right: 232px; bottom: 30px; }
     body.mobile #skScan { right: 232px; bottom: 88px; }
@@ -200,6 +201,7 @@
     body.mobile .hb.big { top: 200px; }
     body.mobile #hotbar { top: 150px; left: calc(10px + env(safe-area-inset-left)); transform: none; }
     body.mobile #qtrack { top: 196px; }
+    body.mobile #menuBtns { flex-direction: column; top: 102px; }
   }
 </style>
 <script type="importmap">
@@ -224,7 +226,7 @@
 
 <div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
 <div id="money" class="panel"></div>
-<div id="menuBtns"><div id="mobTime" class="panel">⏩ 按住加速</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
+<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
 <div id="qtrack" hidden></div><div id="markLayer"></div>
 <div id="hotbar"></div><div id="hotName"></div>
 <div id="hpLayer"></div>
