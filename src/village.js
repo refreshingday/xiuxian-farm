@@ -41,6 +41,7 @@ class Villager {
 
   // 日程：当前时刻该在哪
   schedPlace(hour) {
+    if (this.injured || this.g.villageAlarm) return 'home'; // 重伤卧床 / 兽潮躲进屋
     let cur = this.d.sched[0][1];
     for (const [h, p] of this.d.sched) if (hour >= h) cur = p;
     return cur;
@@ -136,6 +137,7 @@ class Villager {
   // 灵根要神识够才看得清（GDD：村民灵根，神识够高才能看到）
   rootText(sense) {
     const d = this.d;
+    if (!d.root) return '灵根：已被夺去，成了凡人';
     if (sense < d.sense) return d.hidden ? '灵根：深不可测' : `灵根：看不清（神识 ${d.sense}）`;
     return `灵根：${d.root.e}·${GRADE[d.root.grade]} ｜ 修为：${realmText(d.realm[0], d.realm[1])}`;
   }
@@ -163,7 +165,14 @@ export class Village {
     v.talking = 4;
     if (!v.talked) { v.talked = true; v.addAff(10); }
     if (!line) g.emit?.('talk', v);
-    const choices = [];
+    const choices = [...(g.realm?.rootChoices?.(v) || [])];
+    if (v.injured) { g.ui.dialog({ name: v.name, sub: '重伤卧床', line: pick(['咳咳……兽潮那天伤得不轻，过几天就好了……', '多谢你来看我……']), hint: `${v.injured - g.day} 天后才能下床，这几天店和委托都停了。` }); return; }
+    // 被夺了灵根的村民：不再理你，商店、委托全停（GDD 第 9 节）
+    if (v.robbed) {
+      choices.push({ label: '离开' });
+      g.ui.dialog({ name: v.name, sub: `凡人 · ${v.heartText()}`, line: pick(['你还有脸来见我？', '把灵根还给我……', '离我远点，魔头！']), choices });
+      return;
+    }
     if (!v.gifted) choices.push({ label: '🎁 送礼', fn: () => this.giftMenu(v) });
     if (v.d.shop) {
       const open = this.shopOpen(v), [a, b] = v.d.hours;
@@ -201,11 +210,12 @@ export class Village {
       onBuy: (id, k) => g.onBuy?.(id, k, v),
     });
   }
-  save() { return Object.fromEntries(this.list.map((v) => [v.d.id, [v.aff, v.talked ? 1 : 0, v.gifted ? 1 : 0]])); }
+  save() { return Object.fromEntries(this.list.map((v) => [v.d.id, [v.aff, v.talked ? 1 : 0, v.gifted ? 1 : 0, v.robbed || 0]])); }
   load(s) {
     for (const v of this.list) {
-      const [a, t, gf] = s[v.d.id] || [0, 0, 0];
+      const [a, t, gf, rb] = s[v.d.id] || [0, 0, 0, 0];
       v.aff = a; v.talked = !!t; v.gifted = !!gf; v.place = null; v.path = []; v.away = false;
+      if (rb && !v.robbed) { v.robbed = rb; v.d.root = null; v.d.realm = [0, 0]; }
       const p = v.spot(v.schedPlace(this.g.hours)); v.pos.set(p.x, 0, p.z);
     }
   }

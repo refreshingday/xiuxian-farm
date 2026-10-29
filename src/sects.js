@@ -79,6 +79,7 @@ export class Sects {
     const choices = [];
     let line, sub = d.intro;
     if (this.traitor.has(s.name)) { g.ui.dialog({ name: `${s.name} 执事`, line: '叛出师门之人，还有脸回来？', hint: '叛出过的门派不会再收你。' }); return; }
+    if (!d.evil && (P.karma || 0) >= 150 && !mine) { g.ui.dialog({ name: `${s.name} 执事`, line: '你身上的血腥气隔着山门都闻得到。正道不收魔头。', hint: '业力太重，正道门派都敌视你。洗心丹能洗去业力。' }); return; }
     if (mine) {
       line = `${RANK[m.rank]}弟子，有事？`; sub = `${RANK[m.rank]} · 贡献 ${m.contrib}`;
       choices.push({ label: '📖 功法（贡献兑换）', fn: () => this.openTechs(s) });

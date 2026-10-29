@@ -3,8 +3,8 @@
 import { SEASONS } from './calendar.js';
 
 export const ITEMS = {}, CROPS = {}, SHOPS = {}, RECIPES = {};
-const CAT_ORDER = ['tool', 'seed', 'herb', 'crop', 'food', 'pill', 'mat', 'boss'];
-export const CAT_NAME = { tool: '工具', seed: '种子', herb: '灵草', crop: '作物', food: '食物', pill: '丹药', mat: '材料', boss: '妖王材料' };
+const CAT_ORDER = ['tool', 'seed', 'herb', 'crop', 'food', 'pill', 'rare', 'mat', 'boss'];
+export const CAT_NAME = { tool: '工具', seed: '种子', herb: '灵草', crop: '作物', food: '食物', pill: '丹药', rare: '天材地宝', mat: '材料', boss: '妖王材料' };
 
 export async function loadItems() {
   const d = await (await fetch('data/items.json')).json();
@@ -36,7 +36,7 @@ export function item(id) {
 export const itemName = (id) => item(id)?.name ?? id;
 export const itemIcon = (id) => item(id)?.icon ?? '❔';
 // 能放进快捷栏的：种子、能吃的、能补灵田灵气的
-export const usable = (it) => it.cat === 'tool' || it.cat === 'seed' || it.heal || it.qiHeal || it.xp || it.soilQi || it.cat === 'pill';
+export const usable = (it) => it.cat === 'tool' || it.use || it.cat === 'seed' || it.heal || it.qiHeal || it.xp || it.soilQi || it.cat === 'pill';
 
 export class Inventory {
   constructor() {

@@ -13,6 +13,8 @@ import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
 import { sectorAt, biomeK, polar } from './worldmap.js';
 import { Hubs } from './hubs.js';
 import { Sects } from './sects.js';
+import { SecretRealms } from './secret.js';
+import { Places } from './places.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
@@ -270,6 +272,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Tab' || e.code === 'KeyB') openBag();
   if (e.code === 'KeyL') quests.openLog();
   if (e.code === 'KeyM') landmarks.open();
+  if (e.code === 'KeyK') realm.openRoots();
   if (e.code === 'KeyG') realm.toggleFly();
   if (e.code === 'KeyV') realm.scan();
   if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
@@ -371,10 +374,11 @@ g.onSlam = (e) => combat.slamAround(e);
 
 function attackClick() {
   if (P.dead || gui.blocking || g.paused || P.dashT > 0 || P.work > 0 || realm.fly) return;
+  if (g.noFight) { g.toast('鬼市里禁止动手', 1); return; }
   combat.click();
 }
 function useSkill(i) {
-  if (P.dead || gui.blocking || g.paused || P.work > 0 || realm.fly) return;
+  if (P.dead || gui.blocking || g.paused || P.work > 0 || realm.fly || g.noFight) return;
   combat.useSkill(i);
 }
 function cycleWeapon() { combat.cycle(); }
@@ -387,7 +391,7 @@ combat.onMove = showMove;
 function hotKey(i) {
   inv.sel = i; gui.renderHotbar(inv);
   const id = inv.hot[i], it = id && item(id);
-  if (it && (it.heal || it.qiHeal || it.xp || it.cat === 'pill') && !gui.blocking) life.use(id);
+  if (it && (it.heal || it.qiHeal || it.xp || it.use) && !gui.blocking) life.use(id);
 }
 const dashCd = () => Math.max(0.6, DASH_CD + (P.mods.dashCd || 0));
 function dash() {
@@ -434,6 +438,9 @@ const landmarks = new Landmarks(g, g.mapData); g.landmarks = landmarks;
 const hubs = new Hubs(g, landmarks); g.hubs = hubs;
 // 宗门（sects.js + data/sects.json）：拜入、试炼、晋升、贡献、功法、宗门任务、大比
 const sects = new Sects(g, landmarks, await (await fetch('data/sects.json')).json());
+// 秘境（每周五）与独特地点（鬼市、古剑冢、天火陨坑、天劫峰心魔路、矿洞灯火）
+const secrets = new SecretRealms(g, landmarks); g.secrets = secrets;
+const places = new Places(g, landmarks); g.places = places;
 // 妖王巢穴：地图上每个妖王一个（加上原型矿洞里的赤岩妖王）
 for (const L of landmarks.list) if (L.kind === 'boss' && BOSS_BY_NAME[L.name]) enemies.lairs.push({ type: BOSS_BY_NAME[L.name], x: L.x, z: L.z, deadDay: -99 });
 // 世界事件：血月、妖虫夜袭（events.js）
@@ -453,6 +460,7 @@ function openMenu() {
     body.append(btn('🎒 背包', () => { gui.closePanel(); openBag(); }, 'wide'));
     body.append(btn('📜 任务', () => { gui.closePanel(); quests.openLog(); }, 'wide'));
     body.append(btn('🗺 地图', () => { gui.closePanel(); landmarks.open(); }, 'wide'));
+    body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('❓ 操作说明', () => { gui.closePanel(); document.getElementById('help').classList.remove('hidden'); }, 'wide'));
@@ -480,6 +488,8 @@ register('quests', () => quests.save(), (s) => quests.load(s));
 register('landmarks', () => landmarks.save(), (s) => landmarks.load(s));
 register('hubs', () => hubs.save(), (s) => hubs.load(s));
 register('sects', () => sects.save(), (s) => sects.load(s));
+register('secrets', () => secrets.save(), (s) => secrets.load(s));
+register('places', () => places.save(), (s) => places.load(s));
 register('events', () => ({ ...events.save(), lairs: enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
@@ -570,6 +580,8 @@ function tick(dt) {
   events.update(dt);
   hubs.update(dt);
   sects.update(dt);
+  secrets.update(dt);
+  places.update(dt);
   scanMarks(dt);
   farm.update();
   alchemy.update(dt);
@@ -705,7 +717,7 @@ function updateLights(h) {
     l.intensity = c.lv * 10;
   });
   aura.position.set(P.pos.x, 2.2, P.pos.z);
-  aura.intensity = Math.max(g.nightK * 0.6, m) * 6;
+  aura.intensity = Math.max(g.nightK * 0.6, m) * 6 * (m > 0.5 && g.lampOn === false ? 0.25 : 1); // 矿洞里灯灭了只剩一点微光
 }
 
 function updateUI() {

@@ -89,7 +89,7 @@ export class UI {
         const bs = [];
         if (o.gift) { if (it.cat !== 'tool') bs.push(btn('送出', () => o.gift(id))); }
         else {
-          if (o.onUse && (it.heal || it.qiHeal || it.xp || it.cat === 'pill')) bs.push(btn('使用', () => { o.onUse(id); this.refresh(); }));
+          if (o.onUse && (it.heal || it.qiHeal || it.xp || it.use)) bs.push(btn('使用', () => { o.onUse(id); this.refresh(); }));
           const k = inv.hot.indexOf(id);
           bs.push(btn(k >= 0 ? `快捷 ${k + 1}` : '放快捷栏', () => { pinTo(inv, id); this.refresh(); }, k >= 0 ? 'on' : ''));
         }

@@ -6,6 +6,7 @@
 import { VILLAGE_R } from './world.js';
 import { ITEMS, itemName } from './items.js';
 import { near } from './life.js';
+import { btn, el } from './ui.js';
 
 const NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 export const REALMS = ['炼气', '筑基', '金丹', '元婴', '化神', '渡劫'];
@@ -34,7 +35,9 @@ export class Realm {
     this.senseMax = 0; this.scanT = 0;
     const P = g.player;
     P.roots = P.roots || [{ e: '金', grade: 0 }];
-    P.hpBonus = P.hpBonus || 0; P.sense = 0;
+    P.hpBonus = P.hpBonus || 0; P.sense = 0; P.karma = P.karma || 0; P.stolen = P.stolen || [];
+    for (const e of ['金', '木', '水', '火', '土', '雷', '冰', '风', '暗']) ITEMS['root_' + e].use = () => this.acquireRoot(e);
+    ITEMS.pill_purify.use = () => { if (!P.karma) { g.toast('你心中没有戾气', 1.4); return false; } g.inv.take('pill_purify'); this.addKarma(-50); g.toast(`洗去戾气，业力 ${P.karma}`, 2); return true; };
     for (const k of ['pill_break', 'pill_break2', 'pill_break3', 'pill_break4', 'pill_break5']) ITEMS[k].use = () => this.tryBreak(k);
     ITEMS.pill_avert.use = () => this.takeAvert();
     g.rootMul = () => this.mul();
@@ -54,6 +57,85 @@ export class Realm {
   // 生活被动强度：没有这条灵根 0，凡品 0.1 … 极品 0.4
   passive(e) { const r = this.active().find((x) => x.e === e); return r ? 0.1 * (r.grade + 1) : 0; }
   rootText() { return this.g.player.roots.map((r) => `${r.e}·${ROOT_GRADE[r.grade]}${this.active().includes(r) ? '' : '（未激活）'}`).join(' ') + `　修炼 ×${this.mul().toFixed(2)}`; }
+
+  // ---------- 灵根：机缘、提升品级、夺取 / 归还、业力 ----------
+  acquireRoot(e) {
+    const g = this.g, P = g.player;
+    if (P.roots.some((r) => r.e === e)) { g.toast(`已经有${e}灵根了`, 1.6); return false; }
+    g.inv.take('root_' + e);
+    P.roots.push({ e, grade: ROOT_NEED[e] ? 3 : 0 }); // 异灵根固定极品（GDD）
+    this.recalc();
+    g.fx.burst(P.pos, '#ffe7a8', 60, { speed: 3, up: 7, life: 1.4, grav: -2 });
+    g.toast(`长出了一条${e}灵根！${ROOT_NEED[e] && !this.active().some((r) => r.e === e) ? `
+（要先有${ROOT_NEED[e].join('、')}灵根才会激活）` : ''}
+修炼倍率 ×${this.mul().toFixed(2)}`, 4);
+    return true;
+  }
+  // 提升品级：淬灵丹 + 本圈的该元素天材地宝（凡→良 筑基圈、良→上 金丹圈、上→极 元婴圈）；鬼市里可以用修为代替天材地宝
+  upgradeRoot(r, ghost) {
+    const g = this.g, P = g.player, inv = g.inv, tc = `tc_${r.e}_${r.grade + 1}`, cost = this.xpCost(r);
+    const pill = ['pill_root+2', 'pill_root+1', 'pill_root'].find((k) => inv.count(k));
+    if (r.grade >= 3 || ROOT_NEED[r.e]) return;
+    if (!pill) return g.toast('需要一颗淬灵丹', 1.6);
+    if (ghost) { if (P.xp < cost) return g.toast('修为不够', 1.6); P.xp -= cost; }
+    else { if (!inv.count(tc)) return g.toast(`需要${itemName(tc)}`, 1.6); inv.take(tc); }
+    inv.take(pill); r.grade++; this.recalc();
+    g.fx.burst(P.pos, '#9ef0ff', 50, { speed: 3, up: 6, life: 1.2, grav: -2 });
+    g.toast(`${r.e}灵根提升到${ROOT_GRADE[r.grade]}！修炼倍率 ×${this.mul().toFixed(2)}`, 3);
+    g.ui.refresh();
+  }
+  xpCost(r) { return Math.round(xpNeed(this.g.player.layer) * 0.6 * (r.grade + 1)); }
+  openRoots(ghost) {
+    const g = this.g, P = g.player;
+    g.ui.panel(ghost ? '鬼市 · 灵根洗炼' : '灵根', (body) => {
+      const S = this.active().reduce((s, r) => s + ROOT_VAL[r.grade], 0);
+      body.append(el('div', 'pmoney', `灵根总值 ${S}　修炼倍率 ×${this.mul().toFixed(2)}　业力 ${P.karma}`));
+      for (const r of P.roots) {
+        const act = this.active().includes(r), variant = !!ROOT_NEED[r.e], top = r.grade >= 3 || variant;
+        const need = top ? '' : ghost ? `淬灵丹 + 修为 ${this.xpCost(r)}` : `淬灵丹 + ${itemName(`tc_${r.e}_${r.grade + 1}`)}`;
+        body.append(g.ui.row(variant ? '✨' : '🌱', `${r.e}灵根 · ${ROOT_GRADE[r.grade]}${r.stolen ? ' <i>夺来的</i>' : ''}${act ? '' : ' <i>未激活</i>'}`,
+          `生活被动：${ROOT_LIFE[r.e]}${variant ? `　前置：${ROOT_NEED[r.e].join(' + ')}` : ''}${need ? `　提升要：${need}` : ''}`,
+          top ? [] : [btn('提升', () => this.upgradeRoot(r, ghost))]));
+      }
+      body.append(el('div', 'pempty', '新灵根靠机缘（秘境宝箱、鬼市），也能走邪修路线夺人灵根——夺来的保持原品级，代价是业力、正道敌视、天劫峰上多一只心魔。'));
+    });
+  }
+  addKarma(n) {
+    const g = this.g, P = g.player, before = P.karma;
+    P.karma = Math.max(0, P.karma + n);
+    if (n > 0) g.toast(`业力 +${n}（${P.karma}）`, 1.8);
+    if (before < 100 && P.karma >= 100) { for (const v of g.village?.list || []) v.addAff(-30); g.toast('业力太重，村里人看你的眼神都变了……', 3); }
+  }
+  evil() { const s = this.g.sects; return s?.member?.name === '血魔宫' || [...(s?.learned || [])].some((t) => t.startsWith('xm')); }
+  // 村民对话里的邪修选项：夺取灵根 / 归还灵根（GDD 第 9 / 11 节）
+  rootChoices(v) {
+    const g = this.g, P = g.player, out = [];
+    if (v.robbed) {
+      if (P.stolen.some((x) => x.id === v.d.id)) out.push({ label: '🙏 归还灵根（业力 −15）', fn: () => this.giveBack(v) });
+    } else if (this.evil() && v.d.root && !v.d.hidden) out.push({ label: '🩸 夺取灵根（邪修 · 业力 +30）', fn: () => this.steal(v) });
+    return out;
+  }
+  steal(v) {
+    const g = this.g, P = g.player, { e, grade } = v.d.root;
+    v.robbed = { e, grade, realm: v.d.realm }; v.d.root = null; v.d.realm = [0, 0]; v.aff = -200;
+    // 记下这一夺改了什么，归还时原样退回：new 新长出一条 / upgrade 把自己的提了品级 / held 自己的更好，只是攥在手里
+    const mine = P.roots.find((r) => r.e === e), rec = { id: v.d.id, e, grade, mode: 'held' };
+    if (!mine) { P.roots.push({ e, grade, stolen: v.d.id }); rec.mode = 'new'; }
+    else if (mine.grade < grade) { rec.mode = 'upgrade'; rec.prev = mine.grade; mine.grade = grade; mine.stolen = v.d.id; }
+    P.stolen.push(rec);
+    this.recalc(); this.addKarma(30);
+    g.fx.burst(v.pos, '#ff2a3a', 40, { speed: 4, up: 4, life: 0.8 }); g.shake(0.5);
+    g.ui.dialog({ name: v.name, line: '啊——！我的灵根……你、你这个魔头！', info: `夺得${e}灵根（${ROOT_GRADE[grade]}）。${v.name}成了凡人，从此敌视你。`, hint: '归还灵根，好感才会慢慢回升。' });
+  }
+  giveBack(v) {
+    const g = this.g, P = g.player, rec = P.stolen.find((x) => x.id === v.d.id), r = P.roots.find((x) => x.stolen === v.d.id);
+    if (rec?.mode === 'new' && r) P.roots.splice(P.roots.indexOf(r), 1);
+    else if (rec?.mode === 'upgrade' && r) { r.grade = rec.prev; delete r.stolen; }
+    v.d.root = { e: v.robbed.e, grade: v.robbed.grade }; v.d.realm = v.robbed.realm; v.robbed = null; v.aff = -100;
+    P.stolen = P.stolen.filter((s) => s.id !== v.d.id);
+    this.recalc(); this.addKarma(-15);
+    g.ui.dialog({ name: v.name, line: '……灵根回来了。我不会原谅你，但……谢谢你还回来。', hint: '好感会随着送礼慢慢回升。' });
+  }
 
   // 按等级重算属性（任务给的护甲等加成另算）
   recalc(full) {
@@ -153,6 +235,13 @@ export class Realm {
         e.state = 'chase'; e.trib = true;
       }
     }
+    // 心魔（元婴起）：每一重劫来一只，夺过的灵根越多越多
+    if (T.mech.includes('mirror') && !T.demons?.[stage]) {
+      (T.demons ??= {})[stage] = true;
+      const n = 1 + (P.stolen?.length || 0);
+      for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, e = g.enemies.spawn('heartdemon', P.pos.x + Math.cos(a) * 8, P.pos.z + Math.sin(a) * 8, T.target * 5); e.state = 'chase'; e.trib = true; }
+      g.toast('心魔现身……', 1.6);
+    }
     // 天火：地上持续燃烧的圈（化神起）
     if (T.mech.includes('fire') && Math.random() < dt * 0.5) {
       const x = P.pos.x + (Math.random() - 0.5) * 10, z = P.pos.z + (Math.random() - 0.5) * 10;
@@ -219,6 +308,6 @@ export class Realm {
     if (this.fly) { P.qi -= dt * 3 * (1 - (P.mods?.flyQi || 0)); if (P.qi <= 0) { P.qi = 0; this.fly = false; g.toast('灵力耗尽，落地', 1.2); } }
     this.updateTrib(dt);
   }
-  save() { return { roots: this.g.player.roots, hpBonus: this.g.player.hpBonus, cool: this.cool }; }
-  load(s) { const P = this.g.player; P.roots = s.roots; P.hpBonus = s.hpBonus || 0; this.cool = s.cool || 0; this.recalc(false); }
+  save() { const P = this.g.player; return { roots: P.roots, hpBonus: P.hpBonus, cool: this.cool, karma: P.karma, stolen: P.stolen }; }
+  load(s) { const P = this.g.player; P.roots = s.roots; P.hpBonus = s.hpBonus || 0; this.cool = s.cool || 0; P.karma = s.karma || 0; P.stolen = s.stolen || []; this.recalc(false); }
 }
