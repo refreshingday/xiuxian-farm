@@ -47,10 +47,13 @@
   #inv { position: fixed; right: 16px; top: 92px; font-size: 13px; }
   #inv b { color: #ffe7a8; margin-right: 6px; }
   #skills { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; }
-  .slot { position: relative; width: 78px; height: 58px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18); display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; font-size: 12px; }
+  .slot { position: relative; width: 72px; height: 58px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18); display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; font-size: 12px; }
   .slot.off { opacity: .45; }
   .slot kbd { font-size: 10px; opacity: .7; margin-bottom: 3px; }
   .slot .cd { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.55); height: 0; }
+  .slot .nm { font-family: "STKaiti", "KaiTi", serif; font-size: 15px; color: #ffe7a8; }
+  .slot small { font-size: 10px; opacity: .7; }
+  #sk0 { width: 96px; } #skWeap span { font-family: "STKaiti", "KaiTi", serif; font-size: 16px; color: #ffe7a8; }
   kbd { font-family: inherit; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 0 5px; }
   #prompt { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 6px 14px; border-radius: 16px; font-size: 14px; }
   #dialog { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); width: min(680px, 92vw); background: rgba(24, 20, 16, 0.86); border: 1px solid rgba(255, 220, 160, .3); border-radius: 12px; padding: 14px 18px; }
@@ -64,6 +67,7 @@
   #comboName { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; color: #ffe7a8; text-shadow: 0 2px 6px rgba(0,0,0,.8); pointer-events: none; white-space: nowrap; }
   #comboName small { font-size: 14px; letter-spacing: 1px; opacity: .8; margin-left: 8px; }
   body.talking #help { display: none; }
+  @media (max-width: 1150px) { #help { bottom: 90px; } }
   #toast { position: fixed; left: 50%; top: 22%; transform: translate(-50%, -10px); font-family: "STKaiti", "KaiTi", serif; font-size: 24px; letter-spacing: 2px; color: #fff3d0; text-shadow: 0 2px 8px #000, 0 0 16px rgba(255,200,120,.6); opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; text-align: center; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
   #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(255, 30, 20, .7); opacity: 0; }
@@ -91,21 +95,31 @@
   body.mobile #stick { display: block; position: fixed; left: calc(100px + env(safe-area-inset-left)); top: calc(100% - 110px); width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(14, 22, 24, .35); border: 2px solid rgba(214, 182, 112, .4); pointer-events: none; z-index: 3; opacity: .55; transition: opacity .15s; }
   body.mobile #stick.live { opacity: 1; }
   #stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, rgba(255, 240, 200, .8), rgba(214, 182, 112, .55)); box-shadow: 0 2px 8px rgba(0,0,0,.5); }
-  body.mobile #skills { left: auto; right: calc(14px + env(safe-area-inset-right)); bottom: 14px; transform: none; display: block; width: 200px; height: 200px; z-index: 4; pointer-events: none; }
-  body.mobile .slot { position: absolute; width: 54px; height: 54px; border-radius: 50%; font-size: 10px; text-align: center; line-height: 1.15; pointer-events: auto; touch-action: none; }
+  body.mobile #skills { left: auto; right: calc(14px + env(safe-area-inset-right)); bottom: 14px; transform: none; display: block; width: 230px; height: 290px; z-index: 4; pointer-events: none; }
+  body.mobile .slot { position: absolute; width: 50px; height: 50px; border-radius: 50%; font-size: 10px; text-align: center; line-height: 1.15; pointer-events: auto; touch-action: none; }
+  body.mobile .slot .nm { font-size: 13px; } body.mobile .slot small { display: none; }
   body.mobile .slot.press { filter: brightness(1.5); transform: scale(.92); }
-  body.mobile #sk0 { right: 0; bottom: 0; width: 92px; height: 92px; font-size: 16px; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; }
-  body.mobile #sk4 { right: 137px; bottom: 19px; }
-  body.mobile #sk1 { right: 121px; bottom: 78px; }
-  body.mobile #sk2 { right: 78px; bottom: 121px; }
-  body.mobile #sk3 { right: 19px; bottom: 137px; }
+  body.mobile #sk0 { right: 0; bottom: 0; width: 92px; height: 92px; font-size: 26px; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; color: #ffe7a8; }
+  body.mobile #skDash { right: 171px; bottom: 21px; }
+  body.mobile #skills [data-slot="0"] { right: 160px; bottom: 78px; }
+  body.mobile #skills [data-slot="1"] { right: 127px; bottom: 127px; }
+  body.mobile #skills [data-slot="2"] { right: 78px; bottom: 160px; }
+  body.mobile #skills [data-slot="3"] { right: 21px; bottom: 171px; }
+  body.mobile #skWeap { right: 0; bottom: 236px; }
+  body.mobile #skHerb { right: 58px; bottom: 236px; }
   body.mobile #prompt { bottom: 24px; padding: 10px 18px; font-size: 15px; z-index: 4; touch-action: none; }
   body.mobile #prompt::before { content: '👆 '; }
   body.mobile #comboName { bottom: 76px; font-size: 22px; }
   body.mobile #dialog { bottom: 16px; }
+  @media (max-height: 500px) {
+    body.mobile #skills { width: 290px; height: 230px; }
+    body.mobile #skWeap { right: 232px; bottom: 62px; }
+    body.mobile #skHerb { right: 232px; bottom: 4px; }
+    body.mobile #mobTime { top: 10px; right: calc(222px + env(safe-area-inset-right)); }
+  }
   @media (max-width: 700px) {
-    body.mobile #prompt { bottom: 230px; }
-    body.mobile #comboName { bottom: 280px; }
+    body.mobile #prompt { bottom: 316px; right: calc(14px + env(safe-area-inset-right)); left: auto; transform: none; }
+    body.mobile #comboName { bottom: 360px; }
     body.mobile .hb.big { top: 120px; }
   }
 </style>
@@ -121,7 +135,7 @@
 <div id="dmg"></div>
 
 <div id="status" class="panel">
-  <div class="name">叶清玄<span class="tag">第一代 · 金木双灵根 · 中等资质（上限 金丹）</span></div>
+  <div class="name">叶清玄<span class="tag" id="rootTag">金灵根 · 凡品</span></div>
   <div class="bar hp"><div id="hpFill"></div><span id="hpText"></span></div>
   <div class="bar qi"><div id="qiFill"></div><span id="qiText"></span></div>
   <div class="realm" id="realm"></div>
@@ -140,21 +154,25 @@
 </div>
 
 <div id="skills">
-  <div class="slot" id="sk0"><kbd>左键</kbd><span>连招</span></div>
-  <div class="slot" id="sk1"><kbd>右键</kbd><span>剑气 15</span><i class="cd"></i></div>
-  <div class="slot" id="sk2"><kbd>1</kbd><span>剑旋 30</span><i class="cd"></i></div>
-  <div class="slot" id="sk3"><kbd>2</kbd><span>服灵草</span><i class="cd"></i></div>
-  <div class="slot" id="sk4"><kbd>空格</kbd><span>身法</span><i class="cd"></i></div>
+  <div class="slot" id="sk0"><kbd>左键</kbd><span id="atkName">连招</span></div>
+  <div class="slot" data-slot="0"><kbd>Q</kbd><span class="nm"></span><small class="qc"></small><i class="cd"></i></div>
+  <div class="slot" data-slot="1"><kbd>E</kbd><span class="nm"></span><small class="qc"></small><i class="cd"></i></div>
+  <div class="slot" data-slot="2"><kbd>R</kbd><span class="nm"></span><small class="qc"></small><i class="cd"></i></div>
+  <div class="slot" data-slot="3"><kbd>C</kbd><span class="nm"></span><small class="qc"></small><i class="cd"></i></div>
+  <div class="slot" id="skDash"><kbd>空格</kbd><span>身法</span><i class="cd"></i></div>
+  <div class="slot" id="skWeap"><kbd>X 换武</kbd><span id="weapName">剑</span></div>
+  <div class="slot" id="skHerb"><kbd>1</kbd><span>灵草</span><i class="cd"></i></div>
 </div>
 
 <div id="help" class="panel">
-  <b>WASD</b> 移动　<b>鼠标</b> 瞄准<br>
+  <b>WASD</b> 移动　<b>鼠标</b> 瞄准（出招自动吸附）<br>
   <b>左键</b> 连招（松开出招）<br>
-  　快点 / 慢点 走不同分支，共 6 套<br>
-  <b>右键</b> 剑气　<b>1</b> 剑旋　<b>2</b> 服灵草<br>
-  <b>空格 / Shift</b> 身法闪避（无敌）<br>
-  <b>F</b> 交谈 / 种田 / 采集　<b>Q E</b> 转镜头<br>
-  <b>按住 T</b> 加速时间　<b>H</b> 隐藏说明<br>
+  　快点 / 慢点 走不同分支，每种武器 6 套<br>
+  　第一击免费，之后每招耗灵力<br>
+  <b>Q E R C</b> 技能　<b>X</b> 换武（剑 / 拳 / 符）<br>
+  <b>空格 / Shift</b> 身法闪避（无敌，冷却 2.5 秒）<br>
+  <b>1</b> 服灵草　<b>F</b> 交谈 / 种田 / 采集<br>
+  <b>滚轮</b> 转镜头　<b>按住 T</b> 加速时间　<b>H</b> 隐藏说明<br>
   东北方的大路通往 <b>玄晶矿洞</b>，深处有妖王。
 </div>
 

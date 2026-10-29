@@ -11,10 +11,10 @@ import { World, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist }
 import { FX } from './fx.js';
 import { Enemies } from './enemies.js';
 import { populateVillage, realmText } from './npc.js';
-import { TUNE, MOVES, TREE, ComboRunner } from './combo.js';
-import { ComboFX, MOVE_FX } from './comboFx.js';
-import { SFX, MOVE_SFX } from './comboSfx.js';
-import { animCombo } from './comboAnim.js';
+import { ComboFX } from './comboFx.js';
+import { SFX } from './comboSfx.js';
+import { KE } from './comboKit.js';
+import { Combat, DASH_CD } from './combat.js';
 import { HealthBar, screenOf } from './hpbar.js';
 import { TouchControls } from './touch.js';
 
@@ -117,12 +117,10 @@ const weather = new Weather(scene); g.weather = weather;
 // ---------- 玩家 ----------
 const P = {
   c: createChibi({ skin: '#f8d8bc', hair: '#4a2e22', hairStyle: 2, robe: '#f2f4f6', robe2: '#4f7fb0', belt: '#3a5a78', pants: '#3a4250', sword: true }),
-  r: 0.4, yaw: 0, vel: new THREE.Vector3(), kx: 0, kz: 0,
-  hp: 100, maxHp: 100, qi: 100, maxQi: 100, layer: 1, xp: 0, grade: 2,
-  cast: 0, spin: 0, work: 0,
-  dashT: 0, dashCd: 0, dashDir: 0, iframe: 0, qiCd: 0, spinCd: 0, pillCd: 0,
+  r: 0.4, yaw: 0, vy: 0, vel: new THREE.Vector3(), kx: 0, kz: 0,
+  hp: 100, maxHp: 100, qi: 100, maxQi: 100, layer: 1, xp: 0, grade: 2, elem: '金',
+  work: 0, dashT: 0, dashCd: 0, dashDir: 0, iframe: 0, pillCd: 0,
   inv: { herb: 3, core: 0, stone: 0, heart: 0 }, dead: false,
-  leapFrom: new THREE.Vector2(), leapTo: new THREE.Vector2(), sweepHit: new Set(), ghostT: 0,
 };
 P.pos = P.c.root.position;
 P.pos.set(0, 0, 4);
@@ -130,7 +128,7 @@ scene.add(P.c.root);
 g.player = P;
 
 const xpNeed = () => 40 + P.layer * 30;
-const swordDmg = () => 10 + P.layer * 2.5;
+const atkMul = () => 1 + P.layer * 0.25;  // 招式伤害按炼气一层设计，随境界放大
 
 P.hurt = (dmg, fx0, fz0, knock = 6) => {
   if (P.iframe > 0 || P.dead) return false;
@@ -215,6 +213,7 @@ function ambientSpawns(dt) {
 
 // ---------- 输入 ----------
 const keys = new Set();
+const SKILL_KEYS = ['KeyQ', 'KeyE', 'KeyR', 'KeyC']; // 四个技能槽（F 留给交互）
 const mouse = new THREE.Vector2(), mouseDown = [false, false, false];
 const aim = new THREE.Vector3();
 let camYaw = 0, camYawT = 0, camZoom = 1;
@@ -224,10 +223,12 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'KeyF') interact();
   if (e.code === 'Escape') closeDialog();
-  if (e.code === 'KeyR') g.toast(weather.toggle() ? '下雨了' : '雨停了');
+  if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
-  if (e.code === 'Digit1') spinSkill();
-  if (e.code === 'Digit2') eatHerb();
+  const si = SKILL_KEYS.indexOf(e.code);
+  if (si >= 0) useSkill(si);
+  if (e.code === 'KeyX') cycleWeapon();
+  if (e.code === 'Digit1') eatHerb();
   if (e.code === 'Space' || e.code === 'ShiftLeft') dash();
   if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
 });
@@ -239,17 +240,20 @@ let armed = false;
 renderer.domElement.addEventListener('pointerdown', (e) => { sfx.unlock(); closeDialog(); if (e.pointerType === 'touch') return; mouseDown[e.button] = true; if (e.button === 0) armed = !dialogOpen; });
 addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; mouseDown[e.button] = false; if (e.button === 0 && armed) { armed = false; attackClick(); } });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+// 滚轮转镜头
+renderer.domElement.addEventListener('wheel', (e) => { camYawT -= e.deltaY * 0.0012; }, { passive: true });
 document.getElementById('dialog').addEventListener('pointerdown', closeDialog);
 
 // 手机模式：摇杆 + 按钮（与电脑操作并存，按最近使用的输入自动切换）
 const touch = new TouchControls();
-touch.onChange = () => { mouseDown.fill(false); armed = false; };
+touch.onChange = () => { mouseDown.fill(false); armed = false; updateKitUI(); };
 const tap = (fn) => ({ down: () => { sfx.unlock(); fn(); } });
 touch.bind(document.getElementById('sk0'), { down: () => { sfx.unlock(); mouseDown[0] = true; }, up: (c) => { mouseDown[0] = false; if (!c) attackClick(); } });
-touch.bind(document.getElementById('sk1'), { down: () => { sfx.unlock(); mouseDown[2] = true; }, up: () => { mouseDown[2] = false; } });
-touch.bind(document.getElementById('sk2'), tap(spinSkill));
-touch.bind(document.getElementById('sk3'), tap(eatHerb));
-touch.bind(document.getElementById('sk4'), tap(dash));
+const slotEls = [...document.querySelectorAll('#skills [data-slot]')];
+for (const el of slotEls) touch.bind(el, tap(() => useSkill(+el.dataset.slot)));
+touch.bind(document.getElementById('skDash'), tap(dash));
+touch.bind(document.getElementById('skWeap'), tap(cycleWeapon));
+touch.bind(document.getElementById('skHerb'), tap(eatHerb));
 touch.bind(document.getElementById('prompt'), tap(interact));
 touch.bind(document.getElementById('mobTime'), { hold: 'time' });
 touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
@@ -257,133 +261,64 @@ touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
 const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function updateAim() {
   if (!touch.on) { ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); return; }
-  // 手机：自动瞄准附近最近的敌人，没有就朝移动 / 面朝方向
-  let best = null, bd = 9;
-  for (const e of enemies.list) { const d = Math.hypot(e.pos.x - P.pos.x, e.pos.z - P.pos.z) - e.r; if (d < bd) { bd = d; best = e; } }
+  // 手机：自动瞄准附近最近的敌人（摇杆推着时优先摇杆方向上的），没有就朝移动 / 面朝方向
+  const mv = moveInput(), my = mv.lengthSq() > 0.1 ? Math.atan2(mv.x, mv.y) : null;
+  let best = null, bs = 1e9;
+  for (const e of enemies.list) {
+    const dx = e.pos.x - P.pos.x, dz = e.pos.z - P.pos.z, l = Math.hypot(dx, dz) - e.r;
+    if (l > 9) continue;
+    const sc = l + (my === null ? 0 : Math.abs(angDiff(Math.atan2(dx, dz), my)) * 3);
+    if (sc < bs) { bs = sc; best = e; }
+  }
   if (best) { aim.set(best.pos.x, 0, best.pos.z); return; }
-  const mv = moveInput(), yaw = mv.lengthSq() > 0 ? Math.atan2(mv.x, mv.y) : P.yaw;
+  const yaw = my ?? P.yaw;
   aim.set(P.pos.x + Math.sin(yaw) * 4, 0, P.pos.z + Math.cos(yaw) * 4);
 }
 const aimYaw = () => Math.atan2(aim.x - P.pos.x, aim.z - P.pos.z);
 
-// ---------- 战斗动作 ----------
-function busy() { return P.dead || !!runner.move || P.cast > 0 || P.spin > 0 || P.work > 0; }
+// ---------- 战斗：拳 / 剑 / 符、灵力、四个技能槽、五行（与试炼场同一套，见 combat.js） ----------
+// 五行：己克对方 ×1.5，被克 ×0.75
+const elemMul = (e) => (KE[P.elem] === e.elem ? 1.5 : KE[e.elem] === P.elem ? 0.75 : 1);
+function hitEnemy(e, dmg, fromX, fromZ, knock, color, h) {
+  if (!e.alive) return;
+  const crit = Math.random() < 0.12, mul = elemMul(e);
+  enemies.damage(e, dmg * atkMul() * mul * (crit ? 1.8 : 1), fromX, fromZ, knock * 1.4, crit, h, mul > 1 ? '克' : mul < 1 ? '弱' : '');
+}
+// 普攻也能挖矿：判定范围里的矿石扣一下
+function hitOres(test) {
+  let any = false;
+  for (const o of world.ores) {
+    if (!o.alive || !test(o.x, o.z, o.r)) continue;
+    o.hp--; any = true;
+    fx.burst({ x: o.x, z: o.z }, '#ffd36b', 8, { speed: 4, life: 0.4 });
+    if (o.hp <= 0) { o.alive = false; o.group.visible = false; o.col.off = true; o.respawn = 90; g.addItem('stone', 1 + Math.floor(Math.random() * 2), o); }
+  }
+  return any;
+}
+const combat = new Combat({
+  scene, fx, cfx, sfx, P, aim,
+  targets: () => enemies.list,
+  hit: hitEnemy, hitWorld: hitOres,
+  stop: (sec) => { hitStop = Math.max(hitStop, sec); },
+  shake: (v) => g.shake(v),
+});
+const runner = combat.runner;
+g.onSlam = (e) => combat.slamAround(e);
 
-// 普攻连招（在试炼场 arena.html 打磨，数据见 combo.js）
-const runner = new ComboRunner(TUNE);
-const fwd = () => new THREE.Vector2(Math.sin(P.yaw), Math.cos(P.yaw));
-const fxCtx = (m, cx, cz) => ({ cfx, fx, x: P.pos.x, z: P.pos.z, yaw: P.yaw, fx0: Math.sin(P.yaw), fz0: Math.cos(P.yaw), color: m.color || '#9ef0ff', cx, cz, getPos: () => P.pos });
 function attackClick() {
-  if (P.dead || dialogOpen || P.dashT > 0 || P.cast > 0 || P.spin > 0 || P.work > 0) return;
-  runner.click();
+  if (P.dead || dialogOpen || P.dashT > 0 || P.work > 0) return;
+  combat.click();
 }
-function cancelCombo() { if (runner.path !== null) runner.cancel(); showMove(null); }
-// 招式伤害按 斩·一=10 设计，随境界放大
-function hitEnemy(e, dmg, fromX, fromZ, knock) {
-  const crit = Math.random() < 0.12;
-  enemies.damage(e, dmg * swordDmg() / 10 * (crit ? 1.8 : 1), fromX, fromZ, knock, crit);
+function useSkill(i) {
+  if (P.dead || dialogOpen || P.work > 0) return;
+  combat.useSkill(i);
 }
-function hitFeel(h) {
-  if (h.stop) hitStop = Math.max(hitStop, h.stop);
-  g.shake(h.shake ?? 0.15);
-}
-
-runner.on.start = (m, path, type) => {
-  P.yaw = aimYaw();
-  P.iframe = Math.max(P.iframe, m.iframe || 0);
-  P.sweepHit.clear();
-  if (m.leap) {
-    const L = m.leap, f = fwd();
-    P.leapFrom.set(P.pos.x, P.pos.z);
-    let dist = L.dist ?? 0;
-    if (L.to === 'aim') dist = Math.min(L.max, Math.hypot(aim.x - P.pos.x, aim.z - P.pos.z));
-    P.leapTo.set(P.pos.x + f.x * dist, P.pos.z + f.y * dist);
-    fx.circle(P.leapTo.x, P.leapTo.y, m.hits[0].r, L.t1 - L.t0);
-  }
-  if (m.pose === 'dash') fx.burst(P.pos, '#9ef0ff', 14, { speed: 6, up: 1, life: 0.3 });
-  MOVE_FX[m.id]?.start?.(fxCtx(m, P.leapTo.x, P.leapTo.y), m);
-  if (sfx.ok) { sfx.tick(type); MOVE_SFX[m.id]?.start?.(sfx, m, m.hits[0]?.t ?? 0.15); }
-  P.ghostT = 0;
-  showMove(m);
-};
-
-runner.on.hit = (m, h, idx) => {
-  const f = fwd(), color = m.color || '#9ef0ff';
-  let hitAny = false;
-  if (h.shape === 'arc') {
-    const inArc = (x, z, r) => Math.hypot(x - P.pos.x, z - P.pos.z) - r <= h.range && Math.abs(angDiff(Math.atan2(x - P.pos.x, z - P.pos.z), P.yaw)) <= h.arc;
-    for (const e of [...enemies.list]) if (inArc(e.pos.x, e.pos.z, e.r)) { hitEnemy(e, h.dmg, P.pos.x, P.pos.z, h.knock); hitAny = true; }
-    for (const o of world.ores) {
-      if (!o.alive || !inArc(o.x, o.z, o.r)) continue;
-      o.hp--; hitAny = true;
-      fx.burst({ x: o.x, z: o.z }, '#ffd36b', 8, { speed: 4, life: 0.4 });
-      if (o.hp <= 0) { o.alive = false; o.group.visible = false; o.col.off = true; o.respawn = 90; g.addItem('stone', 1 + Math.floor(Math.random() * 2), o); }
-    }
-  } else if (h.shape === 'circle') {
-    const cx = P.pos.x + f.x * h.at, cz = P.pos.z + f.y * h.at;
-    fx.shockRing(cx, cz, h.r, color, 0.3);
-    for (const e of [...enemies.list]) if (Math.hypot(e.pos.x - cx, e.pos.z - cz) - e.r <= h.r) { hitEnemy(e, h.dmg, cx, cz, h.knock); hitAny = true; }
-  } else if (h.shape === 'wave') {
-    waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color, hit: new Set(), m: spawnWaveMesh(color) });
-  }
-  MOVE_FX[m.id]?.hit?.(fxCtx(m, P.pos.x + f.x * (h.at || 0), P.pos.z + f.y * (h.at || 0)), h, idx);
-  if (sfx.ok) MOVE_SFX[m.id]?.hit?.(sfx, h, idx, m);
-  if (hitAny || h.shape !== 'arc') hitFeel(h);
-};
-
-// 剑气（疾风·终）
-const waves = [];
-function spawnWaveMesh(color) {
-  const mk = (c, k) => new THREE.Mesh(fx.crescentGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k), side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-  const w = new THREE.Group(), a = mk(color, 3), b = mk('#ffffff', 2.5), c = mk(color, 2);
-  a.scale.setScalar(1.6); b.scale.setScalar(1.25); c.scale.set(1.9, 1, 1.1); c.position.set(0, 0, -0.5);
-  w.add(a, b, c); scene.add(w);
-  w.setOpacity = (v) => { a.material.opacity = v; b.material.opacity = v; c.material.opacity = v * 0.5; };
-  w.dispose = () => { for (const o of [a, b, c]) o.material.dispose(); };
-  return w;
-}
-function updateWaves(dt) {
-  for (let i = waves.length - 1; i >= 0; i--) {
-    const w = waves[i], step = Math.min(w.left, 20 * dt);
-    w.x += Math.sin(w.yaw) * step; w.z += Math.cos(w.yaw) * step; w.left -= step;
-    w.m.position.set(w.x, 1, w.z); w.m.rotation.y = w.yaw;
-    w.m.setOpacity(Math.min(1, w.left * 0.6));
-    w.age = (w.age || 0) + dt;
-    for (const sd of [-1, 1]) {
-      const o = Math.sin(w.age * 30 + sd * 1.6) * 1.1 * sd;
-      fx.mote(w.x + Math.cos(w.yaw) * o, 1 + Math.cos(w.age * 30) * 0.4, w.z - Math.sin(w.yaw) * o, w.color, { life: 0.35, size: 0.8 });
-    }
-    for (const e of [...enemies.list]) {
-      if (w.hit.has(e) || Math.hypot(e.pos.x - w.x, e.pos.z - w.z) > e.r + w.h.w * 0.6) continue;
-      w.hit.add(e); hitEnemy(e, w.h.dmg, w.x - Math.sin(w.yaw), w.z - Math.cos(w.yaw), w.h.knock);
-      cfx.arc(e.pos, w.yaw, w.color, { tilt: 0.7, scale: 0.6, y: 1.2, dur: 0.18 });
-    }
-    if (w.left <= 0) { fx.burst({ x: w.x, z: w.z }, w.color, 14, { speed: 5, up: 2, life: 0.35, y: 1 }); scene.remove(w.m); w.m.dispose(); waves.splice(i, 1); }
-  }
-}
+function cycleWeapon() { combat.cycle(); }
 
 const comboEl = document.getElementById('comboName');
 function showMove(m) { comboEl.innerHTML = m ? `${m.name}<small>第${runner.chain}式</small>` : ''; }
+combat.onMove = showMove;
 
-const projs = [];
-function qiSlash() {
-  if (P.qi < 15 || P.qiCd > 0 || busy()) return;
-  P.qi -= 15; P.qiCd = 0.35; P.cast = 0.25; P.yaw = aimYaw();
-  sfx.swing({ lead: 0.05, pitch: 1.3, size: 0.8 });
-  const m = new THREE.Mesh(fx.crescentGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color('#9ef0ff').multiplyScalar(3), side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-  m.position.set(P.pos.x + Math.sin(P.yaw) * 0.8, 1.0, P.pos.z + Math.cos(P.yaw) * 0.8); m.rotation.y = P.yaw;
-  scene.add(m);
-  projs.push({ m, vx: Math.sin(P.yaw) * 22, vz: Math.cos(P.yaw) * 22, life: 0.75, hit: new Set(), dmg: 12 + P.layer * 2.5 });
-}
-function spinSkill() {
-  if (P.qi < 30 || P.spinCd > 0 || P.dead) return;
-  P.qi -= 30; P.spinCd = 3; P.spin = 0.001; cancelCombo();
-  sfx.spin(0);
-  fx.shockRing(P.pos.x, P.pos.z, 3.6, '#9ef0ff', 0.35);
-  fx.burst(P.pos, '#9ef0ff', 30, { speed: 8, up: 1, life: 0.4, y: 1 });
-  for (const e of [...enemies.list]) if (e.pos.distanceTo(P.pos) - e.r < 3.4) enemies.damage(e, 16 + P.layer * 3, P.pos.x, P.pos.z, 12);
-  hitStop = 0.06; g.shake(0.4);
-}
 function eatHerb() {
   if (P.inv.herb <= 0 || P.pillCd > 0 || P.dead) { if (P.inv.herb <= 0) g.toast('没有灵草了——去田里种，或在野外采集'); return; }
   P.inv.herb--; P.pillCd = 1;
@@ -395,8 +330,8 @@ function dash() {
   if (P.dashCd > 0 || P.dead) return;
   const mv = moveInput();
   P.dashDir = mv.lengthSq() > 0 ? Math.atan2(mv.x, mv.y) : P.yaw;
-  P.dashT = 0.18; P.dashCd = 0.55; P.iframe = Math.max(P.iframe, 0.25);
-  cancelCombo(); sfx.dash();
+  P.dashT = 0.18; P.dashCd = DASH_CD; P.iframe = Math.max(P.iframe, 0.25);
+  combat.cancel(); sfx.dash();
 }
 function moveInput() {
   const ix = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0) + touch.stick.x;
@@ -456,7 +391,7 @@ function closeDialog() { dialogOpen = false; document.getElementById('dialog').c
 // ---------- 主循环 ----------
 let hitStop = 0, last = performance.now();
 const focus = new THREE.Vector3().copy(P.pos);
-const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'timeText', 'regionText', 'invHerb', 'invCore', 'invStone', 'invHeart', 'prompt', 'sk1', 'sk2', 'sk3', 'sk4'].map((k) => [k, document.getElementById(k)]));
+const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'timeText', 'regionText', 'invHerb', 'invCore', 'invStone', 'invHeart', 'prompt', 'skDash', 'skHerb', 'atkName', 'weapName'].map((k) => [k, document.getElementById(k)]));
 const SEASONS = ['春', '夏', '秋', '冬'];
 
 world.update(P.pos, 0, 0, g.day * 24 + g.hours, true);
@@ -487,6 +422,7 @@ g.onEnemyGone = (e) => {
     e.bar = null;
   }
   if (focusE === e) { if (dead) { targetBar.die(); focusT = Math.min(focusT, 1.2); } else focusE = null; }
+  combat.forget(e);
 };
 function placeBar(bar, dt, x, y, z) {
   bar.update(dt);
@@ -495,7 +431,7 @@ function placeBar(bar, dt, x, y, z) {
   if (!front) bar.el.style.visibility = 'hidden';
 }
 function updateHpBars(dt) {
-  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, BAR_Y[e.type] ?? 2, e.pos.z);
+  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, (BAR_Y[e.type] ?? 2) + e.pos.y, e.pos.z);
   for (let i = fadingBars.length - 1; i >= 0; i--) {
     const f = fadingBars[i]; f.t -= dt; placeBar(f.bar, dt, f.x, f.y, f.z);
     f.bar.el.style.opacity = Math.min(1, f.t / 0.4).toFixed(3);
@@ -513,7 +449,10 @@ function updateHpBars(dt) {
 
 function frame(now) {
   requestAnimationFrame(frame);
-  let dt = Math.min(0.05, (now - last) / 1000); last = now;
+  tick(Math.min(0.05, (now - last) / 1000)); last = now;
+  composer.render();
+}
+function tick(dt) {
   if (hitStop > 0) { hitStop -= dt; dt *= 0.08; }
   g.time += dt;
   for (let i = g.scheduled.length - 1; i >= 0; i--) if (g.scheduled[i].t <= g.time) { const s = g.scheduled[i]; g.scheduled.splice(i, 1); s.fn(); }
@@ -531,8 +470,7 @@ function frame(now) {
   world.update(P.pos, dt, g.nightK, g.day * 24 + h);
   for (const n of npcs) n.update(dt, h);
   enemies.update(dt);
-  updateProjs(dt);
-  updateWaves(dt);
+  combat.updateEffects(dt);
   ambientSpawns(dt);
   ambience(dt);
   fx.update(dt);
@@ -541,93 +479,42 @@ function frame(now) {
   updateHpBars(dt);
   updateLights(h);
   updateUI();
-  composer.render();
 }
 
+const NOMOVE = new THREE.Vector2();
 function updatePlayer(dt) {
-  P.iframe -= dt; P.dashCd -= dt; P.qiCd -= dt; P.spinCd -= dt; P.pillCd -= dt;
-  if (P.dead) cancelCombo(); else runner.update(dt);
-  if (!P.dead) P.qi = Math.min(P.maxQi, P.qi + dt * 9);
+  P.iframe -= dt; P.dashCd -= dt; P.pillCd -= dt;
+  if (P.dead) combat.cancel(); else combat.update(dt);
   updateAim();
   const mv = moveInput();
   if (mv.lengthSq() > 0 && dialogOpen) closeDialog();
-  if (!P.dead && !dialogOpen) {
-    if (mouseDown[2]) qiSlash();
-  }
-  let spd = 6, vx = mv.x, vz = mv.y, lx = 0, lz = 0, y = 0;
-  const m = runner.move, t = runner.t;
-  if (m) {
-    spd = m.moveSpd || 0;
-    if (m.lunge) {
-      const [t0, t1, dist] = m.lunge;
-      if (t > t0 && t - dt < t1) {
-        const k = (Math.min(t, t1) - Math.max(t - dt, t0)) / (t1 - t0) * dist / dt;
-        lx = Math.sin(P.yaw) * k; lz = Math.cos(P.yaw) * k;
-      }
-    }
-    if (m.leap) {
-      const L = m.leap, k = clamp((t - L.t0) / (L.t1 - L.t0), 0, 1), e = k * k * (3 - 2 * k);
-      P.pos.x = lerp(P.leapFrom.x, P.leapTo.x, e); P.pos.z = lerp(P.leapFrom.y, P.leapTo.y, e); spd = 0;
-      y = L.h * 4 * k * (1 - k);
-      if (k > 0 && k < 1 && Math.random() < 0.6) fx.mote(P.pos.x, y + 1, P.pos.z, m.color, { life: 0.3, size: 0.9 });
-    }
-    if (m.sweep && t > m.lunge[0] && t - dt < m.lunge[1]) {
-      fx.mote(P.pos.x, 0.8 + Math.random() * 0.6, P.pos.z, '#9ef0ff', { life: 0.35, size: 1.3 });
-      for (const e of [...enemies.list]) {
-        if (P.sweepHit.has(e) || Math.hypot(e.pos.x - P.pos.x, e.pos.z - P.pos.z) > e.r + m.sweep.w) continue;
-        P.sweepHit.add(e); hitEnemy(e, m.sweep.dmg, P.pos.x - Math.sin(P.yaw), P.pos.z - Math.cos(P.yaw), m.sweep.knock);
-        cfx.xslash(e.pos, '#9ef0ff', 0.03);
-        hitFeel(m.sweep);
-      }
-    }
-  }
-  // 冲刺 / 突刺 / 跃击时留残影
-  const ghosting = (m && ((m.sweep && t < m.lunge[1]) || (m.leap && t < m.leap.t1))) || P.dashT > 0;
-  if (ghosting) { P.ghostT -= dt; if (P.ghostT <= 0) { P.ghostT = 0.035; cfx.ghost(P.c.root, m?.leap ? m.color : '#9ef0ff', 0.28); } }
-  if (P.cast > 0) { P.cast -= dt; spd = 2; }
-  if (P.spin > 0) { P.spin += dt / 0.35; if (P.spin >= 1) P.spin = 0; }
-  if (P.work > 0) { P.work += dt / 0.4; spd = 0; if (P.work >= 1) P.work = 0; }
-  if (P.dead) spd = 0;
-  P.vel.set(vx * spd + lx, 0, vz * spd + lz);
+  if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
+  // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里
+  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, 6);
+  let vx = st.vx, vz = st.vz;
   if (P.dashT > 0) {
     P.dashT -= dt;
-    P.vel.set(Math.sin(P.dashDir) * 17, 0, Math.cos(P.dashDir) * 17);
+    vx = Math.sin(P.dashDir) * 17; vz = Math.cos(P.dashDir) * 17;
     fx.mote(P.pos.x, 0.8 + Math.random() * 0.6, P.pos.z, '#9ef0ff', { life: 0.3, size: 1.2 });
   }
-  P.pos.x += (P.vel.x + P.kx) * dt; P.pos.z += (P.vel.z + P.kz) * dt;
+  P.vel.set(vx, 0, vz);
+  P.pos.x += (vx + P.kx) * dt; P.pos.z += (vz + P.kz) * dt;
   const kd = Math.exp(-10 * dt); P.kx *= kd; P.kz *= kd;
   world.resolve(P.pos, P.r);
-  for (const e of enemies.list) {
+  if (!st.ghost && P.dashT <= 0) for (const e of enemies.list) {
+    if (Math.abs(e.pos.y - st.y) > 1) continue;
     const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, rr = P.r + e.r, d2 = dx * dx + dz * dz;
-    if (d2 < rr * rr && d2 > 1e-6 && P.dashT <= 0 && !(m && (m.sweep || m.leap))) { const d = Math.sqrt(d2), k = (rr - d) / d; P.pos.x += dx * k * 0.7; P.pos.z += dz * k * 0.7; }
+    if (d2 < rr * rr && d2 > 1e-6) { const d = Math.sqrt(d2), k = (rr - d) / d; P.pos.x += dx * k * 0.7; P.pos.z += dz * k * 0.7; }
   }
-  const fighting = P.cast > 0 || mouseDown[0] || mouseDown[2];
-  if (m) { /* 出招时朝向在起招那一刻锁定 */ }
-  else if (fighting) P.yaw = lerpAngle(P.yaw, aimYaw(), 1 - Math.exp(-20 * dt));
-  else if (P.dashT > 0) P.yaw = P.dashDir;
-  else if (mv.lengthSq() > 0) P.yaw = lerpAngle(P.yaw, Math.atan2(mv.x, mv.y), 1 - Math.exp(-14 * dt));
+  // 出招 / 放技能时朝向在起手那一刻锁定；按住左键时转向鼠标
+  if (P.dashT > 0) P.yaw = P.dashDir;
+  else if (runner.move || combat.skill) { /* 锁定 */ }
+  else if (mouseDown[0]) P.yaw = lerpAngle(P.yaw, aimYaw(), 1 - Math.exp(-20 * dt));
+  else if (mv.lengthSq() > 0 && P.work <= 0) P.yaw = lerpAngle(P.yaw, Math.atan2(mv.x, mv.y), 1 - Math.exp(-14 * dt));
   P.c.root.rotation.y = P.yaw;
-  const moving = Math.min(1, Math.hypot(P.vel.x, P.vel.z) / 6);
-  P.c.root.position.y = y;
-  if (!animCombo(P.c, dt, m, t)) animChibi(P.c, dt, { move: P.dashT > 0 ? 0 : moving, attack: -1, combo: 0, cast: P.cast, dash: P.dashT > 0, spin: P.spin, work: P.work });
+  P.c.root.position.y = st.y;
+  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6), { work: P.work });
   P.c.root.visible = !P.dead && !(P.iframe > 0 && P.iframe < 0.55 && Math.floor(g.time * 20) % 2 === 0);
-}
-
-function updateProjs(dt) {
-  for (let i = projs.length - 1; i >= 0; i--) {
-    const p = projs[i];
-    p.m.position.x += p.vx * dt; p.m.position.z += p.vz * dt; p.life -= dt;
-    p.m.scale.setScalar(1 + (0.75 - p.life) * 1.2);
-    p.m.material.opacity = Math.min(1, p.life * 4);
-    if (Math.random() < 0.7) fx.mote(p.m.position.x, 1, p.m.position.z, '#9ef0ff', { life: 0.25, size: 0.9 });
-    for (const e of [...enemies.list]) {
-      if (p.hit.has(e)) continue;
-      if (Math.hypot(e.pos.x - p.m.position.x, e.pos.z - p.m.position.z) < e.r + 0.9) {
-        p.hit.add(e); enemies.damage(e, p.dmg, p.m.position.x - p.vx, p.m.position.z - p.vz, 5);
-      }
-    }
-    if (p.life <= 0) { scene.remove(p.m); p.m.material.dispose(); projs.splice(i, 1); }
-  }
 }
 
 // 环境粒子：夜里萤火虫，矿洞里飘尘
@@ -641,8 +528,6 @@ function ambience(dt) {
 }
 
 function updateCamera(dt) {
-  if (keys.has('KeyQ')) camYawT += dt * 1.6;
-  if (keys.has('KeyE')) camYawT -= dt * 1.6;
   camYawT = clamp(camYawT, -0.8, 0.8);
   camYaw = lerp(camYaw, camYawT, 1 - Math.exp(-8 * dt));
   focus.lerp(P.pos, 1 - Math.exp(-8 * dt));
@@ -725,15 +610,27 @@ function updateUI() {
   ui.prompt.classList.toggle('hidden', !it);
   if (it) ui.prompt.innerHTML = it.kind === 'none' ? it.label : `<kbd>F</kbd> ${it.label}`;
   const cd = (el, v, max, ok) => { el.querySelector('.cd').style.height = (clamp(v / max, 0, 1) * 100) + '%'; el.classList.toggle('off', !ok); };
-  cd(ui.sk1, P.qiCd, 0.35, P.qi >= 15);
-  cd(ui.sk2, P.spinCd, 3, P.qi >= 30);
-  cd(ui.sk3, P.pillCd, 1, P.inv.herb > 0);
-  cd(ui.sk4, P.dashCd, 0.55, true);
-  ui.sk3.querySelector('span').textContent = `服灵草 ×${P.inv.herb}`;
+  for (const el of slotEls) { const i = +el.dataset.slot, s = combat.kit.skills[i]; cd(el, combat.skillCd[i], s.cd, P.qi >= s.qi); }
+  cd(ui.skDash, P.dashCd, DASH_CD, true);
+  cd(ui.skHerb, P.pillCd, 1, P.inv.herb > 0);
+  ui.skHerb.querySelector('span').textContent = `灵草 ×${P.inv.herb}`;
 }
+// 换武器 / 切手机模式时刷新技能槽名字
+function updateKitUI() {
+  const kit = combat.kit;
+  for (const el of slotEls) { const s = kit.skills[+el.dataset.slot]; el.querySelector('.nm').textContent = s.name; el.querySelector('.qc').textContent = s.qi ? s.qi + ' 灵' : '回气'; }
+  ui.weapName.textContent = kit.name;
+  ui.atkName.textContent = touch.on ? (kit.id === 'sword' ? '斩' : kit.name) : '连招 · ' + kit.name;
+}
+combat.onKit = updateKitUI;
+updateKitUI();
+// 窗口矮时操作说明默认收起（H 打开）
+if (innerHeight < 720) document.getElementById('help').classList.add('hidden');
 
 requestAnimationFrame(frame);
-g.toast(touch.on ? '左下摇杆移动 · 右下按钮出招（自动瞄准）· 拖动画面转镜头 · 点提示交互' : '左键连招（松开出招，快慢分支）· 右键剑气 · F 交互 · H 查看操作', 4);
+g.toast(touch.on ? '左下摇杆移动 · 右下按钮出招（自动瞄准）· 拖动画面转镜头 · 点提示交互' : '左键连招（松开出招，快慢分支）· QERC 技能 · X 换武 · F 交互 · H 查看操作', 4);
 // 调试入口
-window.game = g; g.combo = runner;
+window.game = g; g.combo = runner; g.combat = combat;
+// 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
+g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) composer.render(); };
 export { flat, glow, mesh };

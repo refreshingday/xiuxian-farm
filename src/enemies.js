@@ -14,12 +14,14 @@ function geos() {
   return G;
 }
 
+// elem = 五行属性（GDD：克制 ×1.5，被克 ×0.75，见 comboKit.js 的 KE）
 export const TYPES = {
-  boar: { name: '野猪妖', hp: 75, r: 0.75, speed: 3.4, dmg: 12, xp: 14 },
-  spider: { name: '毒蛛', hp: 50, r: 0.7, speed: 3.0, dmg: 8, xp: 12 },
-  golem: { name: '石傀', hp: 150, r: 0.9, speed: 2.2, dmg: 18, xp: 26 },
-  boss: { name: '赤岩妖王', hp: 1500, r: 1.9, speed: 2.6, dmg: 24, xp: 320 },
+  boar: { name: '野猪妖', hp: 75, r: 0.75, speed: 3.4, dmg: 12, xp: 14, elem: '土' },
+  spider: { name: '毒蛛', hp: 50, r: 0.7, speed: 3.0, dmg: 8, xp: 12, elem: '木' },
+  golem: { name: '石傀', hp: 150, r: 0.9, speed: 2.2, dmg: 18, xp: 26, elem: '金' },
+  boss: { name: '赤岩妖王', hp: 1500, r: 1.9, speed: 2.6, dmg: 24, xp: 320, elem: '火' },
 };
+const GRAV = 26;
 
 function build(type) {
   const g = geos();
@@ -108,6 +110,7 @@ export class Enemies {
       dmg: T.dmg * (1 + lvl * 0.2), lvl, speed: T.speed, yaw: Math.random() * 6.28, kx: 0, kz: 0,
       state: 'idle', st: 0, cd: 1 + Math.random(), flash: 0, home: new THREE.Vector2(x, z),
       tx: x, tz: z, walk: 0, touchCd: 0, alive: true, phase: 1, queue: [], hitOnce: false, chargeDir: 0,
+      elem: T.elem, boss: type === 'boss', vy: 0, airSpin: 0, airRot: 0, spiked: false, rootT: 0, stuck: [],
     };
     root.position.set(x, 0, z);
     this.game.scene.add(root);
@@ -125,16 +128,31 @@ export class Enemies {
     if (e === this.boss) { this.boss = null; }
   }
 
-  damage(e, amt, fromX, fromZ, knock = 6, crit = false) {
+  // h = 命中参数（combat.js / comboAir.js）：launch 挑飞 | lift 空中托住 | spike 砸向地面 | pull 吸到身前
+  // tag = 伤害数字后缀（克 / 弱）
+  damage(e, amt, fromX, fromZ, knock = 6, crit = false, h = null, tag = '') {
     if (!e.alive) return;
+    const P = this.game.player, air = e.pos.y > 0.02 || e.vy > 0;
     e.hp -= amt;
     e.flash = 0.12;
     this.game.onEnemyHit?.(e, amt, crit);
     const dx = e.pos.x - fromX, dz = e.pos.z - fromZ, d = Math.hypot(dx, dz) || 1;
     const resist = e.type === 'boss' ? 0.08 : e.type === 'golem' ? 0.5 : 1;
-    if (e.state !== 'charge') { e.kx += dx / d * knock * resist; e.kz += dz / d * knock * resist; }
+    if (e.state !== 'charge') { const k = knock * resist * (air ? 0.7 : 1); e.kx += dx / d * k; e.kz += dz / d * k; }
+    // 挑空：妖王挑不动，石傀沉一些。浮空时不能行动，前摇被打断（update 里处理）
+    const lift = e.type === 'boss' ? 0 : e.type === 'golem' ? 0.6 : 1;
+    if (h && lift) {
+      if (h.pull) { // 吸到角色身前，连段不脱节
+        const tx = P.pos.x + Math.sin(P.yaw) * 1.5, tz = P.pos.z + Math.cos(P.yaw) * 1.5;
+        e.kx = e.kx * (1 - h.pull) + (tx - e.pos.x) * h.pull * 5; e.kz = e.kz * (1 - h.pull) + (tz - e.pos.z) * h.pull * 5;
+      }
+      if (h.spike) { e.vy = -h.spike; e.spiked = true; e.airSpin = 14; }
+      else if (h.launch) { e.vy = Math.max(e.vy, h.launch * lift); e.pos.y = Math.max(e.pos.y, 0.03); e.airSpin = 3 + h.launch * 0.4; }
+      else if (air) e.vy = Math.max(e.vy * 0.3, (h.lift ?? 3.5) * clamp(1 + (P.pos.y + 0.2 - e.pos.y) * 0.8, 0.15, 1.6)); // 空中挨打会被托住
+    }
     const fx = this.game.fx;
-    fx.num(e.pos, Math.round(amt) + (crit ? '!' : ''), crit ? 'crit' : '');
+    fx.num(e.pos, Math.round(amt) + (crit ? '!' : '') + tag, crit ? 'crit' : '');
+    if (e.pos.y > 0) fx.nums.at(-1).p.y += e.pos.y;
     fx.burst(e.pos, crit ? '#ffe28a' : '#ffffff', crit ? 12 : 6, { speed: 5, up: 2, life: 0.3, y: 1 });
     this.game.sfx?.impact({ crit, heavy: Math.min(1, Math.max(0, (knock - 4) / 10)) });
     if (e.type !== 'boss' && e.state === 'idle') e.state = 'chase';
@@ -158,6 +176,20 @@ export class Enemies {
       fx.clearTele();
     }
     this.remove(e);
+  }
+
+  // 落地：重摔会弹起；被「坠龙」砸下来的会震飞周围的（game.onSlam → combat.slamAround）
+  land(e) {
+    const g = this.game, fx = g.fx, v = -e.vy;
+    e.pos.y = 0;
+    if (v > 10) {
+      e.vy = Math.min(7, v * 0.32); e.airSpin *= 0.5;
+      fx.shockRing(e.pos.x, e.pos.z, e.spiked ? 2.6 : 1.4, '#e8d8b0', 0.3);
+      fx.burst(e.pos, '#b89a6a', e.spiked ? 24 : 12, { speed: 5, up: 4, life: 0.5, y: 0.2, bright: 1 });
+      g.sfx?.impact({ heavy: 1 }); g.shake(e.spiked ? 0.55 : 0.25);
+      if (e.spiked) { e.spiked = false; fx.num(e.pos, '砸地', 'crit'); g.onSlam?.(e); }
+    } else if (v > 4) { e.vy = v * 0.22; fx.burst(e.pos, '#b89a6a', 5, { speed: 3, up: 2, life: 0.4, y: 0.2, bright: 1 }); }
+    else { e.vy = 0; e.airSpin = 0; e.airRot = Math.atan2(Math.sin(e.airRot), Math.cos(e.airRot)); e.spiked = false; }
   }
 
   shoot(x, z, yaw, speed, dmg, color, size = 1) {
@@ -184,13 +216,20 @@ export class Enemies {
       const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, dist = Math.hypot(dx, dz);
       const toP = Math.atan2(dx, dz);
       let mx = 0, mz = 0, spd = 0, face = null;
-      e.st -= dt; e.cd -= dt; e.touchCd -= dt;
+      e.st -= dt; e.cd -= dt; e.touchCd -= dt; e.rootT -= dt;
+      // 浮空受重力；浮空或被定身（缚符）时不能行动，前摇 / 冲锋被打断
+      const air = e.pos.y > 0.02 || e.vy > 0;
+      if (air) { e.vy -= GRAV * dt; e.pos.y += e.vy * dt; e.airRot += e.airSpin * dt; if (e.pos.y <= 0) this.land(e); }
+      else e.airRot *= Math.exp(-10 * dt);
+      if (e.rootT > 0) e.kx = e.kz = 0;
+      const held = air || e.rootT > 0;
+      if (held && !e.boss && (e.state === 'windup' || e.state === 'charge')) { e.state = 'recover'; e.st = 0.5; e.parts.body.rotation.z = 0; }
       const aggro = (e.type === 'golem' ? 9 : 11) + night * 4;
 
       if (P.dead) { if (e.state !== 'idle' && e.type !== 'boss') e.state = 'idle'; }
 
       if (e.type === 'boss') this.bossAI(e, dt, dist, toP);
-      else {
+      else if (!held) {
         if (e.state === 'idle') {
           if (dist < aggro && !P.dead) e.state = 'chase';
           if (e.st <= 0) { e.st = 2 + Math.random() * 3; const a = Math.random() * 6.28, r = Math.random() * 5; e.tx = e.home.x + Math.cos(a) * r; e.tz = e.home.y + Math.sin(a) * r; }
@@ -244,17 +283,17 @@ export class Enemies {
         if (e.state !== 'charge' && dist < e.r + P.r && e.touchCd <= 0 && e.type === 'boar') { P.hurt(e.dmg * 0.5, e.pos.x, e.pos.z); e.touchCd = 1; }
       }
 
-      if (e.type === 'boss') { const r = this.bossMove; mx = r.mx; mz = r.mz; spd = r.spd; face = r.face; }
+      if (e.type === 'boss') { const r = this.bossMove; mx = r.mx; mz = r.mz; spd = held ? 0 : r.spd; face = r.face; }
 
       // 移动 + 击退 + 碰撞
       e.pos.x += (mx * spd + e.kx) * dt;
       e.pos.z += (mz * spd + e.kz) * dt;
-      const kd = Math.exp(-9 * dt); e.kx *= kd; e.kz *= kd;
+      const kd = Math.exp(-(air ? (e.pos.y > 1 ? 0.8 : 3) : 9) * dt); e.kx *= kd; e.kz *= kd;
       g.world.resolve(e.pos, e.r);
       if (e.type !== 'boss') for (const o of this.list) {
         if (o === e) continue;
         const ox = e.pos.x - o.pos.x, oz = e.pos.z - o.pos.z, rr = e.r + o.r, d2 = ox * ox + oz * oz;
-        if (d2 < rr * rr && d2 > 1e-6) { const d = Math.sqrt(d2), k = (rr - d) / d * 0.5; e.pos.x += ox * k; e.pos.z += oz * k; }
+        if (d2 < rr * rr && d2 > 1e-6 && Math.abs(e.pos.y - o.pos.y) < 1.2) { const d = Math.sqrt(d2), k = (rr - d) / d * 0.5; e.pos.x += ox * k; e.pos.z += oz * k; }
       }
       if (face === null && spd > 0.1) face = Math.atan2(mx, mz);
       if (face !== null) e.yaw = lerpAngle(e.yaw, face, 1 - Math.exp(-10 * dt));
@@ -270,6 +309,7 @@ export class Enemies {
         for (const a of e.parts.arms) a.rotation.x += (up - a.rotation.x) * Math.min(1, dt * 12);
       }
       e.parts.body.position.y = Math.abs(sw) * 0.06 + (e.state === 'windup' && e.type === 'boar' ? -0.1 : 0);
+      if (!e.boss) e.parts.body.rotation.x = e.airRot;
       if (e.flash > 0) { e.flash -= dt; setFlash(e.mats, e.flash > 0 ? 0.9 : 0); }
 
       if (dist > 80 && e.type !== 'boss') this.remove(e);

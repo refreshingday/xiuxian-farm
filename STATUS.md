@@ -37,6 +37,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 野外采集灵草 — 🟩 — 2026-10-27
 
 ## 战斗
+- 试炼场战斗并入主游戏 `combat.js`：拳 / 剑 / 符三武器、灵力（第一击免费）、Q E R C 四技能槽、五行克制、X 换武、闪避冷却 2.5 秒 — 🟩 — 2026-10-29 — 招式表与试炼场共用（comboKit / comboAir / comboKitFx）；出招软吸附最近妖兽；妖兽可被挑空 / 砸地 / 缚符定身，浮空或定身时前摇被打断
 - 试炼场 `arena.html` — 🟩 — 2026-10-27 — 先在小场景打磨，省 token、加载快
 - 连招状态机 `combo.js`（快/慢/断 节奏分支）— 🟩 — 2026-10-27 — 与渲染无关，可单测/可移植
   - 招式：斩一二三、连刺、疾风五连、落雷、回旋剑舞、惊鸿突刺、沉剑、破军·地裂、流星坠
@@ -62,6 +63,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-10-29 — 试炼场三武器战斗搬进主世界（combat.js），妖兽加五行属性和浮空物理
 - 2026-10-28 — 实验场加 Codex 素材分组（g1_village…g6_ruins）与对比模式
 - 2026-10-28 — 耕地贴图接入；贴图改由 Claude 直接驱动 Codex CLI 生成（codex-texture skill）
 - 2026-10-28 — 柔边特效、hitbox 开关、主游戏敌人血条（commit f0193d9）
