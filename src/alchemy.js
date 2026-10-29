@@ -73,7 +73,7 @@ export class Alchemy {
     if (!this.take(id)) { g.toast('主料不够', 1.5); return; }
     if (quick) { this.finish(id, 0, true); return; }
     // 控火小游戏：自己跑一个循环（面板开着时游戏是暂停的）
-    const fireBonus = g.rootPassive?.('火') ?? 0, w = 0.11 * (1 + fireBonus * 1.5), speed = RECIPES[id].speed || 1;
+    const fireBonus = g.rootPassive?.('火') ?? 0, w = 0.11 * (1 + fireBonus * 1.5) * (1 + (g.player.mods?.alch || 0)), speed = RECIPES[id].speed || 1;
     const st = { t: 0, h: 0.2, hold: false, inZone: 0, ph: Math.random() * 6 };
     let gauge, zone, mark, timeBar, scoreTxt;
     const down = (e) => { if (e.type === 'keydown' && e.code !== 'Space') return; e.preventDefault?.(); st.hold = true; };

@@ -188,7 +188,7 @@ export class Combat {
   useSkill(i) {
     const s = this.kit.skills[i], P = this.P;
     if (!s || this.skillCd[i] > 0 || P.qi < s.qi) return false;
-    P.qi -= s.qi; this.qiPause = QI_PAUSE; this.skillCd[i] = s.cd;
+    P.qi -= s.qi; this.qiPause = QI_PAUSE; this.skillCd[i] = s.cd * Math.max(0.4, 1 + (P.mods?.skillCd || 0));
     P.yaw = this.aimYaw();
     this.cancel();
     // 先摆技能动作，出手那一刻才生效
@@ -474,7 +474,7 @@ export class Combat {
     this.clock += dt; this.paperT -= dt;
     this.handPaper.g.visible = this.kit.id === 'talisman' && !(this.paperT > 0);
     for (const m of this.fistGlow) { m.visible = this.kit.id === 'fist'; m.material.opacity = 0.3 + 0.12 * Math.sin(this.clock * 7); }
-    this.qiPause -= dt; if (this.qiPause <= 0) P.qi = Math.min(P.maxQi, P.qi + QI_REGEN * P.maxQi / 100 * dt);
+    this.qiPause -= dt; if (this.qiPause <= 0) P.qi = Math.min(P.maxQi, P.qi + QI_REGEN * (1 + (P.mods?.qiRegen || 0)) * P.maxQi / 100 * dt);
     for (let i = 0; i < 4; i++) this.skillCd[i] = Math.max(0, this.skillCd[i] - dt);
     this.runner.update(dt);
   }

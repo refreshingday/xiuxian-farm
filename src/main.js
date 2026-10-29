@@ -12,6 +12,7 @@ import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
 import { sectorAt, biomeK, polar } from './worldmap.js';
 import { Hubs } from './hubs.js';
+import { Sects } from './sects.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
@@ -153,12 +154,14 @@ g.player = P;
 
 const xpNeed = () => realmXP(P.layer);
 g.xpNeed = xpNeed;
+g.atkMul = () => atkMul();
 // 招式伤害按炼气一层设计，随境界放大（每进一个大境界再跳一截）；兵器淬火另算
 const atkMul = () => (1 + P.layer * 0.25 + levelInfo(P.layer).realm * 0.5) * (1 + P.atkBonus);
 
 P.hurt = (dmg, fx0, fz0, knock = 6) => {
   if (P.iframe > 0 || P.dead) return false;
-  dmg = Math.round(dmg);
+  const M = P.mods;
+  dmg = Math.round(dmg * Math.max(0.3, 1 - (M.dmgTaken || 0) - (g.nightK > 0.5 ? M.nightDef || 0 : 0)));
   P.hp -= dmg; P.iframe = 0.6; P.c.flash = 0.12;
   const dx = P.pos.x - fx0, dz = P.pos.z - fz0, d = Math.hypot(dx, dz) || 1;
   P.kx += dx / d * knock; P.kz += dz / d * knock;
@@ -330,10 +333,15 @@ const aimYaw = () => Math.atan2(aim.x - P.pos.x, aim.z - P.pos.z);
 // ---------- 战斗：拳 / 剑 / 符、灵力、四个技能槽、五行（与试炼场同一套，见 combat.js） ----------
 // 五行：己克对方 ×1.5，被克 ×0.75
 const elemMul = (e) => (KE[P.elem] === e.elem ? 1.5 : KE[e.elem] === P.elem ? 0.75 : 1);
+// 宗门功法（P.mods）：分武器加伤、暴击、对鬼物加伤、减速、吸血
 function hitEnemy(e, dmg, fromX, fromZ, knock, color, h) {
   if (!e.alive) return;
-  const crit = Math.random() < 0.12, mul = elemMul(e);
-  enemies.damage(e, dmg * atkMul() * mul * (crit ? 1.8 : 1), fromX, fromZ, knock * 1.4, crit, h, mul > 1 ? '克' : mul < 1 ? '弱' : '');
+  const M = P.mods, crit = Math.random() < 0.12 + (M.crit || 0), mul = elemMul(e);
+  const k = 1 + (M.dmg_all || 0) + (M['dmg_' + combat.kit.id] || 0) + ((e.T.look === 'ghost' || e.T.look === 'zombie') ? M.vsUndead || 0 : 0);
+  const amt = dmg * atkMul() * mul * k * (crit ? 1.8 : 1);
+  if (M.slow) e.slowT = 2;
+  if (M.lifesteal) P.hp = Math.min(P.maxHp, P.hp + amt * M.lifesteal);
+  enemies.damage(e, amt, fromX, fromZ, knock * 1.4, crit, h, mul > 1 ? '克' : mul < 1 ? '弱' : '');
 }
 // 普攻也能挖矿：判定范围里的矿石扣一下
 function hitOres(test) {
@@ -381,11 +389,12 @@ function hotKey(i) {
   const id = inv.hot[i], it = id && item(id);
   if (it && (it.heal || it.qiHeal || it.xp || it.cat === 'pill') && !gui.blocking) life.use(id);
 }
+const dashCd = () => Math.max(0.6, DASH_CD + (P.mods.dashCd || 0));
 function dash() {
   if (P.dashCd > 0 || P.dead || g.paused || gui.blocking) return;
   const mv = moveInput();
   P.dashDir = mv.lengthSq() > 0 ? Math.atan2(mv.x, mv.y) : P.yaw;
-  P.dashT = 0.18; P.dashCd = DASH_CD; P.iframe = Math.max(P.iframe, 0.25);
+  P.dashT = 0.18; P.dashCd = dashCd(); P.iframe = Math.max(P.iframe, 0.25 + (P.mods.dashIframe || 0));
   combat.cancel(); sfx.dash();
 }
 function moveInput() {
@@ -423,6 +432,8 @@ g.onKill = (e) => g.emit('kill', e);
 const landmarks = new Landmarks(g, g.mapData); g.landmarks = landmarks;
 // 坊市（hubs.js）：客栈、丹药阁、法器阁、拍卖行
 const hubs = new Hubs(g, landmarks); g.hubs = hubs;
+// 宗门（sects.js + data/sects.json）：拜入、试炼、晋升、贡献、功法、宗门任务、大比
+const sects = new Sects(g, landmarks, await (await fetch('data/sects.json')).json());
 // 妖王巢穴：地图上每个妖王一个（加上原型矿洞里的赤岩妖王）
 for (const L of landmarks.list) if (L.kind === 'boss' && BOSS_BY_NAME[L.name]) enemies.lairs.push({ type: BOSS_BY_NAME[L.name], x: L.x, z: L.z, deadDay: -99 });
 // 世界事件：血月、妖虫夜袭（events.js）
@@ -468,6 +479,7 @@ register('alchemy', () => alchemy.save(), (s) => alchemy.load(s));
 register('quests', () => quests.save(), (s) => quests.load(s));
 register('landmarks', () => landmarks.save(), (s) => landmarks.load(s));
 register('hubs', () => hubs.save(), (s) => hubs.load(s));
+register('sects', () => sects.save(), (s) => sects.load(s));
 register('events', () => ({ ...events.save(), lairs: enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
@@ -557,6 +569,7 @@ function tick(dt) {
   landmarks.update(dt);
   events.update(dt);
   hubs.update(dt);
+  sects.update(dt);
   scanMarks(dt);
   farm.update();
   alchemy.update(dt);
@@ -582,7 +595,7 @@ function updatePlayer(dt) {
   const mv = moveInput();
   if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
   // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里；御剑飞行时走得快、悬在半空
-  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 : 6 * (1 + realm.passive('风') * 0.5));
+  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0)));
   if (realm.fly) { st.y = 1.1 + Math.sin(g.time * 3) * 0.08; P.vy = 0; st.ghost = true; }
   flySword.visible = realm.fly;
   let vx = st.vx, vz = st.vz;
@@ -719,7 +732,7 @@ function updateUI() {
   if (it) ui.prompt.innerHTML = it.act ? `<kbd>F</kbd> ${it.label}` : it.label;
   const cd = (el, v, max, ok) => { el.querySelector('.cd').style.height = (clamp(v / max, 0, 1) * 100) + '%'; el.classList.toggle('off', !ok); };
   for (const el of slotEls) { const i = +el.dataset.slot, s = combat.kit.skills[i]; cd(el, combat.skillCd[i], s.cd, P.qi >= s.qi); }
-  cd(ui.skDash, P.dashCd, DASH_CD, true);
+  cd(ui.skDash, P.dashCd, dashCd(), true);
 }
 // 换武器 / 切手机模式时刷新技能槽名字
 function updateKitUI() {

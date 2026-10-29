@@ -271,7 +271,7 @@ export class Enemies {
     g.sfx?.kill();
     fx.burst(e.pos, e.boss ? '#ff6a2a' : '#b9a8ff', e.boss ? 120 : 24, { speed: e.boss ? 9 : 5, up: 4, life: 0.8 });
     g.addXP(e.T.xp * (1 + e.lvl * 0.3), e.pos);
-    const luck = (e.night || g.nightK > NIGHT ? 1.5 : 1) * (e.blood ? 2 : 1);
+    const luck = (e.night || g.nightK > NIGHT ? 1.5 : 1) * (e.blood ? 2 : 1) * (1 + (g.player.mods?.luck || 0));
     let k = 0;
     for (const [id, p] of e.T.drops) if (Math.random() < p * luck) g.addItem(id, Math.random() < p * luck - 1 ? 2 : 1, { x: e.pos.x, z: e.pos.z + 0.5 * k++ });
     if (e.T.stones) { const [a, b] = e.T.stones; g.addStones(Math.round((a + Math.random() * (b - a)) * luck), e.pos); }
@@ -321,7 +321,7 @@ export class Enemies {
       const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, dist = Math.hypot(dx, dz);
       const toP = Math.atan2(dx, dz);
       let mx = 0, mz = 0, spd = 0, face = null;
-      e.st -= dt; e.cd -= dt; e.touchCd -= dt; e.rootT -= dt;
+      e.st -= dt; e.cd -= dt; e.touchCd -= dt; e.rootT -= dt; e.slowT = (e.slowT || 0) - dt;
       // 浮空受重力；浮空或被定身（缚符）时不能行动，前摇 / 冲锋被打断
       const air = e.pos.y > 0.02 || e.vy > 0;
       if (air) { e.vy -= GRAV * dt; e.pos.y += e.vy * dt; e.airRot += e.airSpin * dt; if (e.pos.y <= 0) this.land(e); }
@@ -392,7 +392,8 @@ export class Enemies {
 
       if (e.boss) { const r = this.bossMove; mx = r.mx; mz = r.mz; spd = held ? 0 : r.spd; face = r.face; }
 
-      // 移动 + 击退 + 碰撞
+      // 移动 + 击退 + 碰撞（寒冰掌 / 封印符命中会减速）
+      if (e.slowT > 0 && e.state !== 'charge') spd *= 0.6;
       e.pos.x += (mx * spd + e.kx) * dt;
       e.pos.z += (mz * spd + e.kz) * dt;
       const kd = Math.exp(-(air ? (e.pos.y > 1 ? 0.8 : 3) : 9) * dt); e.kx *= kd; e.kz *= kd;

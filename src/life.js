@@ -61,7 +61,7 @@ export class Life {
         // 在安全点睡觉回满；在自家洞府睡觉额外得打坐修为（约占修为来源的 20%）
         P.hp = P.maxHp; P.qi = P.maxQi;
         if (o.meditate !== false) {
-          const xp = Math.round(g.xpNeed() * 0.22);
+          const xp = Math.round(g.xpNeed() * 0.22 * (1 + (P.mods?.meditate || 0)));
           g.addXP(xp, P.pos, true);
           note = `打坐一夜，修为 +${Math.round(xp * (g.rootMul?.() ?? 1))}`;
         } else note = '一夜好眠';
@@ -133,11 +133,12 @@ export class Life {
     if (!(it.heal || it.qiHeal || it.xp)) return false;
     if (P.pillCd > 0) return false;
     inv.take(id); P.pillCd = 0.8;
-    const tk = it.base || id, k = it.cat === 'pill' ? 0.7 ** (this.tox[tk] = (this.tox[tk] || 0) + 1, this.tox[tk] - 1) : 1;
+    const M = P.mods || {}, tk = it.base || id;
+    const k = it.cat === 'pill' ? 0.7 ** (((this.tox[tk] = (this.tox[tk] || 0) + 1) - 1) * (1 - (M.tox || 0))) * (1 + (M.pillPow || 0)) : 1;
     if (it.heal) { const v = Math.round(it.heal * k); P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + v, 'heal'); }
     if (it.qiHeal) P.qi = Math.min(P.maxQi, P.qi + it.qiHeal * k * P.maxQi / 100);
     if (it.xp) g.addXP(it.xp * k, P.pos);
-    if (k < 1) g.fx.num({ x: P.pos.x + 0.6, z: P.pos.z }, '丹毒 ' + Math.round(k * 100) + '%', 'hurt');
+    if (k < 1 && it.cat === 'pill' && this.tox[tk] > 1) g.fx.num({ x: P.pos.x + 0.6, z: P.pos.z }, '丹毒 ' + Math.round(k * 100) + '%', 'hurt');
     g.fx.burst(P.pos, it.cat === 'pill' ? '#ffe28a' : '#7dffb0', 20, { speed: 2, up: 4, life: 0.8, grav: -1 });
     return true;
   }

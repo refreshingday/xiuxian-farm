@@ -57,12 +57,12 @@ export class Realm {
 
   // 按等级重算属性（任务给的护甲等加成另算）
   recalc(full) {
-    const P = this.g.player, L = P.layer, r = levelInfo(L).realm;
-    const hp = 100 + (L - 1) * 12 + r * 60 + P.hpBonus, qi = 100 + (L - 1) * 8 + r * 40;
+    const P = this.g.player, L = P.layer, r = levelInfo(L).realm, M = P.mods || {};
+    const hp = Math.round((100 + (L - 1) * 12 + r * 60 + P.hpBonus + (M.hp || 0)) * (1 + (M.hpPct || 0))), qi = 100 + (L - 1) * 8 + r * 40 + (M.qiMax || 0);
     if (full) { P.hp = hp; P.qi = qi; }
     P.hp = Math.min(P.hp + Math.max(0, hp - P.maxHp), hp); P.qi = Math.min(P.qi + Math.max(0, qi - P.maxQi), qi);
     P.maxHp = hp; P.maxQi = qi;
-    this.senseMax = 20 + L * 8 + r * 20;
+    this.senseMax = 20 + L * 8 + r * 20 + (M.sense || 0);
     P.sense = Math.min(P.sense || this.senseMax, this.senseMax);
   }
   // 修为：打坐、斩妖、服丹都走这里，乘灵根倍率；小境界自动突破，大境界卡在圆满
@@ -87,8 +87,9 @@ export class Realm {
   // ---------- 神识：V 扫描周围的妖兽和野生灵草（耗神识，慢慢恢复）----------
   scan() {
     const g = this.g, P = g.player;
-    if (P.sense < 20) { g.toast('神识不足', 1.2); return; }
-    P.sense -= 20; this.scanT = 10;
+    const cost = 20 * (1 - (P.mods?.scanCost || 0));
+    if (P.sense < cost) { g.toast('神识不足', 1.2); return; }
+    P.sense -= cost; this.scanT = 10;
     g.fx.shockRing(P.pos.x, P.pos.z, 30, '#c8b8ff', 0.8);
     this.sfx((s) => s.chant(0));
   }
@@ -116,7 +117,7 @@ export class Realm {
   }
   startTrib(home, pillK) {
     const g = this.g, P = g.player, target = levelInfo(P.layer).realm + 1;
-    this.trib = { t: -4, stage: 0, home, target, mech: TRIB[target], k: pillK * (P.avert ? 0.5 : 1) * (home ? 0.75 : 1), next: 0, beastT: 6, fires: [], x: P.pos.x, z: P.pos.z };
+    this.trib = { t: -4, stage: 0, home, target, mech: TRIB[target], k: pillK * (P.avert ? 0.5 : 1) * (home ? 0.75 : 1) * (1 - (P.mods?.tribRes || 0)), next: 0, beastT: 6, fires: [], x: P.pos.x, z: P.pos.z };
     P.avert = false;
     g.toast(`劫云汇聚……\n${REALMS[target]}天劫将至${home ? '（洞府阵法护身）' : '（野外渡劫，会引来妖兽）'}`, 4);
     g.shake(0.6); this.sfx((s) => s.thunderCharge(1));
@@ -215,7 +216,7 @@ export class Realm {
     const g = this.g, P = g.player;
     P.sense = Math.min(this.senseMax, P.sense + dt * 1.5);
     this.scanT -= dt;
-    if (this.fly) { P.qi -= dt * 3; if (P.qi <= 0) { P.qi = 0; this.fly = false; g.toast('灵力耗尽，落地', 1.2); } }
+    if (this.fly) { P.qi -= dt * 3 * (1 - (P.mods?.flyQi || 0)); if (P.qi <= 0) { P.qi = 0; this.fly = false; g.toast('灵力耗尽，落地', 1.2); } }
     this.updateTrib(dt);
   }
   save() { return { roots: this.g.player.roots, hpBonus: this.g.player.hpBonus, cool: this.cool }; }

@@ -68,6 +68,7 @@ export class Quests {
     if (r.atk) out.push(`攻击 +${Math.round(r.atk * 100)}%`);
     if (r.hp) out.push(`气血上限 +${r.hp}`);
     if (r.recipe) out.push(`丹方·${itemName(r.recipe)}`);
+    if (r.contrib) out.push(`宗门贡献 ${r.contrib}`);
     for (const id of Object.keys(r.aff || {})) out.push(`${this.g.village.byId[id]?.name || id} 好感`);
     return out.join(' · ') || '——';
   }
@@ -82,6 +83,7 @@ export class Quests {
     if (r.hp) { P.hpBonus += r.hp; g.realm.recalc(); P.hp += r.hp; }
     if (r.recipe) g.alchemy.learn(r.recipe, true);
     if (r.flag) this.flags.add(r.flag);
+    if (r.contrib) g.sects?.addContrib(r.contrib);
   }
 
   // ---------- 接 / 交 ----------
@@ -155,7 +157,7 @@ export class Quests {
     const day = this.g.day;
     this.board = this.board.filter((b) => b.exp >= day);
     let lost = 0;
-    for (const q of [...this.active]) if (q.from === 'board' && q.exp < day) { this.active.splice(this.active.indexOf(q), 1); lost++; }
+    for (const q of [...this.active]) if ((q.from === 'board' || q.from === 'sect') && q.exp < day) { this.active.splice(this.active.indexOf(q), 1); lost++; }
     const n = BOARD_MAX - this.board.length;
     for (let i = 0; i < n; i++) this.board.push(this.genBoard());
     this.dirty = true;
@@ -185,7 +187,7 @@ export class Quests {
     g.ui.panel('任务', (body) => {
       if (!this.active.length) body.append(el('div', 'pempty', '没有进行中的任务。村民头上有 ❗ 的可以接委托，委托板每天也会有新活。'));
       for (const q of this.active) {
-        const tag = { story: '主线', personal: '委托', board: '委托板' }[q.from];
+        const tag = { story: '主线', personal: '委托', board: '委托板', sect: '宗门' }[q.from];
         body.append(g.ui.row(this.complete(q) ? '✅' : '📜', `${q.def.title} <i>${tag}</i>`, `${q.def.desc}<br>${this.progText(q)}<br>奖励：${this.describe(q.def.reward)}`));
       }
     });
@@ -202,7 +204,7 @@ export class Quests {
   }
   renderTrack() {
     const list = [...this.active].sort((a, b) => (a.from === 'story' ? -1 : 0) - (b.from === 'story' ? -1 : 0)).slice(0, 3);
-    this.track.innerHTML = list.map((q) => `<div class="qt${this.complete(q) ? ' ok' : ''}"><b>${q.from === 'story' ? '◆ ' : ''}${q.def.title}</b>${q.def.goals.map((go, i) => `<span>${this.goalText(go)} ${this.cur(q, i)}/${go.n}</span>`).join('')}${this.complete(q) && q.from !== 'story' ? `<span class="hint">${q.from === 'board' ? '回委托板交付' : '回去找' + (this.g.village.byId[q.def.giver]?.name || '') + '交付'}</span>` : ''}</div>`).join('');
+    this.track.innerHTML = list.map((q) => `<div class="qt${this.complete(q) ? ' ok' : ''}"><b>${q.from === 'story' ? '◆ ' : ''}${q.def.title}</b>${q.def.goals.map((go, i) => `<span>${this.goalText(go)} ${this.cur(q, i)}/${go.n}</span>`).join('')}${this.complete(q) && q.from !== 'story' ? `<span class="hint">${q.from === 'board' ? '回委托板交付' : q.from === 'sect' ? '回宗门找执事交付' : '回去找' + (this.g.village.byId[q.def.giver]?.name || '') + '交付'}</span>` : ''}</div>`).join('');
     this.track.hidden = !list.length;
   }
   // 村民头上：❗ 有委托可接，❓ 有委托可交；委托板同理；主线 reach 目标 📍
@@ -229,7 +231,7 @@ export class Quests {
   }
 
   save() {
-    return { active: this.active.map((q) => ({ id: q.id, prog: q.prog, from: q.from, exp: q.exp, def: q.from === 'board' ? q.def : undefined })), done: [...this.done], flags: [...this.flags], board: this.board, seq: this.seq };
+    return { active: this.active.map((q) => ({ id: q.id, prog: q.prog, from: q.from, exp: q.exp, def: q.from === 'board' || q.from === 'sect' ? q.def : undefined })), done: [...this.done], flags: [...this.flags], board: this.board, seq: this.seq };
   }
   load(s) {
     this.active = s.active.map((q) => ({ ...q, def: q.def || this.defs[q.id] })).filter((q) => q.def);

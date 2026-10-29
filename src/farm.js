@@ -146,7 +146,9 @@ export class Farm {
 
   // 新的一天：按昨天浇没浇水结算
   newDay(date) {
-    const g = this.g, rain = g.weatherToday === 'rain', wood = g.rootPassive?.('木') ?? 0, ice = g.rootPassive?.('冰') ?? 0;
+    const g = this.g, M = g.player.mods || {}, rain = g.weatherToday === 'rain' || !!M.autoWater, wood = g.rootPassive?.('木') ?? 0, ice = g.rootPassive?.('冰') ?? 0;
+    const ageRate = this.ageRate * (1 + (M.herbAge || 0)), earth = g.rootPassive?.('土') ?? 0;
+    if (M.soilQi) for (const t of this.tiles) if (t.state > 0) t.qi = Math.min(QI_MAX, t.qi + M.soilQi); // 聚灵阵
     let withered = 0, hungry = 0, ripened = 0;
     for (const t of this.tiles) {
       if (t.state !== 2) continue;
@@ -157,9 +159,9 @@ export class Farm {
         if (inSeason || ice) {
           if (c.qi && t.qi < c.qi) hungry++;
           else {
-            if (c.qi) t.qi -= c.qi;
+            if (c.qi && Math.random() >= earth * 2) t.qi -= c.qi; // 土灵根：灵草少耗灵气
             if (t.g < c.days) { t.g += 1 + (Math.random() < wood ? 1 : 0); if (t.g >= c.days) ripened++; }
-            else if (c.kind === 'herb') t.age += this.ageRate;
+            else if (c.kind === 'herb') t.age += ageRate;
           }
         }
       } else if (++t.n >= NEGLECT) { t.state = 3; withered++; }
@@ -170,7 +172,7 @@ export class Farm {
     if (ripened) notes.push(`${ripened} 块地成熟了`);
     if (hungry) notes.push(`${hungry} 块灵草灵气不足`);
     if (withered) notes.push(`${withered} 块地的作物枯死了`);
-    if (rain) notes.push('下雨了，不用浇水');
+    if (rain) notes.push(M.autoWater && g.weatherToday !== 'rain' ? '灵雨阵浇过水了' : '下雨了，不用浇水');
     return notes.length ? '灵田：' + notes.join('，') : '';
   }
   update() {

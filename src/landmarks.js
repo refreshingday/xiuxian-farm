@@ -31,7 +31,8 @@ export class Landmarks {
     for (const m of data.mines) add('mine', m, { info: m.ore });
     const mine = this.list.find((L) => L.name === '玄晶矿洞'); if (mine) mine.found = true; // 原型已经建好的矿洞，开局就知道
     this.beacons = [];
-    for (const L of this.list) if (L.name !== '玄晶矿洞') this.build(L);
+    const hide = this.list.find((L) => L.name === '血魔宫'); if (hide) hide.hidden = true; // GDD：入口隐藏
+    for (const L of this.list) if (L.name !== '玄晶矿洞' && !L.hidden) this.build(L);
     this.lastEdge = 0;
   }
   // 石碑（名字竖着写）+ 光柱
@@ -112,6 +113,7 @@ export class Landmarks {
       // 地标
       c.textBaseline = 'middle';
       for (const L of this.list) {
+        if (L.hidden && !L.found) continue;
         const K = KIND[L.kind];
         c.font = `${Math.round(size / 36)}px sans-serif`; c.fillStyle = L.found ? K.color : 'rgba(255,255,255,.35)';
         c.fillText(L.found ? K.icon : '?', X(L.x), Y(L.z));
