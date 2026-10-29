@@ -853,6 +853,14 @@
    "cat": "mat",
    "sell": 600,
    "desc": "流星雨夜从天火陨坑落下来的陨铁。炼器上好的料子。"
+  },
+  "tongxin": {
+   "name": "同心结",
+   "icon": "💞",
+   "cat": "rare",
+   "sell": 0,
+   "buy": 3000,
+   "desc": "红绳编的同心结。送给好感 8 颗心以上的人，就是求结道侣（筑基之后）。"
   }
  },
  "recipes": {
@@ -1082,7 +1090,8 @@
     "talisman_paper",
     "spring",
     "zhenqi",
-    "lamp_oil"
+    "lamp_oil",
+    "tongxin"
    ],
    "buys": [
     "crop",

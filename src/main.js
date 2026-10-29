@@ -15,6 +15,7 @@ import { Hubs } from './hubs.js';
 import { Sects } from './sects.js';
 import { SecretRealms } from './secret.js';
 import { Places } from './places.js';
+import { Social } from './social.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
@@ -172,6 +173,7 @@ P.hurt = (dmg, fx0, fz0, knock = 6) => {
   sfx.impact({ heavy: 0.6 });
   g.shake(0.35);
   const h = document.getElementById('hurt'); h.classList.remove('on'); void h.offsetWidth; h.classList.add('on');
+  if (P.hp <= 0 && social.duel) P.hp = 1; // 节日比武点到为止
   if (P.hp <= 0) { if (realm.trib) realm.failTrib(); else die(); }
   return true;
 };
@@ -441,6 +443,9 @@ const sects = new Sects(g, landmarks, await (await fetch('data/sects.json')).jso
 // 秘境（每周五）与独特地点（鬼市、古剑冢、天火陨坑、天劫峰心魔路、矿洞灯火）
 const secrets = new SecretRealms(g, landmarks); g.secrets = secrets;
 const places = new Places(g, landmarks); g.places = places;
+// 节日、道侣、结局（social.js）
+const social = new Social(g); g.social = social;
+social.valley = landmarks.list.find((L) => L.name === '百花谷');
 // 妖王巢穴：地图上每个妖王一个（加上原型矿洞里的赤岩妖王）
 for (const L of landmarks.list) if (L.kind === 'boss' && BOSS_BY_NAME[L.name]) enemies.lairs.push({ type: BOSS_BY_NAME[L.name], x: L.x, z: L.z, deadDay: -99 });
 // 世界事件：血月、妖虫夜袭（events.js）
@@ -490,6 +495,7 @@ register('hubs', () => hubs.save(), (s) => hubs.load(s));
 register('sects', () => sects.save(), (s) => sects.load(s));
 register('secrets', () => secrets.save(), (s) => secrets.load(s));
 register('places', () => places.save(), (s) => places.load(s));
+register('social', () => social.save(), (s) => social.load(s));
 register('events', () => ({ ...events.save(), lairs: enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
@@ -582,6 +588,7 @@ function tick(dt) {
   sects.update(dt);
   secrets.update(dt);
   places.update(dt);
+  social.update(dt);
   scanMarks(dt);
   farm.update();
   alchemy.update(dt);

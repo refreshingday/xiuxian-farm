@@ -42,6 +42,8 @@ class Villager {
   // 日程：当前时刻该在哪
   schedPlace(hour) {
     if (this.injured || this.g.villageAlarm) return 'home'; // 重伤卧床 / 兽潮躲进屋
+    const fest = this.g.festivalPlace?.(); if (fest && this.d.id !== 'mentor' && this.d.id !== 'wanderer') return fest; // 节日都去会场（隐世高人和流浪者不凑热闹）
+    if (this.g.social?.spouse === this.d.id && (hour >= 21 || hour < 7)) return 'spouse'; // 道侣晚上回你家
     let cur = this.d.sched[0][1];
     for (const [h, p] of this.d.sched) if (hour >= h) cur = p;
     return cur;
@@ -58,6 +60,7 @@ class Villager {
     if (place === 'stall') { const o = off(1.6); return { x: w.stall.x + o.x, z: w.stall.z + 0.4 + Math.abs(o.z) }; }
     if (place === 'plaza') { const a = k * 1.3 + this.d.id.length; return { x: Math.cos(a) * 4.5, z: Math.sin(a) * 4.5 }; }
     if (place === 'away') return { x: 26, z: -23, away: true };
+    if (place === 'spouse') { const h = this.g.life.home; return { x: h.inside.x + 1.2, z: h.inside.z - 0.8, house: h }; }
     if (place[0] === 'wander') return { x: place[1], z: place[2], wander: place[3] };
     return { x: place[0], z: place[1] };
   }
@@ -165,7 +168,7 @@ export class Village {
     v.talking = 4;
     if (!v.talked) { v.talked = true; v.addAff(10); }
     if (!line) g.emit?.('talk', v);
-    const choices = [...(g.realm?.rootChoices?.(v) || [])];
+    const choices = [...(g.realm?.rootChoices?.(v) || []), ...(g.social?.choices(v) || [])];
     if (v.injured) { g.ui.dialog({ name: v.name, sub: '重伤卧床', line: pick(['咳咳……兽潮那天伤得不轻，过几天就好了……', '多谢你来看我……']), hint: `${v.injured - g.day} 天后才能下床，这几天店和委托都停了。` }); return; }
     // 被夺了灵根的村民：不再理你，商店、委托全停（GDD 第 9 节）
     if (v.robbed) {
@@ -182,7 +185,7 @@ export class Village {
     choices.push({ label: '离开' });
     g.ui.dialog({
       name: v.name, sub: `${v.d.role} · ${v.d.pers}　${v.heartText()}`,
-      line: line || v.line(), info: v.rootText(g.sense?.() ?? 20), hint: v.d.bio, choices,
+      line: line || g.social?.spouseLine(v) || v.line(), info: v.rootText(g.sense?.() ?? 20), hint: g.social?.spouse === v.d.id ? '你的道侣' : v.d.bio, choices,
     });
   }
   giftMenu(v) {

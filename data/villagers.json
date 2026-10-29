@@ -1,291 +1,1965 @@
 {
-  "_note": "青竹村村民（GDD 第 9 节）。sched = [[几点起, 去哪]]，地点：home 自家 / work 干活处 / away 出村 / stall 茶摊 / plaza 村口广场 / [x, z] / [\"wander\", x, z, 半径]。hours = 开店时间。loves / likes / dislikes = 物品 id 或 cat:类别。root = 灵根（grade 0 凡品 1 良品 2 上品 3 极品），sense = 神识要多少才看得清。lines.greet 每天随机一句；h3 / h6 = 好感到 3 / 6 颗心后多出的话。",
-  "houses": {
-    "home": { "name": "你家", "x": -15, "z": -8 },
-    "merchant": { "name": "钱记杂货", "x": 17, "z": 0 },
-    "doctor": { "name": "苏氏药铺", "x": -14, "z": 16 },
-    "smithy": { "name": "赵家铁铺", "x": 14, "z": 14 },
-    "chief": { "name": "村长家", "x": -1, "z": 22, "w": 7, "d": 6, "roof": "#6a5a4a", "wall": "#c49058" },
-    "hut": { "name": "云鹤居", "x": 13, "z": -22, "w": 6, "d": 5, "roof": "#5a6a58", "wall": "#a8885a" },
-    "east": { "name": "李家", "x": 25, "z": -8, "w": 6, "d": 5, "roof": "#6e6a80", "wall": "#b88250" },
-    "north": { "name": "周家", "x": -24, "z": -17, "w": 6, "d": 5, "roof": "#707888", "wall": "#c0874e" },
-    "south": { "name": "杨家", "x": 16, "z": 25, "w": 6, "d": 5, "roof": "#686e7e", "wall": "#b67c4a" }
+ "_note": "青竹村村民（GDD 第 9 节）。sched = [[几点起, 去哪]]，地点：home 自家 / work 干活处 / away 出村 / stall 茶摊 / plaza 村口广场 / [x, z] / [\"wander\", x, z, 半径]。hours = 开店时间。loves / likes / dislikes = 物品 id 或 cat:类别。root = 灵根（grade 0 凡品 1 良品 2 上品 3 极品），sense = 神识要多少才看得清。lines.greet 每天随机一句；h3 / h6 = 好感到 3 / 6 颗心后多出的话。",
+ "houses": {
+  "home": {
+   "name": "你家",
+   "x": -15,
+   "z": -8
   },
-  "stall": { "x": -8, "z": 10 },
-  "plaza": { "x": 0, "z": 0 },
-  "villagers": [
-    { "id": "chief", "name": "陈守仁", "role": "村长", "age": "elder", "home": "chief",
-      "look": { "skin": "#eac3a0", "hairStyle": 2, "robe": "#8a5fb0", "beard": true },
-      "root": { "e": "土", "grade": 0 }, "realm": [1, 3], "sense": 20,
-      "pers": "和气、操心", "bio": "当了三十年村长，村里大小事都要过问。",
-      "loves": ["wine", "tea"], "likes": ["rice", "pumpkin", "cat:food"], "dislikes": ["venom"],
-      "sched": [[6, "home"], [8, "plaza"], [12, "home"], [14, ["wander", 0, 4, 6]], [18, "stall"], [20, "home"]],
-      "lines": {
-        "greet": ["年轻人，田里的活计还顺手吧？", "村口那块委托板，有空多看看，乡亲们的事就拜托你了。", "这几年山里的妖兽越来越不安分了。", "村子虽小，五脏俱全。缺什么就去钱记杂货看看。"],
-        "h3": ["你这孩子踏实，老夫没看错人。", "等你修为再高些，村里就靠你护着了。"],
-        "h6": ["当年老夫也想去拜师学艺，可惜资质平平，只好守着这个村子。你可别像我一样留遗憾。"],
-        "rain": ["下雨好啊，地里的庄稼省心了。"], "night": ["这么晚了还在外面？小心妖物。"]
-      },
-      "gift": { "love": "这……这可是好东西！老夫就不客气了。", "like": "有心了，有心了。", "dislike": "这东西……你还是拿回去吧。" } },
-
-    { "id": "granny", "name": "陈阿婆", "role": "村长夫人", "age": "elder", "home": "chief",
-      "look": { "skin": "#f2cba8", "hairStyle": 2, "robe": "#c94f4f" },
-      "root": { "e": "木", "grade": 0 }, "realm": [0, 0], "sense": 10,
-      "pers": "慈祥、爱唠叨", "bio": "村里谁家孩子饿了都往她家跑。",
-      "loves": ["strawberry", "bun"], "likes": ["cabbage", "radish", "yam"], "dislikes": ["iron", "venom"],
-      "sched": [[6, "home"], [9, ["wander", -2, 18, 4]], [12, "home"], [15, "plaza"], [18, "home"]],
-      "lines": {
-        "greet": ["哎哟，乖孩子，吃过饭没有？", "我们家老头子又去管闲事了。", "晚上可别往林子里跑。", "春天的白菜最嫩了，你田里种点吧。"],
-        "h3": ["阿婆给你留了几个包子，记得来拿。"], "h6": ["你就跟我亲孙子一样。"],
-        "rain": ["下雨了，快回家添件衣裳。"], "night": ["这么晚还不睡？"]
-      },
-      "gift": { "love": "哎呀，阿婆最喜欢这个了！", "like": "好孩子，真懂事。", "dislike": "这个阿婆可用不上……" } },
-
-    { "id": "stone", "name": "小石头", "role": "村长孙子", "age": "child", "home": "chief",
-      "look": { "skin": "#eac3a0", "hairStyle": 3, "robe": "#d07a3a" },
-      "root": { "e": "金", "grade": 1 }, "realm": [0, 0], "sense": 25,
-      "pers": "调皮、崇拜修士", "bio": "整天拿根木棍比划，说长大要当剑仙。",
-      "loves": ["strawberry", "melon"], "likes": ["grape", "bun", "corn"], "dislikes": ["eggplant", "pepper"],
-      "sched": [[7, "home"], [9, ["wander", 2, 3, 8]], [12, "home"], [13, ["wander", 6, 10, 8]], [18, "home"]],
-      "lines": {
-        "greet": ["看招！嘿嘿，我的剑法厉害吧？", "你能飞吗？修士都会飞的吧！", "爷爷说我有灵根！是真的吗？", "我昨天看见一只好大的野猪妖！"],
-        "h3": ["你教我练剑好不好？就一招！"], "h6": ["等我长大了，要跟你一起去打妖王！"],
-        "rain": ["下雨不能出去玩……"], "night": ["我才不困呢……呼……"]
-      },
-      "gift": { "love": "哇！给我的？太好了！", "like": "谢谢哥哥！", "dislike": "呸呸，这个不好吃！" } },
-
-    { "id": "merchant", "name": "钱多宝", "role": "商人", "age": "adult", "home": "merchant", "shop": "merchant", "hours": [9, 18],
-      "look": { "skin": "#f6d5b8", "hairStyle": 0, "robe": "#c9a24f" },
-      "root": { "e": "金", "grade": 0 }, "realm": [1, 1], "sense": 15,
-      "pers": "精明、爱钱", "bio": "开着村里唯一的杂货铺，种子、吃食、杂物都卖。",
-      "sched": [[6, "home"], [9, "work"], [18, "stall"], [21, "home"]],
-      "loves": ["renshen", "yaodan", "heart"], "likes": ["shard", "core_stone", "cat:boss"], "dislikes": ["radish", "cabbage"],
-      "lines": {
-        "greet": ["客官里边请！种子吃食应有尽有。", "这季的种子刚到货，过了季可就没了。", "灵石？好东西啊，我这儿可以帮你换成铜钱。", "做生意嘛，讲的是和气生财。"],
-        "h3": ["老主顾了，给你算便宜点。"], "h6": ["跟你说个秘密：青石坊市每周三的拍卖会，能卖出天价。"],
-        "rain": ["下雨天生意不好做啊。"], "night": ["打烊了打烊了，明天请早。"]
-      },
-      "gift": { "love": "哎呀！这可值钱了！客官大方！", "like": "嘿嘿，那我就收下了。", "dislike": "这玩意儿卖不了几个钱……" } },
-
-    { "id": "bao", "name": "钱小宝", "role": "商人之子", "age": "child", "home": "merchant",
-      "look": { "skin": "#f6d5b8", "hairStyle": 0, "robe": "#e0e0d8" },
-      "root": { "e": "水", "grade": 0 }, "realm": [0, 0], "sense": 10,
-      "pers": "嘴馋", "bio": "最大的愿望是把店里的糖全吃光。",
-      "loves": ["melon", "strawberry"], "likes": ["bun", "grape"], "dislikes": ["pepper", "iron"],
-      "sched": [[7, "home"], [9, ["wander", 18, 6, 6]], [12, "home"], [14, ["wander", 0, 6, 8]], [18, "home"]],
-      "lines": {
-        "greet": ["你有糖吗？", "我爹说钱要一文一文地攒。", "小石头说他要当剑仙，切，我要当首富！"],
-        "h3": ["我偷偷告诉你，我爹藏了一坛好酒。"], "h6": ["你是我见过最好的大哥哥！"],
-        "rain": ["下雨天最适合在家吃东西了。"], "night": ["我、我才不怕黑……"]
-      },
-      "gift": { "love": "哇哦！你最好了！", "like": "嘿嘿，谢啦。", "dislike": "这个……能换成糖吗？" } },
-
-    { "id": "doctor", "name": "苏婉", "role": "药师", "age": "adult", "home": "doctor", "shop": "doctor", "hours": [8, 18],
-      "look": { "skin": "#f6d5b8", "hairStyle": 1, "robe": "#6aa86a" },
-      "root": { "e": "木", "grade": 1 }, "realm": [1, 5], "sense": 30,
-      "pers": "温柔、严谨", "bio": "出身丹鼎派外门，回乡开了药铺。灵草种子和丹药都在她这儿。",
-      "loves": ["renshen", "chiyang", "xuanbing"], "likes": ["lingcao", "ninglu", "yuehua", "venom"], "dislikes": ["wine"],
-      "sched": [[6, "home"], [8, "work"], [12, ["wander", -10, -20, 5]], [13, "work"], [18, "home"]],
-      "lines": {
-        "greet": ["受伤了别硬撑，回春丹我这儿有。", "灵草熟了别急着收，多放几年，药龄越高越值钱。", "灵田要有灵气灵草才长，妖丹、灵石碎片都能补。", "同一种丹药吃多了会有丹毒，记得睡一觉排掉。"],
-        "h3": ["你种的灵草品相不错，有机会我教你炼丹。"], "h6": ["其实……我当年是被丹鼎派赶出来的。这事我只跟你说。"],
-        "rain": ["雨天采的凝露草药性最好。"], "night": ["这么晚了，是哪里不舒服吗？"]
-      },
-      "gift": { "love": "这品相……你从哪儿弄来的？太珍贵了！", "like": "正好用得上，谢谢你。", "dislike": "这个……我不太需要。" } },
-
-    { "id": "ling", "name": "苏灵儿", "role": "药铺学徒", "age": "adult", "home": "doctor",
-      "look": { "skin": "#f6d5b8", "hairStyle": 3, "robe": "#3f8a8a" },
-      "root": { "e": "水", "grade": 1 }, "realm": [1, 2], "sense": 25,
-      "pers": "活泼、好奇", "bio": "苏婉的侄女，跟着姑姑学药理，梦想去百花谷。",
-      "loves": ["yuehua", "strawberry"], "likes": ["ninglu", "lingcao", "tea"], "dislikes": ["hide", "venom"],
-      "sched": [[7, "home"], [9, ["wander", -9, -19, 6]], [12, "work"], [14, ["wander", -18, 8, 6]], [18, "stall"], [20, "home"]],
-      "lines": {
-        "greet": ["你看你看，这株是凝露草！", "姑姑说我认药认得太慢了……", "听说百花谷四季开不同的花，好想去看看。", "月华草要秋天才长呢。"],
-        "h3": ["下次去采药，你陪我好不好？"], "h6": ["春天的百花会……你要是去的话，我、我也想去。"],
-        "rain": ["下雨了！快去采凝露草！"], "night": ["晚上的月华草会发光哦。"]
-      },
-      "gift": { "love": "好漂亮！我要把它夹在书里！", "like": "谢谢你～", "dislike": "呃……这个味道好怪。" } },
-
-    { "id": "smith", "name": "赵铁山", "role": "铁匠", "age": "adult", "home": "smithy", "shop": "smith", "hours": [8, 17],
-      "look": { "skin": "#d9ad88", "hairStyle": 0, "robe": "#7a4a2a", "beard": true },
-      "root": { "e": "金", "grade": 1 }, "realm": [1, 6], "sense": 35,
-      "pers": "豪爽、嗓门大", "bio": "铁匠山庄出师，一锤子能把石傀砸裂。收矿石和兽材。",
-      "loves": ["core_stone", "tusk"], "likes": ["iron", "wine", "hide"], "dislikes": ["strawberry", "yuehua"],
-      "sched": [[6, "home"], [8, "work"], [12, "home"], [13, "work"], [17, "stall"], [20, "home"]],
-      "lines": {
-        "greet": ["哈哈！来得好，我正缺人搭把手！", "玄晶矿洞的铁矿成色不错，有多少收多少。", "兵器要常保养，刀口卷了可不行。", "野猪妖的獠牙做刀柄最趁手。"],
-        "h3": ["你这把剑我看看……嗯，回头我给你重新淬一遍火。"], "h6": ["等你攒够材料，我给你打一件真正的法器！"],
-        "rain": ["下雨天炉火不旺，烦！"], "night": ["喝两杯再走？"]
-      },
-      "gift": { "love": "好东西！这可是上好的料子！", "like": "哈哈，够意思！", "dislike": "这玩意儿给我有啥用？" } },
-
-    { "id": "guihua", "name": "王桂花", "role": "铁匠夫人", "age": "adult", "home": "smithy",
-      "look": { "skin": "#eac3a0", "hairStyle": 2, "robe": "#c94f4f" },
-      "root": { "e": "火", "grade": 0 }, "realm": [0, 0], "sense": 10,
-      "pers": "能干、泼辣", "bio": "家里家外一把手，做的红薯饭全村闻名。",
-      "loves": ["pumpkin", "yam"], "likes": ["cabbage", "potato", "rice"], "dislikes": ["venom", "silk"],
-      "sched": [[6, "home"], [9, ["wander", 10, 8, 6]], [11, "home"], [14, "stall"], [17, "home"]],
-      "lines": {
-        "greet": ["我家那口子又在叮叮当当了，吵死了。", "你田里的红薯熟了没？", "小虎又跑哪儿野去了！"],
-        "h3": ["来，尝尝我做的红薯饭。"], "h6": ["我家铁山就服你，你说话比我管用。"],
-        "rain": ["下雨天腰疼……"], "night": ["还不回家？"]
-      },
-      "gift": { "love": "这个好！晚上就下锅！", "like": "你这孩子真会来事。", "dislike": "这东西能吃吗？" } },
-
-    { "id": "hu", "name": "赵小虎", "role": "铁匠之子", "age": "child", "home": "smithy",
-      "look": { "skin": "#d9ad88", "hairStyle": 0, "robe": "#4f7fc9" },
-      "root": { "e": "火", "grade": 1 }, "realm": [0, 0], "sense": 20,
-      "pers": "憨厚、力气大", "bio": "十岁就能抡大锤，梦想是拜入铁匠山庄。",
-      "loves": ["tusk", "corn"], "likes": ["bun", "potato"], "dislikes": ["tea"],
-      "sched": [[7, "home"], [9, "work"], [11, ["wander", 4, 6, 8]], [17, "home"]],
-      "lines": {
-        "greet": ["我爹说我是天生打铁的料！", "你见过铁匠山庄吗？在火山那边！", "嘿！看我的肌肉！"],
-        "h3": ["你帮我跟我娘说说，让我去火山那边看看呗。"], "h6": ["你是我的好兄弟！"],
-        "rain": ["下雨了，打铁打不成了。"], "night": ["我娘要打我屁股了……"]
-      },
-      "gift": { "love": "獠牙！我要做把刀！", "like": "谢啦！", "dislike": "这个不好玩……" } },
-
-    { "id": "mentor", "name": "云鹤", "role": "退隐修士", "age": "elder", "home": "hut",
-      "look": { "skin": "#f2cba8", "hairStyle": 2, "robe": "#e0e0d8", "beard": true },
-      "root": { "e": "水", "grade": 2 }, "realm": [3, 0], "sense": 120, "hidden": true,
-      "pers": "淡泊、话少", "bio": "住在瀑布边的老修士，似乎认识很多大门派的人。",
-      "loves": ["tea", "renshen@100", "renshen"], "likes": ["lingcao", "yaodan", "ninglu"], "dislikes": ["pepper"],
-      "sched": [[5, [-3, -24.5]], [11, "home"], [13, [-3, -24.5]], [19, "home"]],
-      "lines": {
-        "greet": ["修行如种田，急不得。", "灵根只决定快慢，变强还要靠自己去打。", "炼气圈只有一只妖王——赤枫狼王。打败它，取其狼牙炼破境丹，方能筑基。", "瀑布下灵气最浓，在此打坐事半功倍。"],
-        "h3": ["你的剑意有些长进了。"], "h6": ["老夫当年……也是一个人从这个村子走出去的。天劫峰上，我留下过一样东西。"],
-        "rain": ["雨中听瀑，别有一番滋味。"], "night": ["夜里妖气重，修为不够就早些回去。"]
-      },
-      "gift": { "love": "……难得。老夫收下了。", "like": "有心了。", "dislike": "此物于我无用。" } },
-
-    { "id": "wanderer", "name": "无名", "role": "流浪者", "age": "adult", "home": "hut",
-      "look": { "skin": "#d9ad88", "hair": "#2e1e18", "hairStyle": 1, "robe": "#3a3e48" },
-      "root": { "e": "暗", "grade": 3 }, "realm": [4, 0], "sense": 999, "hidden": true,
-      "pers": "神秘", "bio": "只在夜里出现在茶摊，没人知道他从哪儿来。",
-      "loves": ["wine", "heart"], "likes": ["yaodan", "tea"], "dislikes": ["radish", "cabbage"],
-      "sched": [[6, "away"], [19, "stall"], [24, "plaza"]],
-      "lines": {
-        "greet": ["……", "月亮快圆了。", "你身上有股熟悉的味道。", "古战场那边，新月的夜里会有一座集市。"],
-        "h3": ["鬼市只在夜里和新月开，那里什么都能买到——包括别人的灵根。"], "h6": ["血魔宫的入口……在火山南边。你迟早会去的。"],
-        "rain": ["雨能洗掉血腥味。"], "night": ["夜才是我的时候。"]
-      },
-      "gift": { "love": "呵……你倒是懂我。", "like": "……谢了。", "dislike": "……" } },
-
-    { "id": "hunter", "name": "李猎户", "role": "猎户", "age": "adult", "home": "east",
-      "look": { "skin": "#d9ad88", "hairStyle": 0, "robe": "#5e3c26", "beard": true },
-      "root": { "e": "土", "grade": 0 }, "realm": [1, 4], "sense": 25,
-      "pers": "沉稳、话不多", "bio": "村里最好的猎手，常年在竹海边缘打猎。",
-      "loves": ["wine", "tusk"], "likes": ["bun", "potato", "hide"], "dislikes": ["strawberry"],
-      "sched": [[6, "home"], [7, "away"], [17, ["wander", 22, -2, 4]], [20, "home"]],
-      "lines": {
-        "greet": ["野猪妖白天在林子边，晚上会摸到村口。", "赤枫狼王的领地在东北，没本事别去。", "打猎讲究个耐心。"],
-        "h3": ["狼群的作息跟月亮有关，满月夜最凶。"], "h6": ["我年轻时也想修仙……算了，护好这个村子就够了。"],
-        "rain": ["下雨天，野兽的脚印最清楚。"], "night": ["夜里妖兽凶，别逞能。"]
-      },
-      "gift": { "love": "好酒！今晚有着落了。", "like": "嗯，谢了。", "dislike": "……不用了。" } },
-
-    { "id": "yu", "name": "林小雨", "role": "猎户养女", "age": "adult", "home": "east",
-      "look": { "skin": "#f6d5b8", "hairStyle": 1, "robe": "#e0a0b8" },
-      "root": { "e": "风", "grade": 3 }, "realm": [1, 1], "sense": 60, "hidden": true,
-      "pers": "温柔、有点害羞", "bio": "被李猎户从林子里捡回来的姑娘，喜欢花。",
-      "loves": ["yuehua", "strawberry", "grape"], "likes": ["chiyang", "ninglu", "tea"], "dislikes": ["venom", "hide"],
-      "sched": [[6, "home"], [9, ["wander", 22, 10, 6]], [12, "home"], [14, "stall"], [17, ["wander", 6, -6, 5]], [20, "home"]],
-      "lines": {
-        "greet": ["啊……是你呀。", "东边的野花开了，好看吗？", "义父又进山了，我有点担心。", "我总觉得……我好像不是这里的人。"],
-        "h3": ["你要是去百花谷，能给我带一朵花回来吗？"], "h6": ["我做过一个梦，梦里有风，有好多好多人在喊我的名字。"],
-        "rain": ["下雨的声音，好安心。"], "night": ["我、我只是出来看看星星。"]
-      },
-      "gift": { "love": "给、给我的吗？……谢谢你，我会好好收着的。", "like": "谢谢……", "dislike": "啊……这个，我不太喜欢……" } },
-
-    { "id": "scholar", "name": "周书生", "role": "教书先生", "age": "adult", "home": "north",
-      "look": { "skin": "#f6d5b8", "hairStyle": 2, "robe": "#4f7fc9" },
-      "root": { "e": "水", "grade": 0 }, "realm": [0, 0], "sense": 10,
-      "pers": "迂腐、博学", "bio": "屡试不第的读书人，给村里孩子教书识字。",
-      "loves": ["tea", "talisman_paper"], "likes": ["rice", "wine"], "dislikes": ["pepper", "venom"],
-      "sched": [[6, "home"], [8, [-0.5, -12.5]], [12, "stall"], [14, [-0.5, -12.5]], [18, "home"]],
-      "lines": {
-        "greet": ["子曰：学而时习之，不亦说乎？", "这村子以前叫青竹镇，你知道吗？", "天机阁的人据说能算尽天下事。", "修仙者也要读书，不然连功法都看不懂。"],
-        "h3": ["我这里有本《百草图鉴》，借你看看。"], "h6": ["其实我也想修仙……可惜一点灵根都没有。"],
-        "rain": ["春雨贵如油啊。"], "night": ["秉烛夜读，乐在其中。"]
-      },
-      "gift": { "love": "妙哉！妙哉！", "like": "多谢多谢。", "dislike": "此物……不雅。" } },
-
-    { "id": "weaver", "name": "叶青青", "role": "织女", "age": "adult", "home": "north",
-      "look": { "skin": "#f6d5b8", "hairStyle": 1, "robe": "#8a5fb0" },
-      "root": { "e": "木", "grade": 0 }, "realm": [0, 0], "sense": 10,
-      "pers": "安静、手巧", "bio": "周书生的妻子，用蛛丝织的布刀剑难破。",
-      "loves": ["silk", "yuehua"], "likes": ["cabbage", "tea", "strawberry"], "dislikes": ["venom", "iron"],
-      "sched": [[6, "home"], [10, ["wander", -20, -12, 5]], [12, "home"], [16, "stall"], [18, "home"]],
-      "lines": {
-        "greet": ["毒蛛的丝虽然吓人，织出来的布可结实了。", "我家那位又在念叨之乎者也。", "天冷了，要多穿点。"],
-        "h3": ["你多带些蛛丝来，我给你织件护甲。"], "h6": ["谢谢你常来看我们。"],
-        "rain": ["下雨天适合织布。"], "night": ["灯下穿针，眼睛都花了。"]
-      },
-      "gift": { "love": "这蛛丝成色真好！", "like": "谢谢你。", "dislike": "这个……拿走吧。" } },
-
-    { "id": "fortune", "name": "刘半仙", "role": "算命先生", "age": "elder", "home": "north",
-      "look": { "skin": "#eac3a0", "hairStyle": 2, "robe": "#3a3e48", "beard": true },
-      "root": { "e": "金", "grade": 0 }, "realm": [1, 2], "sense": 20,
-      "pers": "神叨叨", "bio": "自称天机阁弃徒，算命十次不准九次。",
-      "loves": ["wine", "shard"], "likes": ["tea", "bun"], "dislikes": ["eggplant", "radish"],
-      "sched": [[7, "home"], [9, [-6, 2.5]], [13, "stall"], [15, [-6, 2.5]], [19, "home"]],
-      "lines": {
-        "greet": ["这位道友，我观你印堂发亮，近日必有奇遇！", "天机不可泄露……除非给钱。", "血月当空之夜，切记不可出门。", "每季第一天是新月，鬼市就在那时候开。"],
-        "h3": ["嘿，我给你算一卦：你命里缺一株百年人参。"], "h6": ["说实话，我是被天机阁赶出来的，因为我算到了不该算的东西。"],
-        "rain": ["我早就算到今天要下雨！"], "night": ["夜观天象……嗯，天象不明。"]
-      },
-      "gift": { "love": "妙！贫道算到你今天会送我这个！", "like": "善哉善哉。", "dislike": "此物与贫道相克啊！" } },
-
-    { "id": "fisher", "name": "杨渔翁", "role": "渔夫", "age": "elder", "home": "south",
-      "look": { "skin": "#d9ad88", "hairStyle": 0, "robe": "#6aa86a", "beard": true },
-      "root": { "e": "水", "grade": 0 }, "realm": [0, 0], "sense": 10,
-      "pers": "悠闲", "bio": "天天坐在荷花池边钓鱼，也不知道钓上过什么没有。",
-      "loves": ["wine"], "likes": ["rice", "yam", "bun"], "dislikes": ["silk", "venom"],
-      "sched": [[6, "home"], [7, [-4, -15.5]], [12, "stall"], [13, [-4, -15.5]], [19, "home"]],
-      "lines": {
-        "greet": ["嘘……别把鱼吓跑了。", "这池子连着山上的瀑布，水里有灵气。", "钓鱼嘛，钓的是心境。"],
-        "h3": ["池底下好像有什么东西在发光……"], "h6": ["年轻时我在沉船泽见过一条蛟，那叫一个大。"],
-        "rain": ["下雨天，鱼最肯咬钩。"], "night": ["夜钓也别有一番趣味。"]
-      },
-      "gift": { "love": "好酒！配鱼正好！", "like": "哈哈，多谢。", "dislike": "这玩意儿缠鱼线……" } },
-
-    { "id": "tea", "name": "白素素", "role": "茶摊老板娘", "age": "adult", "home": "south", "shop": "tea", "hours": [8, 22],
-      "look": { "skin": "#f6d5b8", "hairStyle": 1, "robe": "#e0e0d8" },
-      "root": { "e": "水", "grade": 1 }, "realm": [1, 3], "sense": 30,
-      "pers": "爽朗、八面玲珑", "bio": "在村口摆了个茶摊，村里的消息都从她这儿过。",
-      "loves": ["ninglu", "strawberry"], "likes": ["lingcao", "tea", "grape"], "dislikes": ["iron", "hide"],
-      "sched": [[6, "home"], [8, "stall"], [22, "home"]],
-      "lines": {
-        "greet": ["来碗灵茶？解乏又回灵力。", "听说了吗？李猎户昨天又打了头野猪妖。", "晚上有个怪人总来喝茶，一句话也不说。", "包子刚出锅，要不要来一个？"],
-        "h3": ["你常来照顾生意，这碗茶算我请的。"], "h6": ["我以前……也在坊市混过，后来累了，就回村摆个茶摊。"],
-        "rain": ["下雨天，茶摊最热闹。"], "night": ["夜深了，喝碗热茶再走吧。"]
-      },
-      "gift": { "love": "这个泡茶最香了！", "like": "谢谢客官～", "dislike": "这东西可泡不了茶。" } },
-
-    { "id": "guard", "name": "吴镖头", "role": "退役镖头", "age": "adult", "home": "east",
-      "look": { "skin": "#d9ad88", "hairStyle": 0, "robe": "#c94f4f", "beard": true },
-      "root": { "e": "土", "grade": 1 }, "realm": [1, 7], "sense": 40,
-      "pers": "豪气、爱吹牛", "bio": "走了二十年镖，退下来守村口，说起当年能讲三天三夜。",
-      "loves": ["wine", "tusk"], "likes": ["bun", "corn", "potato"], "dislikes": ["tea"],
-      "sched": [[6, "home"], [7, [9, -7]], [12, "stall"], [13, [9, -7]], [20, "home"]],
-      "lines": {
-        "greet": ["站住！……哦，是你啊。", "当年我护送丹鼎派的药车去青石坊市，路上遇到三十个劫道的！", "往东北走就是玄晶矿洞，里面有石傀，小心。", "黑吃黑的事坊市里多了去了。"],
-        "h3": ["你这身手，在镖局能当个镖师了。"], "h6": ["我这条命，是当年一个过路的剑修救的。他用的剑法……和你有点像。"],
-        "rain": ["下雨天，劫道的也偷懒。"], "night": ["夜里我守着，你放心睡。"]
-      },
-      "gift": { "love": "够爷们！来，喝一个！", "like": "不错不错。", "dislike": "这是给娘们的东西吧？" } },
-
-    { "id": "farmer", "name": "何二愣", "role": "庄稼汉", "age": "adult", "home": "south",
-      "look": { "skin": "#d9ad88", "hairStyle": 0, "robe": "#6aa86a" },
-      "root": { "e": "木", "grade": 0 }, "realm": [0, 0], "sense": 10,
-      "pers": "憨直、勤快", "bio": "村里种地的好手，你要是有空，他什么农活都能教你。",
-      "loves": ["melon", "potato"], "likes": ["corn", "rice", "bun"], "dislikes": ["tea", "silk"],
-      "sched": [[5, "home"], [6, ["wander", -8, 4, 3]], [12, "stall"], [13, ["wander", 20, 18, 5]], [18, "home"]],
-      "lines": {
-        "greet": ["田要每天浇水，不然苗就不长了。", "庄稼不吃灵气，灵草才挑地。", "过了季的庄稼会死在地里，播种前看看季节。", "十天没人管，苗就枯死了。"],
-        "h3": ["我教你个诀窍：雨天不用浇水。"], "h6": ["你要是忙，我可以帮你看着田。"],
-        "rain": ["好雨！不用浇地了！"], "night": ["睡觉睡觉，明天还要下地。"]
-      },
-      "gift": { "love": "嘿嘿，这瓜真大！", "like": "好东西，谢了。", "dislike": "这玩意儿我用不上……" } }
-  ]
+  "merchant": {
+   "name": "钱记杂货",
+   "x": 17,
+   "z": 0
+  },
+  "doctor": {
+   "name": "苏氏药铺",
+   "x": -14,
+   "z": 16
+  },
+  "smithy": {
+   "name": "赵家铁铺",
+   "x": 14,
+   "z": 14
+  },
+  "chief": {
+   "name": "村长家",
+   "x": -1,
+   "z": 22,
+   "w": 7,
+   "d": 6,
+   "roof": "#6a5a4a",
+   "wall": "#c49058"
+  },
+  "hut": {
+   "name": "云鹤居",
+   "x": 13,
+   "z": -22,
+   "w": 6,
+   "d": 5,
+   "roof": "#5a6a58",
+   "wall": "#a8885a"
+  },
+  "east": {
+   "name": "李家",
+   "x": 25,
+   "z": -8,
+   "w": 6,
+   "d": 5,
+   "roof": "#6e6a80",
+   "wall": "#b88250"
+  },
+  "north": {
+   "name": "周家",
+   "x": -24,
+   "z": -17,
+   "w": 6,
+   "d": 5,
+   "roof": "#707888",
+   "wall": "#c0874e"
+  },
+  "south": {
+   "name": "杨家",
+   "x": 16,
+   "z": 25,
+   "w": 6,
+   "d": 5,
+   "roof": "#686e7e",
+   "wall": "#b67c4a"
+  }
+ },
+ "stall": {
+  "x": -8,
+  "z": 10
+ },
+ "plaza": {
+  "x": 0,
+  "z": 0
+ },
+ "villagers": [
+  {
+   "id": "chief",
+   "name": "陈守仁",
+   "role": "村长",
+   "age": "elder",
+   "home": "chief",
+   "look": {
+    "skin": "#eac3a0",
+    "hairStyle": 2,
+    "robe": "#8a5fb0",
+    "beard": true
+   },
+   "root": {
+    "e": "土",
+    "grade": 0
+   },
+   "realm": [
+    1,
+    3
+   ],
+   "sense": 20,
+   "pers": "和气、操心",
+   "bio": "当了三十年村长，村里大小事都要过问。",
+   "loves": [
+    "wine",
+    "tea"
+   ],
+   "likes": [
+    "rice",
+    "pumpkin",
+    "cat:food"
+   ],
+   "dislikes": [
+    "venom"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     8,
+     "plaza"
+    ],
+    [
+     12,
+     "home"
+    ],
+    [
+     14,
+     [
+      "wander",
+      0,
+      4,
+      6
+     ]
+    ],
+    [
+     18,
+     "stall"
+    ],
+    [
+     20,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "年轻人，田里的活计还顺手吧？",
+     "村口那块委托板，有空多看看，乡亲们的事就拜托你了。",
+     "这几年山里的妖兽越来越不安分了。",
+     "村子虽小，五脏俱全。缺什么就去钱记杂货看看。"
+    ],
+    "h3": [
+     "你这孩子踏实，老夫没看错人。",
+     "等你修为再高些，村里就靠你护着了。"
+    ],
+    "h6": [
+     "当年老夫也想去拜师学艺，可惜资质平平，只好守着这个村子。你可别像我一样留遗憾。"
+    ],
+    "rain": [
+     "下雨好啊，地里的庄稼省心了。"
+    ],
+    "night": [
+     "这么晚了还在外面？小心妖物。"
+    ]
+   },
+   "gift": {
+    "love": "这……这可是好东西！老夫就不客气了。",
+    "like": "有心了，有心了。",
+    "dislike": "这东西……你还是拿回去吧。"
+   }
+  },
+  {
+   "id": "granny",
+   "name": "陈阿婆",
+   "role": "村长夫人",
+   "age": "elder",
+   "home": "chief",
+   "look": {
+    "skin": "#f2cba8",
+    "hairStyle": 2,
+    "robe": "#c94f4f"
+   },
+   "root": {
+    "e": "木",
+    "grade": 0
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 10,
+   "pers": "慈祥、爱唠叨",
+   "bio": "村里谁家孩子饿了都往她家跑。",
+   "loves": [
+    "strawberry",
+    "bun"
+   ],
+   "likes": [
+    "cabbage",
+    "radish",
+    "yam"
+   ],
+   "dislikes": [
+    "iron",
+    "venom"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     9,
+     [
+      "wander",
+      -2,
+      18,
+      4
+     ]
+    ],
+    [
+     12,
+     "home"
+    ],
+    [
+     15,
+     "plaza"
+    ],
+    [
+     18,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "哎哟，乖孩子，吃过饭没有？",
+     "我们家老头子又去管闲事了。",
+     "晚上可别往林子里跑。",
+     "春天的白菜最嫩了，你田里种点吧。"
+    ],
+    "h3": [
+     "阿婆给你留了几个包子，记得来拿。"
+    ],
+    "h6": [
+     "你就跟我亲孙子一样。"
+    ],
+    "rain": [
+     "下雨了，快回家添件衣裳。"
+    ],
+    "night": [
+     "这么晚还不睡？"
+    ]
+   },
+   "gift": {
+    "love": "哎呀，阿婆最喜欢这个了！",
+    "like": "好孩子，真懂事。",
+    "dislike": "这个阿婆可用不上……"
+   }
+  },
+  {
+   "id": "stone",
+   "name": "小石头",
+   "role": "村长孙子",
+   "age": "child",
+   "home": "chief",
+   "look": {
+    "skin": "#eac3a0",
+    "hairStyle": 3,
+    "robe": "#d07a3a"
+   },
+   "root": {
+    "e": "金",
+    "grade": 1
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 25,
+   "pers": "调皮、崇拜修士",
+   "bio": "整天拿根木棍比划，说长大要当剑仙。",
+   "loves": [
+    "strawberry",
+    "melon"
+   ],
+   "likes": [
+    "grape",
+    "bun",
+    "corn"
+   ],
+   "dislikes": [
+    "eggplant",
+    "pepper"
+   ],
+   "sched": [
+    [
+     7,
+     "home"
+    ],
+    [
+     9,
+     [
+      "wander",
+      2,
+      3,
+      8
+     ]
+    ],
+    [
+     12,
+     "home"
+    ],
+    [
+     13,
+     [
+      "wander",
+      6,
+      10,
+      8
+     ]
+    ],
+    [
+     18,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "看招！嘿嘿，我的剑法厉害吧？",
+     "你能飞吗？修士都会飞的吧！",
+     "爷爷说我有灵根！是真的吗？",
+     "我昨天看见一只好大的野猪妖！"
+    ],
+    "h3": [
+     "你教我练剑好不好？就一招！"
+    ],
+    "h6": [
+     "等我长大了，要跟你一起去打妖王！"
+    ],
+    "rain": [
+     "下雨不能出去玩……"
+    ],
+    "night": [
+     "我才不困呢……呼……"
+    ]
+   },
+   "gift": {
+    "love": "哇！给我的？太好了！",
+    "like": "谢谢哥哥！",
+    "dislike": "呸呸，这个不好吃！"
+   }
+  },
+  {
+   "id": "merchant",
+   "name": "钱多宝",
+   "role": "商人",
+   "age": "adult",
+   "home": "merchant",
+   "shop": "merchant",
+   "hours": [
+    9,
+    18
+   ],
+   "look": {
+    "skin": "#f6d5b8",
+    "hairStyle": 0,
+    "robe": "#c9a24f"
+   },
+   "root": {
+    "e": "金",
+    "grade": 0
+   },
+   "realm": [
+    1,
+    1
+   ],
+   "sense": 15,
+   "pers": "精明、爱钱",
+   "bio": "开着村里唯一的杂货铺，种子、吃食、杂物都卖。",
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     9,
+     "work"
+    ],
+    [
+     18,
+     "stall"
+    ],
+    [
+     21,
+     "home"
+    ]
+   ],
+   "loves": [
+    "renshen",
+    "yaodan",
+    "heart"
+   ],
+   "likes": [
+    "shard",
+    "core_stone",
+    "cat:boss"
+   ],
+   "dislikes": [
+    "radish",
+    "cabbage"
+   ],
+   "lines": {
+    "greet": [
+     "客官里边请！种子吃食应有尽有。",
+     "这季的种子刚到货，过了季可就没了。",
+     "灵石？好东西啊，我这儿可以帮你换成铜钱。",
+     "做生意嘛，讲的是和气生财。"
+    ],
+    "h3": [
+     "老主顾了，给你算便宜点。"
+    ],
+    "h6": [
+     "跟你说个秘密：青石坊市每周三的拍卖会，能卖出天价。"
+    ],
+    "rain": [
+     "下雨天生意不好做啊。"
+    ],
+    "night": [
+     "打烊了打烊了，明天请早。"
+    ]
+   },
+   "gift": {
+    "love": "哎呀！这可值钱了！客官大方！",
+    "like": "嘿嘿，那我就收下了。",
+    "dislike": "这玩意儿卖不了几个钱……"
+   }
+  },
+  {
+   "id": "bao",
+   "name": "钱小宝",
+   "role": "商人之子",
+   "age": "child",
+   "home": "merchant",
+   "look": {
+    "skin": "#f6d5b8",
+    "hairStyle": 0,
+    "robe": "#e0e0d8"
+   },
+   "root": {
+    "e": "水",
+    "grade": 0
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 10,
+   "pers": "嘴馋",
+   "bio": "最大的愿望是把店里的糖全吃光。",
+   "loves": [
+    "melon",
+    "strawberry"
+   ],
+   "likes": [
+    "bun",
+    "grape"
+   ],
+   "dislikes": [
+    "pepper",
+    "iron"
+   ],
+   "sched": [
+    [
+     7,
+     "home"
+    ],
+    [
+     9,
+     [
+      "wander",
+      18,
+      6,
+      6
+     ]
+    ],
+    [
+     12,
+     "home"
+    ],
+    [
+     14,
+     [
+      "wander",
+      0,
+      6,
+      8
+     ]
+    ],
+    [
+     18,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "你有糖吗？",
+     "我爹说钱要一文一文地攒。",
+     "小石头说他要当剑仙，切，我要当首富！"
+    ],
+    "h3": [
+     "我偷偷告诉你，我爹藏了一坛好酒。"
+    ],
+    "h6": [
+     "你是我见过最好的大哥哥！"
+    ],
+    "rain": [
+     "下雨天最适合在家吃东西了。"
+    ],
+    "night": [
+     "我、我才不怕黑……"
+    ]
+   },
+   "gift": {
+    "love": "哇哦！你最好了！",
+    "like": "嘿嘿，谢啦。",
+    "dislike": "这个……能换成糖吗？"
+   }
+  },
+  {
+   "id": "doctor",
+   "name": "苏婉",
+   "role": "药师",
+   "age": "adult",
+   "home": "doctor",
+   "shop": "doctor",
+   "hours": [
+    8,
+    18
+   ],
+   "look": {
+    "skin": "#f6d5b8",
+    "hairStyle": 1,
+    "robe": "#6aa86a"
+   },
+   "root": {
+    "e": "木",
+    "grade": 1
+   },
+   "realm": [
+    1,
+    5
+   ],
+   "sense": 30,
+   "pers": "温柔、严谨",
+   "bio": "出身丹鼎派外门，回乡开了药铺。灵草种子和丹药都在她这儿。",
+   "loves": [
+    "renshen",
+    "chiyang",
+    "xuanbing"
+   ],
+   "likes": [
+    "lingcao",
+    "ninglu",
+    "yuehua",
+    "venom"
+   ],
+   "dislikes": [
+    "wine"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     8,
+     "work"
+    ],
+    [
+     12,
+     [
+      "wander",
+      -10,
+      -20,
+      5
+     ]
+    ],
+    [
+     13,
+     "work"
+    ],
+    [
+     18,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "受伤了别硬撑，回春丹我这儿有。",
+     "灵草熟了别急着收，多放几年，药龄越高越值钱。",
+     "灵田要有灵气灵草才长，妖丹、灵石碎片都能补。",
+     "同一种丹药吃多了会有丹毒，记得睡一觉排掉。"
+    ],
+    "h3": [
+     "你种的灵草品相不错，有机会我教你炼丹。"
+    ],
+    "h6": [
+     "其实……我当年是被丹鼎派赶出来的。这事我只跟你说。"
+    ],
+    "rain": [
+     "雨天采的凝露草药性最好。"
+    ],
+    "night": [
+     "这么晚了，是哪里不舒服吗？"
+    ],
+    "spouse": [
+     "又受伤了？过来我看看。",
+     "炼丹的时候想着你，火候都乱了。",
+     "今天的药材品相不错，晚上我们一起炼一炉。"
+    ]
+   },
+   "gift": {
+    "love": "这品相……你从哪儿弄来的？太珍贵了！",
+    "like": "正好用得上，谢谢你。",
+    "dislike": "这个……我不太需要。"
+   },
+   "romance": true
+  },
+  {
+   "id": "ling",
+   "name": "苏灵儿",
+   "role": "药铺学徒",
+   "age": "adult",
+   "home": "doctor",
+   "look": {
+    "skin": "#f6d5b8",
+    "hairStyle": 3,
+    "robe": "#3f8a8a"
+   },
+   "root": {
+    "e": "水",
+    "grade": 1
+   },
+   "realm": [
+    1,
+    2
+   ],
+   "sense": 25,
+   "pers": "活泼、好奇",
+   "bio": "苏婉的侄女，跟着姑姑学药理，梦想去百花谷。",
+   "loves": [
+    "yuehua",
+    "strawberry"
+   ],
+   "likes": [
+    "ninglu",
+    "lingcao",
+    "tea"
+   ],
+   "dislikes": [
+    "hide",
+    "venom"
+   ],
+   "sched": [
+    [
+     7,
+     "home"
+    ],
+    [
+     9,
+     [
+      "wander",
+      -9,
+      -19,
+      6
+     ]
+    ],
+    [
+     12,
+     "work"
+    ],
+    [
+     14,
+     [
+      "wander",
+      -18,
+      8,
+      6
+     ]
+    ],
+    [
+     18,
+     "stall"
+    ],
+    [
+     20,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "你看你看，这株是凝露草！",
+     "姑姑说我认药认得太慢了……",
+     "听说百花谷四季开不同的花，好想去看看。",
+     "月华草要秋天才长呢。"
+    ],
+    "h3": [
+     "下次去采药，你陪我好不好？"
+    ],
+    "h6": [
+     "春天的百花会……你要是去的话，我、我也想去。"
+    ],
+    "rain": [
+     "下雨了！快去采凝露草！"
+    ],
+    "night": [
+     "晚上的月华草会发光哦。"
+    ],
+    "spouse": [
+     "你回来啦！今天我采了好多药。",
+     "双修的时候……你的灵力好暖。",
+     "我们以后一起去百花谷看花吧。"
+    ]
+   },
+   "gift": {
+    "love": "好漂亮！我要把它夹在书里！",
+    "like": "谢谢你～",
+    "dislike": "呃……这个味道好怪。"
+   },
+   "romance": true
+  },
+  {
+   "id": "smith",
+   "name": "赵铁山",
+   "role": "铁匠",
+   "age": "adult",
+   "home": "smithy",
+   "shop": "smith",
+   "hours": [
+    8,
+    17
+   ],
+   "look": {
+    "skin": "#d9ad88",
+    "hairStyle": 0,
+    "robe": "#7a4a2a",
+    "beard": true
+   },
+   "root": {
+    "e": "金",
+    "grade": 1
+   },
+   "realm": [
+    1,
+    6
+   ],
+   "sense": 35,
+   "pers": "豪爽、嗓门大",
+   "bio": "铁匠山庄出师，一锤子能把石傀砸裂。收矿石和兽材。",
+   "loves": [
+    "core_stone",
+    "tusk"
+   ],
+   "likes": [
+    "iron",
+    "wine",
+    "hide"
+   ],
+   "dislikes": [
+    "strawberry",
+    "yuehua"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     8,
+     "work"
+    ],
+    [
+     12,
+     "home"
+    ],
+    [
+     13,
+     "work"
+    ],
+    [
+     17,
+     "stall"
+    ],
+    [
+     20,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "哈哈！来得好，我正缺人搭把手！",
+     "玄晶矿洞的铁矿成色不错，有多少收多少。",
+     "兵器要常保养，刀口卷了可不行。",
+     "野猪妖的獠牙做刀柄最趁手。"
+    ],
+    "h3": [
+     "你这把剑我看看……嗯，回头我给你重新淬一遍火。"
+    ],
+    "h6": [
+     "等你攒够材料，我给你打一件真正的法器！"
+    ],
+    "rain": [
+     "下雨天炉火不旺，烦！"
+    ],
+    "night": [
+     "喝两杯再走？"
+    ]
+   },
+   "gift": {
+    "love": "好东西！这可是上好的料子！",
+    "like": "哈哈，够意思！",
+    "dislike": "这玩意儿给我有啥用？"
+   }
+  },
+  {
+   "id": "guihua",
+   "name": "王桂花",
+   "role": "铁匠夫人",
+   "age": "adult",
+   "home": "smithy",
+   "look": {
+    "skin": "#eac3a0",
+    "hairStyle": 2,
+    "robe": "#c94f4f"
+   },
+   "root": {
+    "e": "火",
+    "grade": 0
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 10,
+   "pers": "能干、泼辣",
+   "bio": "家里家外一把手，做的红薯饭全村闻名。",
+   "loves": [
+    "pumpkin",
+    "yam"
+   ],
+   "likes": [
+    "cabbage",
+    "potato",
+    "rice"
+   ],
+   "dislikes": [
+    "venom",
+    "silk"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     9,
+     [
+      "wander",
+      10,
+      8,
+      6
+     ]
+    ],
+    [
+     11,
+     "home"
+    ],
+    [
+     14,
+     "stall"
+    ],
+    [
+     17,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "我家那口子又在叮叮当当了，吵死了。",
+     "你田里的红薯熟了没？",
+     "小虎又跑哪儿野去了！"
+    ],
+    "h3": [
+     "来，尝尝我做的红薯饭。"
+    ],
+    "h6": [
+     "我家铁山就服你，你说话比我管用。"
+    ],
+    "rain": [
+     "下雨天腰疼……"
+    ],
+    "night": [
+     "还不回家？"
+    ]
+   },
+   "gift": {
+    "love": "这个好！晚上就下锅！",
+    "like": "你这孩子真会来事。",
+    "dislike": "这东西能吃吗？"
+   }
+  },
+  {
+   "id": "hu",
+   "name": "赵小虎",
+   "role": "铁匠之子",
+   "age": "child",
+   "home": "smithy",
+   "look": {
+    "skin": "#d9ad88",
+    "hairStyle": 0,
+    "robe": "#4f7fc9"
+   },
+   "root": {
+    "e": "火",
+    "grade": 1
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 20,
+   "pers": "憨厚、力气大",
+   "bio": "十岁就能抡大锤，梦想是拜入铁匠山庄。",
+   "loves": [
+    "tusk",
+    "corn"
+   ],
+   "likes": [
+    "bun",
+    "potato"
+   ],
+   "dislikes": [
+    "tea"
+   ],
+   "sched": [
+    [
+     7,
+     "home"
+    ],
+    [
+     9,
+     "work"
+    ],
+    [
+     11,
+     [
+      "wander",
+      4,
+      6,
+      8
+     ]
+    ],
+    [
+     17,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "我爹说我是天生打铁的料！",
+     "你见过铁匠山庄吗？在火山那边！",
+     "嘿！看我的肌肉！"
+    ],
+    "h3": [
+     "你帮我跟我娘说说，让我去火山那边看看呗。"
+    ],
+    "h6": [
+     "你是我的好兄弟！"
+    ],
+    "rain": [
+     "下雨了，打铁打不成了。"
+    ],
+    "night": [
+     "我娘要打我屁股了……"
+    ]
+   },
+   "gift": {
+    "love": "獠牙！我要做把刀！",
+    "like": "谢啦！",
+    "dislike": "这个不好玩……"
+   }
+  },
+  {
+   "id": "mentor",
+   "name": "云鹤",
+   "role": "退隐修士",
+   "age": "elder",
+   "home": "hut",
+   "look": {
+    "skin": "#f2cba8",
+    "hairStyle": 2,
+    "robe": "#e0e0d8",
+    "beard": true
+   },
+   "root": {
+    "e": "水",
+    "grade": 2
+   },
+   "realm": [
+    3,
+    0
+   ],
+   "sense": 120,
+   "hidden": true,
+   "pers": "淡泊、话少",
+   "bio": "住在瀑布边的老修士，似乎认识很多大门派的人。",
+   "loves": [
+    "tea",
+    "renshen@100",
+    "renshen"
+   ],
+   "likes": [
+    "lingcao",
+    "yaodan",
+    "ninglu"
+   ],
+   "dislikes": [
+    "pepper"
+   ],
+   "sched": [
+    [
+     5,
+     [
+      -3,
+      -24.5
+     ]
+    ],
+    [
+     11,
+     "home"
+    ],
+    [
+     13,
+     [
+      -3,
+      -24.5
+     ]
+    ],
+    [
+     19,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "修行如种田，急不得。",
+     "灵根只决定快慢，变强还要靠自己去打。",
+     "炼气圈只有一只妖王——赤枫狼王。打败它，取其狼牙炼破境丹，方能筑基。",
+     "瀑布下灵气最浓，在此打坐事半功倍。"
+    ],
+    "h3": [
+     "你的剑意有些长进了。"
+    ],
+    "h6": [
+     "老夫当年……也是一个人从这个村子走出去的。天劫峰上，我留下过一样东西。"
+    ],
+    "rain": [
+     "雨中听瀑，别有一番滋味。"
+    ],
+    "night": [
+     "夜里妖气重，修为不够就早些回去。"
+    ]
+   },
+   "gift": {
+    "love": "……难得。老夫收下了。",
+    "like": "有心了。",
+    "dislike": "此物于我无用。"
+   }
+  },
+  {
+   "id": "wanderer",
+   "name": "无名",
+   "role": "流浪者",
+   "age": "adult",
+   "home": "hut",
+   "look": {
+    "skin": "#d9ad88",
+    "hair": "#2e1e18",
+    "hairStyle": 1,
+    "robe": "#3a3e48"
+   },
+   "root": {
+    "e": "暗",
+    "grade": 3
+   },
+   "realm": [
+    4,
+    0
+   ],
+   "sense": 999,
+   "hidden": true,
+   "pers": "神秘",
+   "bio": "只在夜里出现在茶摊，没人知道他从哪儿来。",
+   "loves": [
+    "wine",
+    "heart"
+   ],
+   "likes": [
+    "yaodan",
+    "tea"
+   ],
+   "dislikes": [
+    "radish",
+    "cabbage"
+   ],
+   "sched": [
+    [
+     6,
+     "away"
+    ],
+    [
+     19,
+     "stall"
+    ],
+    [
+     24,
+     "plaza"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "……",
+     "月亮快圆了。",
+     "你身上有股熟悉的味道。",
+     "古战场那边，新月的夜里会有一座集市。"
+    ],
+    "h3": [
+     "鬼市只在夜里和新月开，那里什么都能买到——包括别人的灵根。"
+    ],
+    "h6": [
+     "血魔宫的入口……在火山南边。你迟早会去的。"
+    ],
+    "rain": [
+     "雨能洗掉血腥味。"
+    ],
+    "night": [
+     "夜才是我的时候。"
+    ]
+   },
+   "gift": {
+    "love": "呵……你倒是懂我。",
+    "like": "……谢了。",
+    "dislike": "……"
+   }
+  },
+  {
+   "id": "hunter",
+   "name": "李猎户",
+   "role": "猎户",
+   "age": "adult",
+   "home": "east",
+   "look": {
+    "skin": "#d9ad88",
+    "hairStyle": 0,
+    "robe": "#5e3c26",
+    "beard": true
+   },
+   "root": {
+    "e": "土",
+    "grade": 0
+   },
+   "realm": [
+    1,
+    4
+   ],
+   "sense": 25,
+   "pers": "沉稳、话不多",
+   "bio": "村里最好的猎手，常年在竹海边缘打猎。",
+   "loves": [
+    "wine",
+    "tusk"
+   ],
+   "likes": [
+    "bun",
+    "potato",
+    "hide"
+   ],
+   "dislikes": [
+    "strawberry"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     7,
+     "away"
+    ],
+    [
+     17,
+     [
+      "wander",
+      22,
+      -2,
+      4
+     ]
+    ],
+    [
+     20,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "野猪妖白天在林子边，晚上会摸到村口。",
+     "赤枫狼王的领地在东北，没本事别去。",
+     "打猎讲究个耐心。"
+    ],
+    "h3": [
+     "狼群的作息跟月亮有关，满月夜最凶。"
+    ],
+    "h6": [
+     "我年轻时也想修仙……算了，护好这个村子就够了。"
+    ],
+    "rain": [
+     "下雨天，野兽的脚印最清楚。"
+    ],
+    "night": [
+     "夜里妖兽凶，别逞能。"
+    ]
+   },
+   "gift": {
+    "love": "好酒！今晚有着落了。",
+    "like": "嗯，谢了。",
+    "dislike": "……不用了。"
+   }
+  },
+  {
+   "id": "yu",
+   "name": "林小雨",
+   "role": "猎户养女",
+   "age": "adult",
+   "home": "east",
+   "look": {
+    "skin": "#f6d5b8",
+    "hairStyle": 1,
+    "robe": "#e0a0b8"
+   },
+   "root": {
+    "e": "风",
+    "grade": 3
+   },
+   "realm": [
+    1,
+    1
+   ],
+   "sense": 60,
+   "hidden": true,
+   "pers": "温柔、有点害羞",
+   "bio": "被李猎户从林子里捡回来的姑娘，喜欢花。",
+   "loves": [
+    "yuehua",
+    "strawberry",
+    "grape"
+   ],
+   "likes": [
+    "chiyang",
+    "ninglu",
+    "tea"
+   ],
+   "dislikes": [
+    "venom",
+    "hide"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     9,
+     [
+      "wander",
+      22,
+      10,
+      6
+     ]
+    ],
+    [
+     12,
+     "home"
+    ],
+    [
+     14,
+     "stall"
+    ],
+    [
+     17,
+     [
+      "wander",
+      6,
+      -6,
+      5
+     ]
+    ],
+    [
+     20,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "啊……是你呀。",
+     "东边的野花开了，好看吗？",
+     "义父又进山了，我有点担心。",
+     "我总觉得……我好像不是这里的人。"
+    ],
+    "h3": [
+     "你要是去百花谷，能给我带一朵花回来吗？"
+    ],
+    "h6": [
+     "我做过一个梦，梦里有风，有好多好多人在喊我的名字。"
+    ],
+    "rain": [
+     "下雨的声音，好安心。"
+    ],
+    "night": [
+     "我、我只是出来看看星星。"
+    ],
+    "spouse": [
+     "你回来了……我给你留了饭。",
+     "有你在，我就不做那个梦了。",
+     "风里有你的味道。"
+    ]
+   },
+   "gift": {
+    "love": "给、给我的吗？……谢谢你，我会好好收着的。",
+    "like": "谢谢……",
+    "dislike": "啊……这个，我不太喜欢……"
+   },
+   "romance": true
+  },
+  {
+   "id": "scholar",
+   "name": "周书生",
+   "role": "教书先生",
+   "age": "adult",
+   "home": "north",
+   "look": {
+    "skin": "#f6d5b8",
+    "hairStyle": 2,
+    "robe": "#4f7fc9"
+   },
+   "root": {
+    "e": "水",
+    "grade": 0
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 10,
+   "pers": "迂腐、博学",
+   "bio": "屡试不第的读书人，给村里孩子教书识字。",
+   "loves": [
+    "tea",
+    "talisman_paper"
+   ],
+   "likes": [
+    "rice",
+    "wine"
+   ],
+   "dislikes": [
+    "pepper",
+    "venom"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     8,
+     [
+      -0.5,
+      -12.5
+     ]
+    ],
+    [
+     12,
+     "stall"
+    ],
+    [
+     14,
+     [
+      -0.5,
+      -12.5
+     ]
+    ],
+    [
+     18,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "子曰：学而时习之，不亦说乎？",
+     "这村子以前叫青竹镇，你知道吗？",
+     "天机阁的人据说能算尽天下事。",
+     "修仙者也要读书，不然连功法都看不懂。"
+    ],
+    "h3": [
+     "我这里有本《百草图鉴》，借你看看。"
+    ],
+    "h6": [
+     "其实我也想修仙……可惜一点灵根都没有。"
+    ],
+    "rain": [
+     "春雨贵如油啊。"
+    ],
+    "night": [
+     "秉烛夜读，乐在其中。"
+    ]
+   },
+   "gift": {
+    "love": "妙哉！妙哉！",
+    "like": "多谢多谢。",
+    "dislike": "此物……不雅。"
+   }
+  },
+  {
+   "id": "weaver",
+   "name": "叶青青",
+   "role": "织女",
+   "age": "adult",
+   "home": "north",
+   "look": {
+    "skin": "#f6d5b8",
+    "hairStyle": 1,
+    "robe": "#8a5fb0"
+   },
+   "root": {
+    "e": "木",
+    "grade": 0
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 10,
+   "pers": "安静、手巧",
+   "bio": "周书生的妻子，用蛛丝织的布刀剑难破。",
+   "loves": [
+    "silk",
+    "yuehua"
+   ],
+   "likes": [
+    "cabbage",
+    "tea",
+    "strawberry"
+   ],
+   "dislikes": [
+    "venom",
+    "iron"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     10,
+     [
+      "wander",
+      -20,
+      -12,
+      5
+     ]
+    ],
+    [
+     12,
+     "home"
+    ],
+    [
+     16,
+     "stall"
+    ],
+    [
+     18,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "毒蛛的丝虽然吓人，织出来的布可结实了。",
+     "我家那位又在念叨之乎者也。",
+     "天冷了，要多穿点。"
+    ],
+    "h3": [
+     "你多带些蛛丝来，我给你织件护甲。"
+    ],
+    "h6": [
+     "谢谢你常来看我们。"
+    ],
+    "rain": [
+     "下雨天适合织布。"
+    ],
+    "night": [
+     "灯下穿针，眼睛都花了。"
+    ]
+   },
+   "gift": {
+    "love": "这蛛丝成色真好！",
+    "like": "谢谢你。",
+    "dislike": "这个……拿走吧。"
+   }
+  },
+  {
+   "id": "fortune",
+   "name": "刘半仙",
+   "role": "算命先生",
+   "age": "elder",
+   "home": "north",
+   "look": {
+    "skin": "#eac3a0",
+    "hairStyle": 2,
+    "robe": "#3a3e48",
+    "beard": true
+   },
+   "root": {
+    "e": "金",
+    "grade": 0
+   },
+   "realm": [
+    1,
+    2
+   ],
+   "sense": 20,
+   "pers": "神叨叨",
+   "bio": "自称天机阁弃徒，算命十次不准九次。",
+   "loves": [
+    "wine",
+    "shard"
+   ],
+   "likes": [
+    "tea",
+    "bun"
+   ],
+   "dislikes": [
+    "eggplant",
+    "radish"
+   ],
+   "sched": [
+    [
+     7,
+     "home"
+    ],
+    [
+     9,
+     [
+      -6,
+      2.5
+     ]
+    ],
+    [
+     13,
+     "stall"
+    ],
+    [
+     15,
+     [
+      -6,
+      2.5
+     ]
+    ],
+    [
+     19,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "这位道友，我观你印堂发亮，近日必有奇遇！",
+     "天机不可泄露……除非给钱。",
+     "血月当空之夜，切记不可出门。",
+     "每季第一天是新月，鬼市就在那时候开。"
+    ],
+    "h3": [
+     "嘿，我给你算一卦：你命里缺一株百年人参。"
+    ],
+    "h6": [
+     "说实话，我是被天机阁赶出来的，因为我算到了不该算的东西。"
+    ],
+    "rain": [
+     "我早就算到今天要下雨！"
+    ],
+    "night": [
+     "夜观天象……嗯，天象不明。"
+    ]
+   },
+   "gift": {
+    "love": "妙！贫道算到你今天会送我这个！",
+    "like": "善哉善哉。",
+    "dislike": "此物与贫道相克啊！"
+   }
+  },
+  {
+   "id": "fisher",
+   "name": "杨渔翁",
+   "role": "渔夫",
+   "age": "elder",
+   "home": "south",
+   "look": {
+    "skin": "#d9ad88",
+    "hairStyle": 0,
+    "robe": "#6aa86a",
+    "beard": true
+   },
+   "root": {
+    "e": "水",
+    "grade": 0
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 10,
+   "pers": "悠闲",
+   "bio": "天天坐在荷花池边钓鱼，也不知道钓上过什么没有。",
+   "loves": [
+    "wine"
+   ],
+   "likes": [
+    "rice",
+    "yam",
+    "bun"
+   ],
+   "dislikes": [
+    "silk",
+    "venom"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     7,
+     [
+      -4,
+      -15.5
+     ]
+    ],
+    [
+     12,
+     "stall"
+    ],
+    [
+     13,
+     [
+      -4,
+      -15.5
+     ]
+    ],
+    [
+     19,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "嘘……别把鱼吓跑了。",
+     "这池子连着山上的瀑布，水里有灵气。",
+     "钓鱼嘛，钓的是心境。"
+    ],
+    "h3": [
+     "池底下好像有什么东西在发光……"
+    ],
+    "h6": [
+     "年轻时我在沉船泽见过一条蛟，那叫一个大。"
+    ],
+    "rain": [
+     "下雨天，鱼最肯咬钩。"
+    ],
+    "night": [
+     "夜钓也别有一番趣味。"
+    ]
+   },
+   "gift": {
+    "love": "好酒！配鱼正好！",
+    "like": "哈哈，多谢。",
+    "dislike": "这玩意儿缠鱼线……"
+   }
+  },
+  {
+   "id": "tea",
+   "name": "白素素",
+   "role": "茶摊老板娘",
+   "age": "adult",
+   "home": "south",
+   "shop": "tea",
+   "hours": [
+    8,
+    22
+   ],
+   "look": {
+    "skin": "#f6d5b8",
+    "hairStyle": 1,
+    "robe": "#e0e0d8"
+   },
+   "root": {
+    "e": "水",
+    "grade": 1
+   },
+   "realm": [
+    1,
+    3
+   ],
+   "sense": 30,
+   "pers": "爽朗、八面玲珑",
+   "bio": "在村口摆了个茶摊，村里的消息都从她这儿过。",
+   "loves": [
+    "ninglu",
+    "strawberry"
+   ],
+   "likes": [
+    "lingcao",
+    "tea",
+    "grape"
+   ],
+   "dislikes": [
+    "iron",
+    "hide"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     8,
+     "stall"
+    ],
+    [
+     22,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "来碗灵茶？解乏又回灵力。",
+     "听说了吗？李猎户昨天又打了头野猪妖。",
+     "晚上有个怪人总来喝茶，一句话也不说。",
+     "包子刚出锅，要不要来一个？"
+    ],
+    "h3": [
+     "你常来照顾生意，这碗茶算我请的。"
+    ],
+    "h6": [
+     "我以前……也在坊市混过，后来累了，就回村摆个茶摊。"
+    ],
+    "rain": [
+     "下雨天，茶摊最热闹。"
+    ],
+    "night": [
+     "夜深了，喝碗热茶再走吧。"
+    ],
+    "spouse": [
+     "回来啦，茶刚泡好。",
+     "今天茶摊来了个怪人，不过我更想你。",
+     "累了吧？坐下歇歇。"
+    ]
+   },
+   "gift": {
+    "love": "这个泡茶最香了！",
+    "like": "谢谢客官～",
+    "dislike": "这东西可泡不了茶。"
+   },
+   "romance": true
+  },
+  {
+   "id": "guard",
+   "name": "吴镖头",
+   "role": "退役镖头",
+   "age": "adult",
+   "home": "east",
+   "look": {
+    "skin": "#d9ad88",
+    "hairStyle": 0,
+    "robe": "#c94f4f",
+    "beard": true
+   },
+   "root": {
+    "e": "土",
+    "grade": 1
+   },
+   "realm": [
+    1,
+    7
+   ],
+   "sense": 40,
+   "pers": "豪气、爱吹牛",
+   "bio": "走了二十年镖，退下来守村口，说起当年能讲三天三夜。",
+   "loves": [
+    "wine",
+    "tusk"
+   ],
+   "likes": [
+    "bun",
+    "corn",
+    "potato"
+   ],
+   "dislikes": [
+    "tea"
+   ],
+   "sched": [
+    [
+     6,
+     "home"
+    ],
+    [
+     7,
+     [
+      9,
+      -7
+     ]
+    ],
+    [
+     12,
+     "stall"
+    ],
+    [
+     13,
+     [
+      9,
+      -7
+     ]
+    ],
+    [
+     20,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "站住！……哦，是你啊。",
+     "当年我护送丹鼎派的药车去青石坊市，路上遇到三十个劫道的！",
+     "往东北走就是玄晶矿洞，里面有石傀，小心。",
+     "黑吃黑的事坊市里多了去了。"
+    ],
+    "h3": [
+     "你这身手，在镖局能当个镖师了。"
+    ],
+    "h6": [
+     "我这条命，是当年一个过路的剑修救的。他用的剑法……和你有点像。"
+    ],
+    "rain": [
+     "下雨天，劫道的也偷懒。"
+    ],
+    "night": [
+     "夜里我守着，你放心睡。"
+    ]
+   },
+   "gift": {
+    "love": "够爷们！来，喝一个！",
+    "like": "不错不错。",
+    "dislike": "这是给娘们的东西吧？"
+   }
+  },
+  {
+   "id": "farmer",
+   "name": "何二愣",
+   "role": "庄稼汉",
+   "age": "adult",
+   "home": "south",
+   "look": {
+    "skin": "#d9ad88",
+    "hairStyle": 0,
+    "robe": "#6aa86a"
+   },
+   "root": {
+    "e": "木",
+    "grade": 0
+   },
+   "realm": [
+    0,
+    0
+   ],
+   "sense": 10,
+   "pers": "憨直、勤快",
+   "bio": "村里种地的好手，你要是有空，他什么农活都能教你。",
+   "loves": [
+    "melon",
+    "potato"
+   ],
+   "likes": [
+    "corn",
+    "rice",
+    "bun"
+   ],
+   "dislikes": [
+    "tea",
+    "silk"
+   ],
+   "sched": [
+    [
+     5,
+     "home"
+    ],
+    [
+     6,
+     [
+      "wander",
+      -8,
+      4,
+      3
+     ]
+    ],
+    [
+     12,
+     "stall"
+    ],
+    [
+     13,
+     [
+      "wander",
+      20,
+      18,
+      5
+     ]
+    ],
+    [
+     18,
+     "home"
+    ]
+   ],
+   "lines": {
+    "greet": [
+     "田要每天浇水，不然苗就不长了。",
+     "庄稼不吃灵气，灵草才挑地。",
+     "过了季的庄稼会死在地里，播种前看看季节。",
+     "十天没人管，苗就枯死了。"
+    ],
+    "h3": [
+     "我教你个诀窍：雨天不用浇水。"
+    ],
+    "h6": [
+     "你要是忙，我可以帮你看着田。"
+    ],
+    "rain": [
+     "好雨！不用浇地了！"
+    ],
+    "night": [
+     "睡觉睡觉，明天还要下地。"
+    ]
+   },
+   "gift": {
+    "love": "嘿嘿，这瓜真大！",
+    "like": "好东西，谢了。",
+    "dislike": "这玩意儿我用不上……"
+   }
+  }
+ ]
 }
