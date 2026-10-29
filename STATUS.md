@@ -6,7 +6,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 
 ## 方向 / 规划
 - GDD 决策（3D Q版、俯视固定镜头、HTML 先行）— ✅ — 2026-10-27 — 先便宜验证玩法，后迁 Godot/Unity
-- 世界地图数据 `data/world_map.json` — 🟨 数据有，未接入游戏 — 2026-10-27 — 6 区 / 难度环 / 15 宗门 / 26 矿
+- 世界地图接入（`worldmap.js` + `landmarks.js`）：六扇区地貌（雪峰白松、竹海赤枫、沼泽深林、火山赤土黑岩、沙漠沙地、古战场枯树墓碑）、五个境界圈决定妖兽等级、70 处地标立碑 + 光柱、走近 50 米「发现」、舆图（M）、1 公里边缘（北边通天劫峰）— 🟩 — 2026-10-30
 - 美术参考 `ref/target-art.webp` — ✅ — 2026-10-27 — 修仙版田园风，HUD 不要木框
 
 ## 世界 / 画面 (`world.js` `util.js` `weather.js`)
@@ -80,6 +80,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-10-30 — 世界地图接入：扇区地貌、境界圈难度、地标、舆图
 - 2026-10-30 — 境界体系、天劫、灵根、神识、御剑
 - 2026-10-30 — 任务系统、第一个小时主线、村民委托、委托板、炼丹控火
 - 2026-10-30 — 灵田规则：多种作物与灵草、浇水、土壤灵气、药龄、季节、枯死

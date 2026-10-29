@@ -153,6 +153,8 @@
   body.mobile #money { top: 64px; right: calc(10px + env(safe-area-inset-right)); font-size: 12px; padding: 5px 9px; }
   body.mobile #menuBtns { top: 98px; right: calc(10px + env(safe-area-inset-right)); }
   body.mobile #mobTime { display: block; font-size: 12px; padding: 6px 10px; touch-action: none; }
+  body.mobile #menuBtns button span { display: none; } body.mobile #menuBtns button { font-size: 16px; padding: 4px 9px; }
+  .mapcv { display: block; margin: 4px auto 8px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; }
   body.mobile #hotbar { bottom: auto; top: calc(8px + env(safe-area-inset-top)); z-index: 4; }
   body.mobile .hs { width: 38px; height: 38px; } body.mobile .hs kbd { display: none; } body.mobile .hs .hi { font-size: 19px; }
   body.mobile #hotName { display: none; }
@@ -216,7 +218,7 @@
 
 <div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
 <div id="money" class="panel"></div>
-<div id="menuBtns"><div id="mobTime" class="panel">⏩ 按住加速</div><button id="bagBtn">🎒 背包</button><button id="questBtn">📜 任务</button><button id="menuBtn">☰ 菜单</button></div>
+<div id="menuBtns"><div id="mobTime" class="panel">⏩ 按住加速</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
 <div id="qtrack" hidden></div><div id="markLayer"></div>
 <div id="hotbar"></div><div id="hotName"></div>
 <div id="hpLayer"></div>
@@ -250,7 +252,7 @@
   <b>空格 / Shift</b> 身法闪避（无敌，冷却 2.5 秒）<br>
   <b>1–8</b> 快捷栏（灵草 / 丹药直接吃）<br>
   <b>F</b> 交谈 / 种田 / 采集 / 睡觉 / 炼丹<br>
-  <b>Tab</b> 背包　<b>L</b> 任务　<b>Esc</b> 菜单<br>
+  <b>Tab</b> 背包　<b>L</b> 任务　<b>M</b> 地图　<b>Esc</b> 菜单<br>
   <b>V</b> 神识扫描　<b>G</b> 御剑飞行（筑基后）<br>
   <b>滚轮</b> 转镜头　<b>按住 T</b> 加速时间　<b>H</b> 隐藏说明<br>
   东北方的大路通往 <b>玄晶矿洞</b>，深处有妖王。

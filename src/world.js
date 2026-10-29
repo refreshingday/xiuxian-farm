@@ -4,6 +4,7 @@ import {
   CHUNK, mulberry32, hashInt, hash01, fbm, vnoise, clamp, smooth, approach, angDiff,
   flat, toon, glow, mesh, at, outlineMat, addOutline, canvasTex, boxUV, wind, PNG, weatherU,
 } from './util.js';
+import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
 
 // ---------- 世界骨架（手工） ----------
 export const VILLAGE_R = 32;
@@ -36,8 +37,9 @@ function segDist(px, pz, ax, az, bx, bz) {
   return Math.hypot(px - ax - vx * t, pz - az - vz * t);
 }
 export const roadDist = (x, z) => segDist(x, z, 0, 0, MINE_GATE.x, MINE_GATE.y);
-export const mapleAmount = (x, z) => smooth(0.55, 0.66, fbm(x * 0.008, z * 0.008, 11, 2)) * smooth(60, 110, Math.hypot(x, z));
-export const dangerAt = (x, z) => clamp((Math.hypot(x, z) - 40) / 60, 0, 6);
+// 赤枫林只长在竹海扇区（其他扇区走远了就换成自己的地貌）
+export const mapleAmount = (x, z) => smooth(0.55, 0.66, fbm(x * 0.008, z * 0.008, 11, 2)) * smooth(60, 110, Math.hypot(x, z)) * (sectorAt(x, z).id === 'bamboo' ? 1 : 1 - biomeK(x, z));
+export const dangerAt = dangerFor;
 
 // 野生灵草：多数是灵草，离村越远越可能长出凝露草、人参（按位置固定，不吃区块的随机序列）
 const HERB_GLOW = { lingcao: '#7dffe0', ninglu: '#8ad8ff', renshen: '#ffd27a', chiyang: '#ff8a5a', yuehua: '#fff2a0' };
@@ -52,8 +54,10 @@ export function wildHerb(x, z) {
 export function regionName(x, z) {
   if (Math.hypot(x - MINE.x, z - MINE.y) < MINE_R + 1) return '玄晶矿洞';
   if (Math.hypot(x, z) < VILLAGE_R) return '青竹村';
-  const stars = '★'.repeat(Math.min(5, 1 + Math.floor(dangerAt(x, z))));
-  return (mapleAmount(x, z) > 0.5 ? '赤枫林 ' : '翠竹野 ') + stars;
+  const stars = '★'.repeat(Math.min(5, 1 + Math.floor(dangerAt(x, z) / 5)));
+  const sec = sectorAt(x, z), near = Math.hypot(x, z) < 110;
+  const name = near ? (mapleAmount(x, z) > 0.5 ? '赤枫林' : '翠竹野') : sec.id === 'bamboo' && mapleAmount(x, z) > 0.5 ? '赤枫林' : sec.name;
+  return `${name} · ${RINGS[Math.max(0, ringAt(x, z))].realm}圈 ${stars}`;
 }
 
 // ---------- 地面配色（sRGB 0..255，直接画进 canvas） ----------
@@ -86,6 +90,9 @@ function groundSample(x, z, out) {
   mix3(out, out, GP.meadow, smooth(0.6, 0.8, fbm(x * 0.03, z * 0.03, 5, 2)) * 0.55);
   mix3(out, out, GP.maple, mapleAmount(x, z) * 0.6);
   mix3(out, out, GP.village, (1 - smooth(VILLAGE_R - 6, VILLAGE_R + 4, dv + (n - 0.5) * 8)) * 0.5);
+  // 扇区地貌：雪峰发白、沼泽深绿、火山赤褐、沙漠沙黄、古战场灰褐
+  const sec = sectorAt(x, z), bk = biomeK(x, z);
+  if (sec.tint && bk > 0) mix3(out, out, sec.tint, bk * (0.75 + n * 0.25));
   // 路：大路 + 各家门口通向广场的小路
   let rd = roadDist(x, z) - 0.5;
   for (const [ax, az, bx, bz] of PATHS) rd = Math.min(rd, segDist(x, z, ax, az, bx, bz) + 0.25);
@@ -498,6 +505,7 @@ export class World {
       leaf: flat(new THREE.ConeGeometry(0.12, 0.45, 4)),
       spike: flat(new THREE.ConeGeometry(0.6, 2.4, 5)).translate(0, 1.2, 0),
       shard: flat(new THREE.OctahedronGeometry(0.4, 0)),
+      tomb: mergeGeometries([new THREE.BoxGeometry(0.6, 0.85, 0.22).translate(0, 0.42, 0), new THREE.CylinderGeometry(0.3, 0.3, 0.22, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, 0.85, 0)]),
     };
     this.M = {
       ground: toon('#ffffff', { vc: true }),
@@ -641,7 +649,7 @@ export class World {
     group.add(mesh(gg, gmat, { cast: false, recv: true }));
 
     // 程序填充：树、石、草、花、野生灵草
-    const trees = [], pines = [], trunks = [], rocks = [], grass = [], flowers = [], bushes = [], cols = [], herbs = [];
+    const trees = [], pines = [], trunks = [], rocks = [], grass = [], flowers = [], bushes = [], cols = [], herbs = [], tombs = [];
     const step = 2.6;
     let hi = 0;
     for (let gx = 0; gx < CHUNK; gx += step) for (let gz = 0; gz < CHUNK; gz += step) {
@@ -651,16 +659,21 @@ export class World {
       const dens = fbm(x * 0.035, z * 0.035, 21, 2);
       const r = rng();
       const maple = mapleAmount(x, z);
-      if (!clear && r < smooth(0.35, 0.75, dens) * 0.34) {
-        const isPine = fbm(x * 0.02, z * 0.02, 31, 2) > 0.58 && maple < 0.3;
+      // 扇区：树、石头、草的多少和样子都按本扇区来（离村越远越明显）
+      const sec = sectorAt(x, z), bk = biomeK(x, z), bio = bk > 0.5 ? sec : null;
+      const treeK = 1 + (sec.trees - 1) * bk, rockK = 1 + (sec.rocks - 1) * bk;
+      if (!clear && r < smooth(0.35, 0.75, dens) * 0.34 * treeK) {
         const s = 0.62 + rng() * 0.4;
-        const c = isPine ? PINE[Math.floor(rng() * PINE.length)] : (rng() < maple ? MAPLE : FOREST)[Math.floor(rng() * 4)];
+        if (bio?.tree === 'dead') { trunks.push({ x, z, s: s * 0.9, rot: rng() * 6.28 }); cols.push({ x, z, r: 0.35 * s, off: false }); continue; }
+        const isPine = bio?.tree === 'pine' || (fbm(x * 0.02, z * 0.02, 31, 2) > 0.58 && maple < 0.3);
+        const c = bio?.crown ? (rng() < 0.7 ? bio.crown : PINE[0]) : isPine ? PINE[Math.floor(rng() * PINE.length)] : (rng() < maple ? MAPLE : FOREST)[Math.floor(rng() * 4)];
         (isPine ? pines : trees).push({ x, z, s, rot: rng() * 6.28, c });
         trunks.push({ x, z, s, rot: rng() * 6.28 });
         cols.push({ x, z, r: 0.42 * s, off: false });
-      } else if (!clear && r > 0.965) {
-        const s = 0.6 + rng() * 1.1;
-        rocks.push({ x, z, s, sy: s * (0.6 + rng() * 0.5), rot: rng() * 6.28, c: rng() < 0.5 ? '#aaa59e' : '#948f8a' });
+      } else if (!clear && r > 1 - 0.035 * rockK) {
+        const s = 0.6 + rng() * 1.1, rc = bio?.rockC || ['#aaa59e', '#948f8a'];
+        if (bio?.tomb && rng() < 0.6) tombs.push({ x, z, s: 0.8 + rng() * 0.4, rot: rng() * 0.6 - 0.3, c: rc[Math.floor(rng() * 2)] });
+        else rocks.push({ x, z, s, sy: s * (0.6 + rng() * 0.5), rot: rng() * 6.28, c: rc[Math.floor(rng() * 2)] });
         cols.push({ x, z, r: 0.6 * s, off: false });
       } else if (!clear && r > 0.9 && r < 0.94) {
         bushes.push({ x, z, s: 0.8 + rng() * 0.6, rot: rng() * 6.28, c: rng() < maple ? '#d8803a' : FOREST[Math.floor(rng() * 5)] });
@@ -671,7 +684,7 @@ export class World {
       const inPlaza = dv < 8.5, inMine = dm < MINE_R + 1, onRoad = rd < 1.8;
       if (!inPlaza && !inMine && !onRoad) {
         // 密草：每格 ~30 丛，颜色取自地面，草丛疏密随噪声成片
-        const lush = 0.45 + fbm(x * 0.12, z * 0.12, 41, 2) * 0.9;
+        const lush = (0.45 + fbm(x * 0.12, z * 0.12, 41, 2) * 0.9) * (1 + (sec.grass - 1) * bk);
         const gn = Math.floor(30 * lush);
         for (let i = 0; i < gn; i++) {
           const gx2 = x + (rng() - 0.5) * step, gz2 = z + (rng() - 0.5) * step;
@@ -681,7 +694,7 @@ export class World {
           _c.setRGB(_b[0] / 255 * v * 1.08, _b[1] / 255 * v * 1.1, _b[2] / 255 * v, THREE.SRGBColorSpace);
           grass.push({ x: gx2, z: gz2, s: 0.75 + rng() * 0.6, sy: (0.7 + rng() * 0.7) * (0.7 + lush * 0.5), rot: rng() * 6.28, c: '#' + _c.getHexString() });
         }
-        if (rng() < 0.16) {
+        if (rng() < 0.16 * (1 + (sec.grass - 1) * bk)) {
           const c = FLOWERS[Math.floor(rng() * 5)];
           for (let i = 0; i < 3; i++) {
             const fx = x + rng() * 1.2, fz = z + rng() * 1.2;
@@ -698,6 +711,7 @@ export class World {
     add(inst(this.G.pine, this.M.leafy, pines, true, this.M.leafLine));
     for (const im of this.leafClump('bush', bushes)) add(im);
     add(inst(this.G.rock, this.M.rock, rocks, true, this.M.line));
+    add(inst(this.G.tomb, this.M.rock, tombs, true, this.M.line));
     add(inst(this.G.grass, this.M.grass, grass, false));
     add(inst(this.G.flower, this.M.plain, flowers, false));
 

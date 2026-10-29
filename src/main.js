@@ -15,6 +15,7 @@ import { Village, loadVillageData } from './village.js';
 import { Farm } from './farm.js';
 import { Alchemy } from './alchemy.js';
 import { Quests, loadQuestData } from './quests.js';
+import { Landmarks } from './landmarks.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { KE } from './comboKit.js';
@@ -249,6 +250,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') interact();
   if (e.code === 'Tab' || e.code === 'KeyB') openBag();
   if (e.code === 'KeyL') quests.openLog();
+  if (e.code === 'KeyM') landmarks.open();
   if (e.code === 'KeyG') realm.toggleFly();
   if (e.code === 'KeyV') realm.scan();
   if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
@@ -286,6 +288,7 @@ document.getElementById('hotbar').addEventListener('pointerdown', (e) => { const
 document.getElementById('bagBtn').addEventListener('click', () => openBag());
 document.getElementById('menuBtn').addEventListener('click', () => openMenu());
 document.getElementById('questBtn').addEventListener('click', () => quests.openLog());
+document.getElementById('mapBtn').addEventListener('click', () => landmarks.open());
 touch.bind(document.getElementById('prompt'), tap(interact));
 touch.bind(document.getElementById('mobTime'), { hold: 'time' });
 touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
@@ -400,6 +403,8 @@ inv.countText = (id) => (id === 'can' ? farm.can : undefined); // 快捷栏上�
 const alchemy = new Alchemy(g); g.alchemy = alchemy;
 const quests = new Quests(g, await loadQuestData()); g.quests = quests;
 g.onKill = (e) => g.emit('kill', e);
+// 世界地图上的宗门、坊市、秘境、妖王巢穴、奇地、矿点（landmarks.js + data/world_map.json）
+const landmarks = new Landmarks(g, await (await fetch('data/world_map.json')).json()); g.landmarks = landmarks;
 function interact() {
   if (gui.blocking || P.dead || g.paused) return;
   life.find()?.act?.();
@@ -413,6 +418,7 @@ function openMenu() {
     const info = saveInfo();
     body.append(btn('🎒 背包', () => { gui.closePanel(); openBag(); }, 'wide'));
     body.append(btn('📜 任务', () => { gui.closePanel(); quests.openLog(); }, 'wide'));
+    body.append(btn('🗺 地图', () => { gui.closePanel(); landmarks.open(); }, 'wide'));
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('❓ 操作说明', () => { gui.closePanel(); document.getElementById('help').classList.remove('hidden'); }, 'wide'));
@@ -437,6 +443,7 @@ register('village', () => village.save(), (s) => village.load(s));
 register('realm', () => realm.save(), (s) => realm.load(s));
 register('alchemy', () => alchemy.save(), (s) => alchemy.load(s));
 register('quests', () => quests.save(), (s) => quests.load(s));
+register('landmarks', () => landmarks.save(), (s) => landmarks.load(s));
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
 
@@ -522,6 +529,7 @@ function tick(dt) {
   world.update(P.pos, dt, g.nightK, g.day * 24 + g.hours);
   life.update(dt);
   realm.update(dt);
+  landmarks.update(dt);
   scanMarks(dt);
   farm.update();
   alchemy.update(dt);
@@ -673,7 +681,7 @@ function updateUI() {
   ui.skFly.classList.toggle('hidden', L.realm < 1); ui.skFly.classList.toggle('on', realm.fly);
   const d = dateOf(g.day);
   ui.timeText.textContent = `${d.seasonName}季 ${d.dayOfSeason}日 ${d.weekName}　${d.moonIcon} ${clockText(g.hours)}${g.weatherToday === 'rain' ? ' 🌧' : g.nightK > 0.5 ? ' 🌙' : ' ☀'}`;
-  ui.regionText.textContent = regionName(P.pos.x, P.pos.z);
+  ui.regionText.textContent = landmarks.regionName(P.pos.x, P.pos.z) ?? regionName(P.pos.x, P.pos.z);
   ui.money.textContent = `💰 ${inv.money} 文　💎 ${inv.stones}`;
   // 战斗时快捷栏淡出（GDD 第 12 节 HUD）
   ui.hotbar.classList.toggle('fight', !!runner.move || enemies.list.some((e) => e.state !== 'idle' && e.pos.distanceTo(P.pos) < 12));
