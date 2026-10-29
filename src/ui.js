@@ -112,22 +112,25 @@ export class UI {
       if (tab === 'buy') {
         const list = shop.sells.filter((id) => !o.filterBuy || o.filterBuy(item(id)));
         if (!list.length) body.append(el('div', 'pempty', '今天没有东西卖。'));
+        // 坊市用灵石（1 灵石 ≈ 100 文，略贵一点）
+        const stones = o.currency === 'stones', have = () => (stones ? inv.stones : inv.money), unit = stones ? '灵石' : '文';
         for (const id of list) {
-          const it = item(id), p = Math.round(it.buy * mul);
-          const buy = (k) => { if (inv.money < p * k) return o.toast?.('钱不够'); inv.money -= p * k; inv.add(id, k); o.onBuy?.(id, k); this.refresh(); };
-          body.append(this.row(it.icon, `${it.name} <i>${p} 文</i>`, it.desc || '', [btn('买 1', () => buy(1), inv.money < p ? 'off' : ''), btn('买 5', () => buy(5), inv.money < p * 5 ? 'off' : '')]));
+          const it = item(id), p = stones ? Math.max(1, Math.ceil(it.buy * mul / 80)) : Math.round(it.buy * mul);
+          const buy = (k) => { if (have() < p * k) return o.toast?.(stones ? '灵石不够' : '钱不够'); if (stones) inv.stones -= p * k; else inv.money -= p * k; inv.add(id, k); o.onBuy?.(id, k); this.refresh(); };
+          body.append(this.row(it.icon, `${it.name} <i>${p} ${unit}</i>`, it.desc || '', [btn('买 1', () => buy(1), have() < p ? 'off' : ''), btn('买 5', () => buy(5), have() < p * 5 ? 'off' : '')]));
         }
       } else if (tab === 'sell') {
         const ids = inv.ids((it) => shop.buys.includes(it.cat) && it.sell > 0);
         if (!ids.length) body.append(el('div', 'pempty', '没有这家收的东西。'));
+        const sm = (id) => (o.sellMul?.(id) ?? 1);
         for (const id of ids) {
-          const it = item(id), p = inv.sellPrice(id);
+          const it = item(id), p = inv.sellPrice(id, sm(id));
           const sell = (k) => {
             k = Math.min(k, inv.count(id)); let got = 0;
-            for (let i = 0; i < k; i++) { got += inv.sellPrice(id); inv.sold[id] = (inv.sold[id] || 0) + 1; }
+            for (let i = 0; i < k; i++) { got += inv.sellPrice(id, sm(id)); inv.sold[id] = (inv.sold[id] || 0) + 1; }
             inv.take(id, k); inv.money += got; o.onSell?.(id, k, got); this.refresh();
           };
-          body.append(this.row(it.icon, `${it.name} ×${inv.count(id)} <i>${p} 文</i>`, (inv.sold[id] || 0) > 20 ? '今天卖太多，压价了' : '', [btn('卖 1', () => sell(1)), btn('全卖', () => sell(inv.count(id)))]));
+          body.append(this.row(it.icon, `${it.name} ×${inv.count(id)} <i>${p} 文</i>`, (inv.sold[id] || 0) > 20 ? '今天卖太多，压价了' : sm(id) > 1.3 ? '🔥 今日高价' : '', [btn('卖 1', () => sell(1)), btn('全卖', () => sell(inv.count(id)))]));
         }
       } else {
         body.append(el('div', 'pempty', '灵石是修士的货币，可以换成金钱（1 灵石 = 100 文），金钱换不回灵石。'));

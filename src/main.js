@@ -7,10 +7,11 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, weatherU, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
 import { createChibi, animChibi } from './chibi.js';
 import { Weather } from './weather.js';
-import { World, configureVillage, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
+import { World, configureVillage, configureClearings, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
 import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
-import { sectorAt, biomeK } from './worldmap.js';
+import { sectorAt, biomeK, polar } from './worldmap.js';
+import { Hubs } from './hubs.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
@@ -125,6 +126,12 @@ await loadTextures({
   leaf_cards: { norm: 0.9, key: true }, grass_blades: { norm: 0.9, key: true }, blossom_cards: { norm: 0.9, key: true },
 });
 configureVillage(await loadVillageData().then((d) => (g.villageData = d)));
+// 世界地图数据：坊市 / 宗门所在的地方要先空出来、铺石板（区块生成时就不长树）
+g.mapData = await (await fetch('data/world_map.json')).json();
+configureClearings([
+  ...g.mapData.hubs.map((h) => ({ ...polar(h.ang, h.dist), r: 26, plaza: 17 })),
+  ...g.mapData.sects.map((s) => ({ ...polar(s.ang, s.dist), r: 20, plaza: 9 })),
+]);
 const world = new World(scene); g.world = world;
 const enemies = new Enemies(g); g.enemies = enemies;
 const weather = new Weather(scene); g.weather = weather;
@@ -197,7 +204,7 @@ g.addMoney = (n, p) => { inv.money += n; if (p) fx.num({ x: p.x - 0.6, z: p.z },
 // ---------- 村民 ----------
 
 // ---------- 刷怪 ----------
-const okSpawn = (x, z) => Math.hypot(x, z) > VILLAGE_R + 8 && Math.hypot(x - MINE.x, z - MINE.y) > MINE_R + 6 && roadDist(x, z) > 2;
+const okSpawn = (x, z) => Math.hypot(x, z) > VILLAGE_R + 8 && Math.hypot(x - MINE.x, z - MINE.y) > MINE_R + 6 && roadDist(x, z) > 2 && !g.hubs?.at({ x, z }, 50) && !g.sects?.at?.({ x, z }, 26);
 // 在这里刷什么：走得越远越多本扇区的妖兽；夜里多出游魂、花妖（GDD：只在夜晚出现的敌人）
 function mobAt(x, z) {
   const sec = sectorAt(x, z), far = Math.hypot(x, z);
@@ -413,7 +420,9 @@ const alchemy = new Alchemy(g); g.alchemy = alchemy;
 const quests = new Quests(g, await loadQuestData()); g.quests = quests;
 g.onKill = (e) => g.emit('kill', e);
 // 世界地图上的宗门、坊市、秘境、妖王巢穴、奇地、矿点（landmarks.js + data/world_map.json）
-const landmarks = new Landmarks(g, await (await fetch('data/world_map.json')).json()); g.landmarks = landmarks;
+const landmarks = new Landmarks(g, g.mapData); g.landmarks = landmarks;
+// 坊市（hubs.js）：客栈、丹药阁、法器阁、拍卖行
+const hubs = new Hubs(g, landmarks); g.hubs = hubs;
 // 妖王巢穴：地图上每个妖王一个（加上原型矿洞里的赤岩妖王）
 for (const L of landmarks.list) if (L.kind === 'boss' && BOSS_BY_NAME[L.name]) enemies.lairs.push({ type: BOSS_BY_NAME[L.name], x: L.x, z: L.z, deadDay: -99 });
 // 世界事件：血月、妖虫夜袭（events.js）
@@ -458,6 +467,7 @@ register('realm', () => realm.save(), (s) => realm.load(s));
 register('alchemy', () => alchemy.save(), (s) => alchemy.load(s));
 register('quests', () => quests.save(), (s) => quests.load(s));
 register('landmarks', () => landmarks.save(), (s) => landmarks.load(s));
+register('hubs', () => hubs.save(), (s) => hubs.load(s));
 register('events', () => ({ ...events.save(), lairs: enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
@@ -546,6 +556,7 @@ function tick(dt) {
   realm.update(dt);
   landmarks.update(dt);
   events.update(dt);
+  hubs.update(dt);
   scanMarks(dt);
   farm.update();
   alchemy.update(dt);

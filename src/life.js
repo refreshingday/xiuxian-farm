@@ -42,12 +42,15 @@ export class Life {
     const g = this.g, early = g.hours < 18;
     g.ui.dialog({ narrate: true, line: early ? '天色还早。现在就睡到明天早上吗？' : '要睡到明天早上吗？睡前会自动存档。', choices: [{ label: '睡觉', fn: () => this.endDay('sleep') }, { label: '再等等' }] });
   }
-  // 2:00：在家就倒头睡，不在就昏倒
+  // 2:00：在家就倒头睡；在坊市、宗门这些安全点就地歇下；都不是就昏倒
   passOut() {
-    if (this.atHome) { this.g.toast('太晚了，你倒头就睡……', 2); this.endDay('sleep'); }
+    if (this.atHome) { this.g.toast('太晚了，你倒头就睡……', 2); this.endDay('sleep'); return; }
+    const safe = this.g.safeAt?.(this.g.player.pos);
+    if (safe) { this.g.toast(`太晚了，在${safe.name}歇下了`, 2); this.endDay('sleep', { at: safe.bed, meditate: false }); }
     else this.endDay('faint');
   }
-  endDay(kind) {
+  // o.at = 在哪醒来（默认自家床边）；o.meditate = 打坐修为只有自家洞府才有
+  endDay(kind, o = {}) {
     if (this.ending) return;
     this.ending = true;
     const g = this.g, P = g.player, inv = g.inv, fade = document.getElementById('fade');
@@ -55,11 +58,13 @@ export class Life {
     setTimeout(() => {
       let note = '';
       if (kind === 'sleep') {
-        // 在自家洞府睡觉：回满，并得一点打坐修为（约占修为来源的 20%）
+        // 在安全点睡觉回满；在自家洞府睡觉额外得打坐修为（约占修为来源的 20%）
         P.hp = P.maxHp; P.qi = P.maxQi;
-        const xp = Math.round(g.xpNeed() * 0.22);
-        g.addXP(xp, P.pos, true);
-        note = `打坐一夜，修为 +${Math.round(xp * (g.rootMul?.() ?? 1))}`;
+        if (o.meditate !== false) {
+          const xp = Math.round(g.xpNeed() * 0.22);
+          g.addXP(xp, P.pos, true);
+          note = `打坐一夜，修为 +${Math.round(xp * (g.rootMul?.() ?? 1))}`;
+        } else note = '一夜好眠';
       } else {
         const lost = Math.min(inv.money, Math.max(0, Math.round(inv.money * 0.1)));
         inv.money -= lost;
@@ -67,7 +72,8 @@ export class Life {
         note = `你昏倒在外，被村民背了回来${lost ? `，丢了 ${lost} 文` : ''}`;
       }
       const notes = this.newDay();
-      P.pos.set(this.bed.x + 1.3, 0, this.bed.z + 0.6); P.vy = 0; P.dead = false; P.c.root.visible = true;
+      const at = o.at || { x: this.bed.x + 1.3, z: this.bed.z + 0.6 };
+      P.pos.set(at.x, 0, at.z); P.vy = 0; P.dead = false; P.c.root.visible = true;
       g.save?.();
       fade.classList.remove('on');
       g.paused = false; this.ending = false;

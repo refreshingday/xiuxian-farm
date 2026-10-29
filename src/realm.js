@@ -4,7 +4,7 @@
 // 灵根：每条只有品级（凡 20 / 良 45 / 上 80 / 极 150），修炼倍率 = 1 + 2 × (1 − e^(−S/300))，S = 已激活灵根值之和。
 // 异灵根（雷冰风暗）要先有两条前置五行灵根才激活。每种灵根带一个生活被动。
 import { VILLAGE_R } from './world.js';
-import { ITEMS } from './items.js';
+import { ITEMS, itemName } from './items.js';
 import { near } from './life.js';
 
 const NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
@@ -35,7 +35,7 @@ export class Realm {
     const P = g.player;
     P.roots = P.roots || [{ e: '金', grade: 0 }];
     P.hpBonus = P.hpBonus || 0; P.sense = 0;
-    ITEMS.pill_break.use = () => this.tryBreak();
+    for (const k of ['pill_break', 'pill_break2', 'pill_break3', 'pill_break4', 'pill_break5']) ITEMS[k].use = () => this.tryBreak(k);
     ITEMS.pill_avert.use = () => this.takeAvert();
     g.rootMul = () => this.mul();
     g.rootPassive = (e) => this.passive(e);
@@ -94,14 +94,18 @@ export class Realm {
   }
 
   // ---------- 天劫（GDD「天劫」）----------
-  tryBreak() {
-    const g = this.g, P = g.player, I = levelInfo(P.layer);
+  // 破境丹分档：突破到筑基用 pill_break，金丹 pill_break2 …… 渡劫 pill_break5
+  tryBreak(used) {
+    const g = this.g, P = g.player, I = levelInfo(P.layer), need = I.realm === 0 ? 'pill_break' : 'pill_break' + (I.realm + 1);
     if (this.trib) return false;
+    if (used && used !== need) { g.toast(`这是${itemName(used)}，你现在要的是${itemName(need)}`, 2.5); return false; }
     if (!I.top || P.xp < xpNeed(P.layer)) { g.toast(`修为还没圆满（${I.name}），破境丹现在吃了也是浪费`, 2.5); return false; }
     if (this.cool > g.day) { g.toast(`上次渡劫失败，${this.cool - g.day + 1} 天内不能再渡`, 2.5); return false; }
     const home = g.life.atHome || near(P, g.life.home.door, 10) !== false;
     if (!home && Math.hypot(P.pos.x, P.pos.z) < VILLAGE_R + 6) { g.toast('村子里禁止渡劫（自家洞府除外）', 2.5); return false; }
-    const id = g.inv.selId?.startsWith('pill_break') ? g.inv.selId : ['pill_break+2', 'pill_break+1', 'pill_break'].find((k) => g.inv.count(k));
+    if (g.hubs?.at(P.pos)) { g.toast('坊市里禁止渡劫', 2.5); return false; }
+    const id = [need + '+2', need + '+1', need].find((k) => g.inv.count(k));
+    if (!id) { g.toast(`需要${itemName(need)}`, 2); return false; }
     g.inv.take(id);
     this.startTrib(home, id.endsWith('+2') ? 0.7 : id.endsWith('+1') ? 0.85 : 1);
     return true;

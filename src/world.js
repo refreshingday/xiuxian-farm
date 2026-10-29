@@ -71,6 +71,9 @@ const makePaths = () => HOUSES.map((h) => [h.cx, h.cz + h.d / 2 + 0.6, 0, 0]).co
 let PATHS = makePaths();
 // 村子布局（data/villagers.json）：房屋、茶摊、委托板。要在 new World 之前调用
 let STALL = null;
+// 野外空地：坊市、宗门所在的地方不长树，中间铺石板（main 在 new World 之前登记）
+let CLEARINGS = [];
+export function configureClearings(list) { CLEARINGS = list; }
 export const BOARD = { x: -4.5, z: -7 };
 export function configureVillage(data) {
   HOUSES = Object.entries(data.houses).map(([id, h]) => {
@@ -104,6 +107,7 @@ function groundSample(x, z, out) {
   const bd = Math.min(Math.hypot(x - BASIN.x, z - BASIN.z) - BASIN.r, segDist(x, z, ...STREAM) - 0.55);
   if (bd < 0.8 + (n - 0.5) * 0.5) { GS.kind = 2; GS.path = 1; }
   for (const [px, pz, , pr] of PEAKS) if (Math.hypot(x - px, z - pz) < pr + 0.9 + (n - 0.5) * 0.8) { GS.kind = 4; GS.path = 1; mix3(out, out, [96, 112, 84], 0.7); }
+  for (const c of CLEARINGS) if (c.plaza && Math.abs(x - c.x) < c.plaza + (n - 0.5) && Math.abs(z - c.z) < c.plaza * 0.75 + (n - 0.5)) { GS.kind = 1; GS.path = 1; }
   const F = FARM;
   if (x > F.x0 - 0.5 && x < F.x0 + F.cols * F.size + 0.5 && z > F.z0 - 0.5 && z < F.z0 + F.rows * F.size + 0.5) { GS.kind = 3; GS.path = 1; }
   const mine = 1 - smooth(MINE_R - 1, MINE_R + 5, dm + (n - 0.5) * 4);
@@ -655,7 +659,7 @@ export class World {
     for (let gx = 0; gx < CHUNK; gx += step) for (let gz = 0; gz < CHUNK; gz += step) {
       const x = ox + gx + rng() * step, z = oz + gz + rng() * step;
       const dv = Math.hypot(x, z), dm = Math.hypot(x - MINE.x, z - MINE.y), rd = roadDist(x, z);
-      const clear = dv < VILLAGE_R - 3 || rd < 3 || dm < MINE_R + 7 || pondDist(x, z) < 2;
+      const clear = dv < VILLAGE_R - 3 || rd < 3 || dm < MINE_R + 7 || pondDist(x, z) < 2 || CLEARINGS.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
       const dens = fbm(x * 0.035, z * 0.035, 21, 2);
       const r = rng();
       const maple = mapleAmount(x, z);

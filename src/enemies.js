@@ -43,6 +43,8 @@ export const TYPES = {
   ghost: T({ name: '游魂', hp: 55, r: 0.65, speed: 3.2, dmg: 11, xp: 16, elem: '阴', kind: 'shooter', look: 'ghost', c: ['#b8c8ff', '#6a7ab8', '#e8f0ff'], shot: '#c8d8ff', h: 2.2, night: true, drops: [['yaodan', 0.3], ['shard', 0.35]] }),
   // 夜里才有
   flower: T({ name: '花妖', hp: 60, r: 0.65, speed: 2.4, dmg: 10, xp: 16, elem: '木', kind: 'shooter', look: 'flower', c: ['#3a8a3a', '#ff7ab8', '#fff0a0'], shot: '#ff9ac8', h: 1.8, night: true, drops: [['yaodan', 0.3], ['yuehua', 0.25], ['ninglu', 0.25]] }),
+  // 黑吃黑：坊市拍到重宝后，回程路上截杀的劫修
+  bandit: T({ name: '劫修', hp: 140, r: 0.7, speed: 4.0, dmg: 16, xp: 30, elem: '金', kind: 'charger', look: 'zombie', c: ['#3a3e48', '#22242a', '#ff4a3a'], h: 2.2, drops: [['yaodan', 0.5], ['shard', 0.5]], stones: [2, 5] }),
   insect: T({ name: '妖虫', hp: 40, r: 0.55, speed: 3.6, dmg: 7, xp: 10, elem: '木', kind: 'charger', look: 'bug', c: ['#5a3a2a', '#c8a03a', '#ffcc3a'], h: 1.1, drops: [['yaodan', 0.2]] }),
 };
 // 妖王（GDD 第 7 节：20 个；炼气圈 1、筑基 / 金丹 / 元婴各 6、化神 1，再加原型的赤岩妖王）。
