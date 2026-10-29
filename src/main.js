@@ -17,6 +17,8 @@ import { SecretRealms } from './secret.js';
 import { Places } from './places.js';
 import { Social } from './social.js';
 import { Home } from './home.js';
+import { Gamepad, PAD } from './gamepad.js';
+import { TUNE } from './combo.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
@@ -115,7 +117,7 @@ function sample(h, idx, out) {
 const g = {
   scene, camera, time: 0, hours: DAY_START, day: 1, weatherToday: 'clear', nightK: 0, scheduled: [], paused: true,
   after(sec, fn) { this.scheduled.push({ t: this.time + sec, fn }); },
-  shakeV: 0, shake(v) { this.shakeV = Math.max(this.shakeV, v); },
+  shakeV: 0, shake(v) { if (!this.noShake) this.shakeV = Math.max(this.shakeV, v); },
   // 事件：kill / harvest / plant / water / soilQi / craft / talk …（任务进度等靠它推进）
   handlers: {}, on(t, f) { (this.handlers[t] ??= []).push(f); }, emit(t, ...a) { for (const f of this.handlers[t] || []) f(...a); },
   toast(msg, sec = 2.2) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), sec * 1000); },
@@ -288,7 +290,9 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); mouseDown.fill(false); });
-renderer.domElement.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); });
+renderer.domElement.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') { mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); if (e.movementX || e.movementY) pad.on = false; } });
+// 手柄（gamepad.js）
+const pad = new Gamepad(); g.pad = pad;
 // 左键松开才出招（按下只"上膛"）；按下时若在对话中，这次点击只用来关对话框
 let armed = false;
 renderer.domElement.addEventListener('pointerdown', (e) => { sfx.unlock(); if (gui.dialogOpen) { gui.advance(); return; } if (e.pointerType === 'touch') return; mouseDown[e.button] = true; if (e.button === 0) armed = !gui.blocking; });
@@ -320,7 +324,13 @@ touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
 
 const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function updateAim() {
-  if (!touch.on) { ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); return; }
+  // 手柄：右摇杆推着就朝那个方向，不推就和手机一样自动瞄最近的妖兽
+  if (pad.on && !touch.on && Math.hypot(pad.aim.x, pad.aim.y) > 0.3) {
+    const ix = pad.aim.x, iy = -pad.aim.y;
+    aim.set(P.pos.x + (ix * Math.cos(camYaw) - iy * Math.sin(camYaw)) * 5, 0, P.pos.z + (-ix * Math.sin(camYaw) - iy * Math.cos(camYaw)) * 5);
+    return;
+  }
+  if (!touch.on && !pad.on) { ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); return; }
   // 手机：自动瞄准附近最近的敌人（摇杆推着时优先摇杆方向上的），没有就朝移动 / 面朝方向
   const mv = moveInput(), my = mv.lengthSq() > 0.1 ? Math.atan2(mv.x, mv.y) : null;
   let best = null, bs = 1e9;
@@ -405,8 +415,8 @@ function dash() {
   combat.cancel(); sfx.dash();
 }
 function moveInput() {
-  const ix = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0) + touch.stick.x;
-  const iy = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0) + touch.stick.y;
+  const ix = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0) + touch.stick.x + pad.stick.x;
+  const iy = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0) + touch.stick.y + pad.stick.y;
   const v = new THREE.Vector2(ix * Math.cos(camYaw) - iy * Math.sin(camYaw), -ix * Math.sin(camYaw) - iy * Math.cos(camYaw));
   if (v.lengthSq() > 1) v.normalize();
   return v;
@@ -471,8 +481,26 @@ function openMenu() {
     body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
+    body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
     body.append(btn('❓ 操作说明', () => { gui.closePanel(); document.getElementById('help').classList.remove('hidden'); }, 'wide'));
     body.append(btn('🔄 重新开始', () => { if (confirm('放弃当前进度，从头开始？')) { clearSave(); location.reload(); } }, 'wide'));
+  });
+}
+// 设置（存在本机）：音量、震屏、连招节奏提示（GDD 第 12 节：F/S 提示可以在设置里开关）
+const settings = { vol: 0.7, shake: true, rhythm: false };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
+const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
+applySettings();
+function openSettings() {
+  gui.panel('设置', (body) => {
+    const row = el('div', 'prow');
+    const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings.vol; r.style.flex = '1';
+    r.addEventListener('input', () => { settings.vol = +r.value; applySettings(); });
+    row.append(el('span', 'pic', '🔊'), el('div', 'ptxt', '<b>音量</b>'), r); body.append(row);
+    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条']]) {
+      body.append(gui.row(k === 'shake' ? '📳' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
+    }
+    body.append(el('div', 'pempty', '手柄：左摇杆移动 · 右摇杆瞄准 · A 普攻 · B 闪避 · X / Y / LB / RB 技能 · LT 换武 · RT 交互 · 十字键换快捷栏 / 用 / 背包 · Start 菜单 · Back 地图 · 按右摇杆 神识 · 按左摇杆 御剑'));
   });
 }
 const metaText = () => { const d = dateOf(g.day); return `${d.seasonName}季第${d.dayOfSeason}天 ${clockText(g.hours)} · ${levelInfo(P.layer).name}`; };
@@ -563,8 +591,36 @@ function updateHpBars(dt) {
   targetBar.update(dt); targetBar.place();
 }
 
+// 手柄按键：对话 / 面板里十字键选、A 确定、B 关；游戏里按 gamepad.js 开头的布局
+let padSel = 0;
+function padTick() {
+  for (const b of pad.poll()) {
+    if (g.title) { if (b === PAD.A) document.querySelector('#titleBtns button')?.click(); continue; }
+    if (gui.dialogOpen) {
+      const bs = [...document.querySelectorAll('.dchoices button')];
+      if ((b === PAD.UP || b === PAD.DOWN) && bs.length) { padSel = (padSel + (b === PAD.DOWN ? 1 : bs.length - 1)) % bs.length; bs.forEach((x, i) => x.classList.toggle('padfocus', i === padSel)); }
+      if (b === PAD.A) { if (bs.length) bs[padSel % bs.length].click(); else gui.advance(); padSel = 0; }
+      if (b === PAD.B) { gui.closeDialog(); padSel = 0; }
+      continue;
+    }
+    if (gui.panelOpen) { if (b === PAD.B || b === PAD.START) gui.closePanel(); continue; }
+    if (b === PAD.A) attackClick();
+    if (b === PAD.B) dash();
+    const sk = [PAD.X, PAD.Y, PAD.LB, PAD.RB].indexOf(b); if (sk >= 0) useSkill(sk);
+    if (b === PAD.LT) cycleWeapon();
+    if (b === PAD.RT) interact();
+    if (b === PAD.LEFT || b === PAD.RIGHT) { inv.sel = (inv.sel + (b === PAD.RIGHT ? 1 : 7)) % 8; gui.renderHotbar(inv); }
+    if (b === PAD.UP) hotKey(inv.sel);
+    if (b === PAD.DOWN) openBag();
+    if (b === PAD.START) openMenu();
+    if (b === PAD.BACK) landmarks.open();
+    if (b === PAD.RS) realm.scan();
+    if (b === PAD.LS) realm.toggleFly();
+  }
+}
 function frame(now) {
   requestAnimationFrame(frame);
+  padTick();
   tick(Math.min(0.05, (now - last) / 1000)); last = now;
   composer.render();
 }
@@ -732,7 +788,21 @@ function updateLights(h) {
   aura.intensity = Math.max(g.nightK * 0.6, m) * 6 * (m > 0.5 && g.lampOn === false ? 0.25 : 1); // 矿洞里灯灭了只剩一点微光
 }
 
+// 连招节奏条：收招前点 = 快（预输入），收招后一小会儿 = 快，再晚 = 慢，太晚 = 断
+const RPRE = 0.3, rcur = document.getElementById('rcur');
+function updateRhythm() {
+  if (!settings.rhythm) return;
+  const span = RPRE + TUNE.slowWin + 0.3, pct = (t) => clamp((t + RPRE) / span, 0, 1) * 100 + '%';
+  const m = runner.move; let dt = null;
+  if (m && runner.t < m.cancel) dt = runner.t - m.cancel;
+  else if (runner.path !== null && !runner.moves[runner.tree[runner.path]].end) dt = runner.clock - runner.readyAt;
+  const bar = document.getElementById('rhythm');
+  bar.style.opacity = dt === null || dt > span - RPRE ? 0.25 : 1;
+  if (dt !== null) rcur.style.left = pct(dt);
+  const z = bar.children; z[0].style.width = pct(0); z[1].style.left = pct(0); z[1].style.width = `calc(${pct(TUNE.fastWin)} - ${pct(0)})`; z[2].style.left = pct(TUNE.fastWin); z[2].style.width = `calc(${pct(TUNE.slowWin)} - ${pct(TUNE.fastWin)})`;
+}
 function updateUI() {
+  updateRhythm();
   if (!runner.move && !runner.open && comboEl.textContent) showMove(null);
   ui.hpFill.style.width = (P.hp / P.maxHp * 100) + '%';
   ui.hpText.textContent = `${Math.ceil(P.hp)} / ${P.maxHp}`;

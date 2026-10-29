@@ -95,6 +95,12 @@
   .qt span { display: block; padding-left: 10px; opacity: .9; } .qt.ok b { color: #7dffb0; } .qt .hint { color: #ffcf9a; }
   #markLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
   .qmark { position: absolute; left: 0; top: 0; font-size: 26px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.8)); }
+  /* 连招节奏条（设置里开）：绿 = 快，黄 = 慢，灰 = 断 */
+  #rhythm { position: fixed; left: 50%; bottom: 176px; transform: translateX(-50%); width: 220px; height: 8px; border-radius: 4px; background: rgba(138,143,150,.5); overflow: hidden; pointer-events: none; transition: opacity .2s; }
+  #rhythm i { position: absolute; top: 0; bottom: 0; left: 0; } #rhythm i:nth-child(1) { background: rgba(125,255,176,.35); } #rhythm i:nth-child(2) { background: rgba(125,255,176,.85); } #rhythm i:nth-child(3) { background: rgba(255,200,90,.8); }
+  #rhythm b { position: absolute; top: -2px; bottom: -2px; width: 3px; background: #fff; box-shadow: 0 0 6px #fff; }
+  body.mobile #rhythm { bottom: auto; top: calc(44px + env(safe-area-inset-top)); }
+  .padfocus { outline: 2px solid #ffe7a8; outline-offset: 2px; }
   #fade { position: fixed; inset: 0; background: #05070c; opacity: 0; pointer-events: none; transition: opacity .8s; z-index: 30; }
   #fade.on { opacity: 1; }
   #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(10, 24, 30, .45), rgba(5, 10, 20, .88)); z-index: 25; }
@@ -259,6 +265,7 @@
 </div>
 
 <div id="comboName"></div>
+<div id="rhythm" hidden><i></i><i></i><i></i><b id="rcur"></b></div>
 <div id="tribBar"></div>
 <div id="toast"></div>
 <div id="hurt"></div>

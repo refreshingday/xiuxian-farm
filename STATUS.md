@@ -29,6 +29,8 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - NPC 对话（F 交谈）— 🟩 — 2026-10-30 — 按好感、天气、昼夜换台词；带选项（送礼 / 买卖 / 委托）
 
 ## 玩家 / 成长 (`main.js`)
+- 手柄（`gamepad.js`，GDD 第 1 节）：左摇杆移动、右摇杆瞄准（不推自动吸附）、A 普攻、B 闪避、X/Y/LB/RB 技能、LT 换武、RT 交互、十字键快捷栏 / 背包、Start 菜单、Back 地图；对话里十字键选、A 确定 — 🟩 — 2026-10-30
+- 设置（菜单 → ⚙）：音量、震屏、连招节奏提示条（GDD 第 12 节 F/S 提示开关）— 🟩 — 2026-10-30
 - 日常（`life.js`）：床上睡觉（回满 + 打坐修为 + 自动存档）、2:00 不在家就昏倒（丢 10% 钱）、死亡丢 10% 钱和一半低价材料（包袱留在原地，天亮前可捡）、丹毒递减 — 🟩 — 2026-10-30
 - 存读档（`save.js`，localStorage，只存差异）+ 标题画面（继续 / 新的开始）+ 菜单（Esc）— 🟩 — 2026-10-30
 - 物品 / 背包 / 快捷栏 1–8（`items.js` + `data/items.json`，数据驱动）、金钱 + 灵石 — 🟩 — 2026-10-30 — 战斗时快捷栏淡出
@@ -93,6 +95,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-10-30 — 手柄支持、设置面板、连招节奏条
 - 2026-10-30 — 魔道入侵、血魔宫隐藏线、九重剑阶、青锋剑派灭门危机
 - 2026-10-30 — 灵兽、帮工、洞府升级、制符台 / 阵法台、建房引村民
 - 2026-10-30 — 节日、道侣、结局与 NG+
