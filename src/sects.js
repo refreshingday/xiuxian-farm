@@ -28,6 +28,8 @@ export class Sects {
     this.learned = new Set(); this.traitor = new Set(); this.alumni = new Set();
     this.week = -1; this.tourneyDay = -1;
     this.trial = null; this.pet = null;
+    this.steps = 0; this.stepDay = -1; this.stepsToday = 0;   // 剑宗九重剑阶
+    this.crisis = { day: 22 + Math.floor(Math.random() * 10), state: 'wait' }; // 青锋剑派灭门危机：wait / alarm / fight / saved / ruined
     g.player.mods = {};
     this.list = landmarks.list.filter((L) => L.kind === 'sect' && this.data[L.name]).map((L) => this.build(L));
     g.sects = this;
@@ -79,6 +81,8 @@ export class Sects {
     const choices = [];
     let line, sub = d.intro;
     if (this.traitor.has(s.name)) { g.ui.dialog({ name: `${s.name} 执事`, line: '叛出师门之人，还有脸回来？', hint: '叛出过的门派不会再收你。' }); return; }
+    if (d.hidden && !g.quests.flags.has('bloodClue')) { g.ui.dialog({ narrate: true, line: '这里只有一片焦黑的岩地，什么也没有……', hint: '也许该去问问知道内情的人。' }); return; }
+    if (s.ruined) { g.ui.dialog({ narrate: true, line: '山门已经塌了，到处是烧焦的梁柱。青锋剑派……没了。', hint: '灭门危机时没人来救。' }); return; }
     if (!d.evil && (P.karma || 0) >= 150 && !mine) { g.ui.dialog({ name: `${s.name} 执事`, line: '你身上的血腥气隔着山门都闻得到。正道不收魔头。', hint: '业力太重，正道门派都敌视你。洗心丹能洗去业力。' }); return; }
     if (mine) {
       line = `${RANK[m.rank]}弟子，有事？`; sub = `${RANK[m.rank]} · 贡献 ${m.contrib}`;
@@ -97,6 +101,9 @@ export class Sects {
       line = d.hidden ? '……你居然找到了这里。想入魔道？这条路可回不了头。' : `${d.intro}想拜入本门？先和守山弟子过过招。`;
       choices.push({ label: `⚔ 入门试炼（${TRIAL_T / 60} 分钟内打败试炼弟子）`, fn: () => this.startTrial(s, 'join') });
     }
+    // 剑宗九重剑阶：元婴起谁都能登，每一阶和更高辈分的弟子单挑（一天最多三阶）
+    if (d.id === 'jianzong' && realm >= 3 && this.steps < 9) choices.unshift({ label: `🗡 登九重剑阶（第 ${this.steps + 1} 阶）`, off: this.stepDay === g.day && this.stepsToday >= 3, fn: () => { if (!(this.stepDay === g.day && this.stepsToday >= 3)) this.startTrial(s, 'step'); } });
+    if (s.vassal) line = '恩公来了！本门上下随时听候差遣。（附属门派：功法贡献打七折）';
     choices.push({ label: '离开' });
     g.ui.dialog({ name: `${s.name} 执事`, sub, line, info: `功法：${d.techs.map((t) => t.name).join('、')}`, choices });
   }
@@ -105,12 +112,12 @@ export class Sects {
     g.ui.panel(`${s.name} · 功法`, (body) => {
       body.append(el('div', 'pmoney', `${RANK[m.rank]} · 贡献 ${m.contrib}`));
       for (const t of s.d.techs) {
-        const have = this.learned.has(t.id), lockR = m.rank < t.rank;
-        body.append(g.ui.row(have ? '✅' : '📖', `${t.name} <i>${RANK[t.rank]}可学 · ${t.cost} 贡献</i>`, t.desc,
+        const have = this.learned.has(t.id), lockR = m.rank < t.rank, cost = Math.round(t.cost * (s.vassal ? 0.7 : 1));
+        body.append(g.ui.row(have ? '✅' : '📖', `${t.name} <i>${RANK[t.rank]}可学 · ${cost} 贡献</i>`, t.desc,
           [btn(have ? '已学会' : lockR ? `要${RANK[t.rank]}` : '学习', () => {
-            if (have || lockR || m.contrib < t.cost) return;
-            m.contrib -= t.cost; this.learned.add(t.id); this.recalc(); g.toast(`学会了 ${t.name}`, 2); g.ui.refresh();
-          }, have || lockR || m.contrib < t.cost ? 'off' : '')]));
+            if (have || lockR || m.contrib < cost) return;
+            m.contrib -= cost; this.learned.add(t.id); this.recalc(); g.toast(`学会了 ${t.name}`, 2); g.ui.refresh();
+          }, have || lockR || m.contrib < cost ? 'off' : '')]));
       }
     });
   }
@@ -149,12 +156,12 @@ export class Sects {
   // ---------- 试炼：入门 / 晋升 / 大比，在练武场上一对一 ----------
   startTrial(s, kind) {
     const g = this.g, P = g.player, m = this.member, rounds = kind === 'tourney' ? 3 : 1;
-    const lvl = s.lvl + (kind === 'promote' ? (m.rank + 1) * 2 : kind === 'tourney' ? (m?.rank || 0) * 2 : 0);
+    const lvl = s.lvl + (kind === 'promote' ? (m.rank + 1) * 2 : kind === 'tourney' ? (m?.rank || 0) * 2 : kind === 'step' ? this.steps : 0);
     this.trial = { s, kind, lvl, round: 0, rounds, t: TRIAL_T, foe: null };
     for (const e of [...g.enemies.list]) if (!e.boss && Math.hypot(e.pos.x - s.x, e.pos.z - s.z) < 30) g.enemies.remove(e);
     P.pos.set(s.x, 0, s.z + 5.5);
     this.nextFoe();
-    g.toast({ join: '入门试炼', promote: '晋升试炼', tourney: '宗门大比' }[kind] + '：开始！', 2);
+    g.toast({ join: '入门试炼', promote: '晋升试炼', tourney: '宗门大比', step: `九重剑阶 · 第 ${this.steps + 1} 阶` }[kind] + '：开始！', 2);
   }
   nextFoe() {
     const T = this.trial, g = this.g;
@@ -172,7 +179,7 @@ export class Sects {
       if (T.round < T.rounds) { g.toast(`第 ${T.round} 场胜！下一场`, 1.6); this.nextFoe(); }
       else this.endTrial(true);
     }
-    document.getElementById('tribBar').textContent = `${{ join: '入门试炼', promote: '晋升试炼', tourney: '宗门大比' }[T.kind]} · 第 ${T.round}/${T.rounds} 场　${Math.ceil(T.t)}`;
+    document.getElementById('tribBar').textContent = `${{ join: '入门试炼', promote: '晋升试炼', tourney: '宗门大比', step: '九重剑阶' }[T.kind]} · 第 ${T.round}/${T.rounds} 场　${Math.ceil(T.t)}`;
   }
   endTrial(win, why) {
     const T = this.trial, g = this.g, s = T.s;
@@ -186,6 +193,11 @@ export class Sects {
     } else if (T.kind === 'promote') {
       this.member.rank++;
       g.ui.dialog({ name: `${s.name} 执事`, line: `恭喜晋升${RANK[this.member.rank]}弟子！`, info: '更深的功法解锁了。' });
+    } else if (T.kind === 'step') {
+      if (this.stepDay !== g.day) { this.stepDay = g.day; this.stepsToday = 0; }
+      this.steps++; this.stepsToday++; g.addStones(5 + this.steps * 3, g.player.pos);
+      if (this.steps >= 9) { g.player.atkBonus += 0.15; g.ui.dialog({ name: '剑宗 执事', line: '九重剑阶，一气登顶！剑宗上下，无人不服。', info: '攻击 +15%，剑宗记下了你的名字。' }); g.quests.flags.add('swordSteps'); }
+      else g.toast(`登上第 ${this.steps} 阶剑阶`, 2);
     } else {
       this.tourneyDay = g.day; this.addContrib(150); g.addStones(5 + s.lvl, g.player.pos);
       g.ui.dialog({ name: `${s.name} 执事`, line: '大比三连胜！本周魁首，赏！', info: '贡献 +150，另有灵石。' });
@@ -214,8 +226,38 @@ export class Sects {
     p.y = Math.abs(Math.sin(g.time * 8)) * 0.15;
   }
 
+  // ---------- 青锋剑派灭门危机（GDD 独特地点 3）：魔修围山，三天内去救；守住成你的附属门派，放任就成废墟（永久）----------
+  updateCrisis() {
+    const g = this.g, C = this.crisis, s = this.list.find((x) => x.d.id === 'qingfeng'), P = g.player;
+    if (!s || C.state === 'saved' || C.state === 'ruined') return;
+    if (C.state === 'wait' && g.day >= C.day) { C.state = 'alarm'; C.deadline = g.day + 3; g.toast('急报！青锋剑派遭魔修围攻，\n三天之内去救援，晚了就来不及了！', 5); }
+    if (C.state === 'alarm' && g.day > C.deadline) { this.ruin(s); return; }
+    if (C.state === 'alarm' && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 28) {
+      C.state = 'fight'; C.wave = 0;
+      g.toast('魔修正在攻山！', 2);
+    }
+    if (C.state === 'fight') {
+      if (!g.enemies.list.some((e) => e.crisis)) {
+        if (C.wave >= 3) { C.state = 'saved'; s.vassal = true; this.member && this.member.name === s.name && this.addContrib(200); g.ui.dialog({ name: '青锋剑派 执事', lines: ['魔修退了……青锋剑派保住了！', '恩公大恩，本门愿奉你为上宾——从今往后，青锋剑派就是你的附属门派。'], info: '附属门派：在这里学功法贡献打七折，宗门大比奖励照拿。' }); for (const v of g.village.list) v.addAff(10); return; }
+        C.wave++;
+        for (let i = 0; i < 2 + C.wave * 2; i++) { const a = Math.random() * 6.28, e = g.enemies.spawn('demoncult', s.x + Math.cos(a) * 14, s.z + Math.sin(a) * 14, s.lvl + C.wave); e.state = 'chase'; e.crisis = true; }
+        g.toast(`魔修 · 第 ${C.wave} 波`, 1.5);
+      }
+      if (Math.hypot(P.pos.x - s.x, P.pos.z - s.z) > 60 || P.dead) { for (const e of [...g.enemies.list]) if (e.crisis) g.enemies.remove(e); C.state = 'alarm'; }
+    }
+  }
+  ruin(s, quiet) {
+    const g = this.g;
+    this.crisis.state = 'ruined'; s.ruined = true;
+    for (const dsc of s.disciples) dsc.c.root.visible = false;
+    s.elder.root.visible = false;
+    if (this.member?.name === s.name) this.member = null;
+    if (!quiet) g.toast('青锋剑派……被魔修灭门了。\n山门成了一片废墟', 5);
+  }
+
   update(dt) {
     const g = this.g, P = g.player;
+    this.updateCrisis();
     this.updateTrial(dt);
     if (this.trial) document.body.classList.add('trib');
     this.updatePet(dt);
@@ -228,9 +270,13 @@ export class Sects {
       for (const dsc of s.disciples) { dsc.t += dt; dsc.c.root.rotation.y = Math.PI; animChibi(dsc.c, dt, { move: 0, attack: (dsc.t % 1.6) / 1.6 < 0.4 ? (dsc.t % 1.6) / 0.64 : -1, cast: 0 }); }
     }
   }
-  save() { return { member: this.member, learned: [...this.learned], traitor: [...this.traitor], alumni: [...this.alumni], tourney: this.tourneyDay }; }
+  save() { return { member: this.member, learned: [...this.learned], traitor: [...this.traitor], alumni: [...this.alumni], tourney: this.tourneyDay, steps: this.steps, crisis: this.crisis }; }
   load(s) {
     this.member = s.member; this.learned = new Set(s.learned); this.traitor = new Set(s.traitor); this.alumni = new Set(s.alumni); this.tourneyDay = s.tourney ?? -1;
+    this.steps = s.steps || 0; if (s.crisis) this.crisis = s.crisis;
+    const qf = this.list.find((x) => x.d.id === 'qingfeng');
+    if (qf && this.crisis.state === 'ruined' && !qf.ruined) this.ruin(qf, true);
+    if (qf && this.crisis.state === 'saved') qf.vassal = true;
     this.recalc();
   }
 }

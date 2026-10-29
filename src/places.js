@@ -35,6 +35,10 @@ export class Places {
     g.life.on((P) => this.tomb && near(P, this.tomb, 3.5) !== false && !this.duel && { label: this.tombWins >= 3 ? '古剑冢（剑魂已认主）' : `拔剑（第 ${this.tombWins + 1} 道残影）`, act: this.tombWins >= 3 ? null : () => this.drawSword(), d: 1 });
     // 天火陨坑：捡陨铁碎片
     g.life.on((P) => { for (const f of this.frags) { const d = near(P, f, 1.6); if (d !== false) return { label: '捡起天外陨铁碎片', act: () => this.pickFrag(f), d }; } return null; });
+    // 隐藏线（GDD 剧情）：神秘流浪者 → 鬼市 → 血魔宫。无名好感 6 颗心时透露鬼市；鬼市的蒙面摊主再指出血魔宫的入口
+    g.on('talk', (v) => {
+      if (v.d.id === 'wanderer' && v.hearts >= 6 && !g.quests.flags.has('ghostClue')) { g.quests.flags.add('ghostClue'); setTimeout(() => g.toast('无名的话里藏着线索：\n古战场的鬼市，有人知道血魔宫在哪', 3.5), 400); }
+    });
     g.life.dayHooks.push((d) => {
       this.showerTonight = g.weatherToday !== 'rain' && Math.random() < 0.3;
       for (const f of this.frags) g.scene.remove(f.m); this.frags = [];
@@ -72,6 +76,13 @@ export class Places {
       body.append(el('div', 'pmoney', `💎 灵石 ${inv.stones}　业力 ${g.player.karma || 0}`));
       body.append(el('div', 'pempty', '蒙面摊主压低声音：「灵根、天材、丹药……都是好货，别问来路。」'));
       body.append(btn('🌱 灵根洗炼（用修为代替天材地宝）', () => { g.ui.closePanel(); g.realm.openRoots(true); }, 'wide'));
+      if (g.quests.flags.has('ghostClue') && !g.quests.flags.has('bloodClue')) body.append(btn('🩸 打听血魔宫（50 灵石）', () => {
+        if (inv.stones < 50) return g.toast('灵石不够', 1.2);
+        inv.stones -= 50; g.quests.flags.add('bloodClue');
+        const L = g.landmarks.list.find((x) => x.name === '血魔宫'); if (L) L.found = true;
+        g.ui.closePanel();
+        g.ui.dialog({ name: '蒙面摊主', lines: ['……你想去那儿？', '火山南边，熔岩最深处有一道裂缝。顺着血腥味走，就是血魔宫的山门。', '去了，就别想干干净净地回来。'], info: '舆图上标出了血魔宫。' });
+      }, 'wide'));
       for (const id of sells) {
         const it = item(id), stolen = id.startsWith('root_'), p = stolen ? 260 : Math.max(8, Math.ceil(it.sell / 70));
         body.append(g.ui.row(it.icon, `${it.name} <i>${p} 灵石${stolen ? ' · 业力 +10' : ''}</i>`, stolen ? '夺来的灵根，原主人已成凡人……' : it.desc, [btn('买', () => {
