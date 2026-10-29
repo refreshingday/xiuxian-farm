@@ -111,7 +111,26 @@
   .mb.press { filter: brightness(1.6); transform: scale(.92); }
   #mAtk { right: 0; bottom: 0; width: 100px; height: 100px; font-size: 30px; }
   #mDash { right: 112px; bottom: 4px; }
-  #mSwap { right: 6px; bottom: 112px; width: 50px; height: 50px; font-size: 14px; }
+  /* 灵力 / 武器 / 技能槽 */
+  #qi { position: relative; height: 12px; margin-top: 6px; border-radius: 4px; overflow: hidden; background: rgba(0,0,0,.45); border: 1px solid rgba(160,210,255,.6); }
+  #qiFill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: linear-gradient(90deg, #4a8fd8, #bfe8ff); }
+  #qiTxt { position: absolute; inset: 0; line-height: 12px; font-size: 10px; text-align: center; color: #fff; text-shadow: 0 1px 2px #000; }
+  #kitRow { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; }
+  #weapon { font-family: "STKaiti", "KaiTi", serif; font-size: 18px; letter-spacing: 2px; color: var(--gold); text-shadow: 0 1px 3px #000; min-width: 1.6em; text-align: center; }
+  #skills { display: flex; gap: 6px; }
+  .sk { position: relative; width: 60px; height: 46px; border: 1px solid var(--line); border-radius: 4px; background: rgba(0,0,0,.45); overflow: hidden; text-align: center; padding-top: 2px; transition: opacity .15s; }
+  .sk b { display: block; font-size: 10px; font-weight: normal; opacity: .7; }
+  .sk .nm { display: block; font-family: "STKaiti", "KaiTi", serif; font-size: 14px; color: var(--gold); }
+  .sk small { display: block; font-size: 10px; opacity: .7; }
+  .sk i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0,0,0,.6); }
+  .sk.off, .mb.off { opacity: .45; }
+  #mobSkills, .mini { display: none; }
+  body.mobile #kitRow { display: none; }
+  body.mobile #mobSkills { display: grid; grid-template-columns: repeat(4, 50px); gap: 6px; position: fixed; right: calc(14px + env(safe-area-inset-right)); bottom: 132px; z-index: 4; }
+  body.mobile #mobSkills .mb { position: static; width: 50px; height: 50px; font-size: 12px; }
+  body.mobile .mini { display: flex; position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); width: 54px; height: 54px; font-size: 13px; z-index: 4; }
+  body.mobile #mWeap { right: calc(14px + env(safe-area-inset-right)); bottom: 196px; }
+  body.mobile #mSwap { right: calc(14px + env(safe-area-inset-right)); bottom: 254px; }
 </style>
 </head>
 <body>
@@ -126,6 +145,7 @@
   <div>慢点 → 挑天：把木桩挑上天，再快点追上去空中连斩</div>
   <div>空格 / Shift 闪避（打断连段）</div>
   <div>1 单桩 · 2 一排 · 3 一群 · 4 移动靶</div>
+  <div>Q E F C 技能 · X 换武（剑 / 拳 / 符）</div>
   <div class="dim" style="margin-top:6px">快 = 招式收尾前就点（或刚收尾）<br>慢 = 收尾后稍停再点<br>停太久 = 断招，重新起手</div>
   <div style="margin-top:6px"><a href="index.html">← 回主世界</a></div>
 </div>
@@ -139,6 +159,7 @@
   <label>时间倍率 <input id="timeScale" type="range" min="0.1" max="1.5" step="0.05"><span class="v"></span></label>
   <label>木桩血量 <input id="dummyHp" type="range" min="100" max="2000" step="50"><span class="v"></span></label>
   <label>击退倍率 <input id="knock" type="range" min="0.5" max="3" step="0.1"><span class="v"></span></label>
+  <label>灵根 <select id="elem"><option>金</option><option>木</option><option>水</option><option>火</option><option>土</option></select></label>
   <label>音量 <input id="vol" type="range" min="0" max="1" step="0.05"><span class="v"></span></label>
   <div class="btns">
     <button id="bHitbox">判定框</button>
@@ -174,13 +195,29 @@
     <div id="mark" hidden></div><div id="cursor" hidden></div>
   </div>
   <div id="lastIn"></div>
+  <div id="qi"><i id="qiFill"></i><span id="qiTxt"></span></div>
+  <div id="kitRow"><span id="weapon"></span>
+    <div id="skills">
+      <div class="sk" data-slot="0"><b>Q</b><span class="nm"></span><small class="qc"></small><i></i></div>
+      <div class="sk" data-slot="1"><b>E</b><span class="nm"></span><small class="qc"></small><i></i></div>
+      <div class="sk" data-slot="2"><b>F</b><span class="nm"></span><small class="qc"></small><i></i></div>
+      <div class="sk" data-slot="3"><b>C</b><span class="nm"></span><small class="qc"></small><i></i></div>
+    </div>
+  </div>
 </div>
 
 <div id="mobBtns">
-  <div class="mb" id="mSwap">换靶</div>
   <div class="mb" id="mDash">闪</div>
   <div class="mb" id="mAtk">斩</div>
 </div>
+<div id="mobSkills">
+  <div class="mb" data-slot="0"><span class="nm"></span></div>
+  <div class="mb" data-slot="1"><span class="nm"></span></div>
+  <div class="mb" data-slot="2"><span class="nm"></span></div>
+  <div class="mb" data-slot="3"><span class="nm"></span></div>
+</div>
+<div class="mb mini" id="mWeap">剑</div>
+<div class="mb mini" id="mSwap">换靶</div>
 
 <script type="importmap">
 { "imports": {

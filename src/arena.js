@@ -7,7 +7,8 @@ import { clamp, angDiff, lerpAngle, toon, mesh, at, setFlash, outlineMat, addOut
 import { createChibi, animChibi } from './chibi.js';
 import { FX } from './fx.js';
 import { TUNE, ComboRunner } from './combo.js';
-import { AIR_MOVES as MOVES, AIR_TREE as TREE, AIR_ROUTES as ROUTES, AIR_FX as MOVE_FX, AIR_SFX as MOVE_SFX } from './comboAir.js';
+import { AIR_FX as MOVE_FX, AIR_SFX as MOVE_SFX } from './comboAir.js';
+import { KITS, SKILL_KEYS, ELEM, KE } from './comboKit.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { TouchControls } from './touch.js';
@@ -77,7 +78,7 @@ const cfx = new ComboFX(scene, fx, { soft: true });
 const sfx = new SFX();
 
 // ---------- 调参（存在本机浏览器，刷新不丢） ----------
-const opt = { fastWin: TUNE.fastWin, slowWin: TUNE.slowWin, timeScale: 1, dummyHp: 300, knock: 1.6, hitbox: false, stop: true, shake: true, vol: 0.7, sound: true, soft: true };
+const opt = { fastWin: TUNE.fastWin, slowWin: TUNE.slowWin, timeScale: 1, dummyHp: 300, knock: 1.6, elem: '金', hitbox: false, stop: true, shake: true, vol: 0.7, sound: true, soft: true };
 try { Object.assign(opt, JSON.parse(localStorage.getItem('arenaTune') || '{}')); } catch {}
 const saveOpt = () => { try { localStorage.setItem('arenaTune', JSON.stringify(opt)); } catch {} };
 opt.hitbox = false; // 判定框每次打开都默认关
@@ -102,6 +103,10 @@ for (const [id, key] of [['bHitbox', 'hitbox'], ['bStop', 'stop'], ['bShake', 's
   b.addEventListener('click', () => { opt[key] = !opt[key]; b.classList.toggle('on', opt[key]); sfx.enabled = opt.sound; cfx.soft = opt.soft; saveOpt(); });
 }
 
+const elemSel = document.getElementById('elem');
+elemSel.value = opt.elem;
+elemSel.addEventListener('change', () => { opt.elem = elemSel.value; P.elem = opt.elem; saveOpt(); });
+
 // ---------- 木桩 ----------
 const dummies = [];
 let movingTargets = false;
@@ -114,7 +119,7 @@ const DG = {
   head: new THREE.SphereGeometry(0.26, 12, 10),
 };
 function makeDummy(x, z) {
-  const mats = [];
+  const mats = [], elem = ELEM[dummies.length % 5];
   const M = (c) => { const m = toon(c, { unique: true }); mats.push(m); return m; };
   const straw = M('#d8b86a'), wood = M('#8a5a3a'), rope = M('#6a4a2a'), sack = M('#c8a878');
   const root = new THREE.Group(), yaw = new THREE.Group(), tilt = new THREE.Group(), model = new THREE.Group();
@@ -126,7 +131,7 @@ function makeDummy(x, z) {
   root.position.set(x, 0, z);
   scene.add(root);
   const d = { root, yaw, tilt, model, mats, pos: root.position, home: new THREE.Vector2(x, z), base: new THREE.Vector2(x, z), r: 0.55, vx: 0, vz: 0, vy: 0, ang: 0, angV: 0, flash: 0, stun: 0, airRot: 0, airSpin: 0, spiked: false, bumpT: 0,
-    name: '试炼木桩 · ' + NUMS[dummies.length], max: opt.dummyHp, hp: opt.dummyHp, dead: false, deathT: 0, spawnT: 1 };
+    name: '试炼木桩 · ' + NUMS[dummies.length] + ' · ' + elem, elem, max: opt.dummyHp, hp: opt.dummyHp, dead: false, deathT: 0, spawnT: 1 };
   d.bar = new HealthBar({ parent: hpLayer, max: d.max, tick: 50 });
   dummies.push(d);
   return d;
@@ -156,10 +161,12 @@ const stats = { total: 0, log: [], chainHits: 0, best: 0, kills: 0 };
 // h：命中参数里的 launch / lift / spike / pull（见 comboAir.js）
 const GRAV = 26;
 const airborne = (d) => d.pos.y > 0.02 || d.vy > 0;
+// 五行：己克对方 ×1.5，被克 ×0.75
+const elemMul = (d) => (KE[P.elem] === d.elem ? 1.5 : KE[d.elem] === P.elem ? 0.75 : 1);
 function hitDummy(d, dmg, fromX, fromZ, knock, color = '#ffffff', h = {}) {
   if (d.dead) return;
   const air = airborne(d);
-  const crit = Math.random() < 0.12, amt = dmg * (crit ? 1.8 : 1);
+  const crit = Math.random() < 0.12, mul = elemMul(d), amt = dmg * (crit ? 1.8 : 1) * mul;
   if (focusD !== d) { focusD = d; targetBar.snap(d.hp, d.max, d.name); }
   d.hp = Math.max(0, d.hp - amt);
   d.bar.damage(amt, crit); targetBar.damage(amt, crit);
@@ -177,7 +184,7 @@ function hitDummy(d, dmg, fromX, fromZ, knock, color = '#ffffff', h = {}) {
   d.yaw.rotation.y = Math.atan2(dx, dz); d.model.rotation.y = -d.yaw.rotation.y;
   d.angV += 4 + Math.abs(knock) * 0.7;
   d.flash = 0.1;
-  fx.num(d.pos, Math.round(amt) + (crit ? '!' : ''), crit ? 'crit' : '');
+  fx.num(d.pos, Math.round(amt) + (crit ? '!' : '') + (mul > 1 ? '克' : mul < 1 ? '弱' : ''), crit ? 'crit' : '');
   fx.nums.at(-1).p.y += d.pos.y;
   fx.burst(d.pos, crit ? '#ffe28a' : color, crit ? 12 : 6, { speed: 5, up: 2, life: 0.3, y: 1.1 });
   sfx.impact({ crit, heavy: clamp((dmg - 10) / 25, 0, 1) });
@@ -300,14 +307,20 @@ function wallDummy(d) {
 const P = {
   c: createChibi({ skin: '#f8d8bc', hair: '#4a2e22', hairStyle: 2, robe: '#f2f4f6', robe2: '#4f7fb0', belt: '#3a5a78', pants: '#3a4250', sword: true }),
   r: 0.4, yaw: -Math.PI / 2, iframe: 0, dashT: 0, dashCd: 0, dashDir: 0, vy: 0,
+  qi: 100, qiMax: 100, qiPause: 0, skillCd: [0, 0, 0, 0], elem: opt.elem,
   leapFrom: new THREE.Vector2(), leapTo: new THREE.Vector2(), leapY0: 0, leapY1: 0, leapOn: false, motion: [], sweepHit: new Set(),
 };
 P.pos = P.c.root.position;
 P.pos.set(1, 0, 0);
 scene.add(P.c.root);
 
-const runner = new ComboRunner(TUNE, MOVES, TREE);
+// 当前武器（拳 / 剑 / 符）：决定连招树和技能槽，切换见 setKit
+let kit = KITS[0];
+const runner = new ComboRunner(TUNE, kit.moves, kit.tree);
+runner.afford = (m) => P.qi >= (m.qi || 0); // 灵力不够就断回第一击
 const fwd = () => new THREE.Vector2(Math.sin(P.yaw), Math.cos(P.yaw));
+// 向前 dist 米的地面点（最远 8 米）
+const groundAt = (dist) => { const f = fwd(), k = Math.min(dist, 8); return { x: P.pos.x + f.x * k, z: P.pos.z + f.y * k }; };
 const fxCtx = (m, cx, cz) => ({ cfx, fx, x: P.pos.x, y: P.pos.y, z: P.pos.z, yaw: P.yaw, fx0: Math.sin(P.yaw), fz0: Math.cos(P.yaw), color: m.color || '#9ef0ff', cx, cz, getPos: () => P.pos, getY: () => P.pos.y });
 
 // 前方（±40°）最近、高度够得着的木桩
@@ -359,12 +372,13 @@ runner.on.start = (m, path, type) => {
   P.iframe = Math.max(P.iframe, m.iframe || 0);
   P.sweepHit.clear();
   if (path === '') stats.chainHits = 0;
+  else { P.qi -= m.qi || 0; P.qiPause = 0.4; }
   P.motion = (m.motion || []).map((s) => ({ ...s, d: motionDist(s) }));
   P.leapOn = false;
   if (m.leap && m.leap.t0 <= 0.05) startLeap(m);
   if (m.pose === 'dash') fx.burst(P.pos, '#9ef0ff', 14, { speed: 6, up: 1, life: 0.3 });
   MOVE_FX[m.id]?.start?.(fxCtx(m, P.leapTo.x, P.leapTo.y), m);
-  if (sfx.ok) { sfx.tick(type); MOVE_SFX[m.id]?.start?.(sfx, m, (m.hits[0]?.t ?? 0.15) / opt.timeScale); }
+  if (sfx.ok) { sfx.tick(type); if (MOVE_SFX[m.id]) MOVE_SFX[m.id].start?.(sfx, m, (m.hits[0]?.t ?? 0.15) / opt.timeScale); else sfx.swing({ lead: 0.06, pitch: 1.15, size: 0.8 }); }
   P.ghostT = 0;
   showMove(m, path);
 };
@@ -390,7 +404,20 @@ runner.on.hit = (m, h, idx) => {
   } else if (h.shape === 'wave') {
     debugLine(P.pos.x, P.pos.z, P.yaw, h.len, h.w);
     waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color, hit: new Set(), m: spawnWaveMesh(color) });
+  } else if (h.shape === 'bolt') {
+    spawnBolt(P.pos.x + f.x * 0.8, P.pos.z + f.y * 0.8, P.yaw + (h.ang || 0), h, color);
+  } else if (h.shape === 'trap') {
+    const g0 = groundAt(h.at); placeBlast(g0.x, g0.z, h, color);
+  } else if (h.shape === 'rain') {
+    const g0 = groundAt(h.at);
+    for (let k = 0; k < h.n; k++) {
+      const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * h.spread;
+      placeBlast(g0.x + Math.cos(a) * rr, g0.z + Math.sin(a) * rr, { ...h, keep: false, delay: h.delay * (0.4 + Math.random() * 0.6) }, color);
+    }
+  } else if (h.shape === 'detonate') {
+    for (const b of blasts.filter((b) => b.keep && b.armed)) explode(b, h.mul);
   }
+  if (!MOVE_FX[m.id] && h.shape === 'arc') cfx.arc(P.pos, P.yaw, color, { tilt: idx % 2 ? 0.6 : -0.6, scale: 0.85, flip: idx % 2 === 1 });
   const f2 = fwd();
   MOVE_FX[m.id]?.hit?.(fxCtx(m, P.pos.x + f2.x * (h.at || 0), P.pos.z + f2.y * (h.at || 0)), h, idx);
   if (sfx.ok) MOVE_SFX[m.id]?.hit?.(sfx, h, idx, m);
@@ -433,6 +460,69 @@ function updateWaves(dt) {
   }
 }
 
+// ---------- 符：飞符、陷阱、圆形爆炸 ----------
+const bolts = [], blasts = [];
+const talisGeo = new THREE.BoxGeometry(0.32, 0.46, 0.03);
+const talisMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff3c0').multiplyScalar(2), toneMapped: false });
+function spawnBolt(x, z, yaw, h, color) {
+  const m = new THREE.Mesh(talisGeo, talisMat); m.position.set(x, 1.1, z); m.rotation.y = yaw; scene.add(m);
+  bolts.push({ x, z, yaw, left: h.range, h, color, hit: new Set(), m });
+}
+function updateBolts(dt) {
+  for (let i = bolts.length - 1; i >= 0; i--) {
+    const b = bolts[i], step = Math.min(b.left, b.h.spd * dt);
+    b.x += Math.sin(b.yaw) * step; b.z += Math.cos(b.yaw) * step; b.left -= step;
+    b.m.position.set(b.x, 1.1, b.z);
+    if (Math.random() < 0.6) fx.mote(b.x, 1.1, b.z, b.color, { life: 0.25, size: 0.7 });
+    let done = b.left <= 0;
+    for (const d of live()) {
+      if (b.hit.has(d) || d.pos.y > 2 || Math.hypot(d.pos.x - b.x, d.pos.z - b.z) > d.r + 0.3) continue;
+      b.hit.add(d); hitDummy(d, b.h.dmg, b.x - Math.sin(b.yaw), b.z - Math.cos(b.yaw), b.h.knock, b.color, b.h);
+      if (!b.h.pierce) { done = true; break; }
+    }
+    if (done) { fx.burst({ x: b.x, z: b.z }, b.color, 8, { speed: 4, up: 2, life: 0.3, y: 1 }); scene.remove(b.m); bolts.splice(i, 1); }
+  }
+}
+// 陷阱：先预警圈，延时后生效；keep 的会一直埋在地上，有人踩进去或引爆才炸，6 秒后失效
+function placeBlast(x, z, h, color) {
+  const b = { x, z, h, color, keep: !!h.keep, delay: h.delay ?? 0.2, t: 0, armed: !h.delay };
+  fx.circle(x, z, h.r, b.delay);
+  blasts.push(b);
+}
+function updateBlasts(dt) {
+  for (let i = blasts.length - 1; i >= 0; i--) {
+    const b = blasts[i]; b.t += dt;
+    if (!b.armed && b.t >= b.delay) b.armed = true;
+    if (!b.armed) continue;
+    if (!b.keep) { explode(b); continue; }
+    if (b.t > b.delay + 6) { blasts.splice(i, 1); continue; }
+    if (live().some((d) => Math.hypot(d.pos.x - b.x, d.pos.z - b.z) - d.r < b.h.r)) explode(b);
+    else if (Math.random() < 0.15) { const a = Math.random() * Math.PI * 2; fx.mote(b.x + Math.cos(a) * b.h.r, 0.2, b.z + Math.sin(a) * b.h.r, b.color, { life: 0.5, size: 0.6, vy: 0.8 }); }
+  }
+}
+function explode(b, mul = 1) {
+  const h = b.h;
+  fx.shockRing(b.x, b.z, h.r, b.color, 0.3);
+  fx.burst({ x: b.x, z: b.z }, b.color, 18, { speed: 6, up: 4, life: 0.45, y: 0.3 });
+  cfx.flash(b.x, b.z, b.color, 20, 0.25);
+  for (const d of live()) {
+    if (Math.hypot(d.pos.x - b.x, d.pos.z - b.z) - d.r > h.r) continue;
+    hitDummy(d, h.dmg * mul, b.x, b.z, h.knock, b.color, h);
+    if (h.root) { d.stun = h.root; d.vx = d.vz = 0; }
+  }
+  hitFeel(h);
+  const i = blasts.indexOf(b); if (i >= 0) blasts.splice(i, 1);
+}
+// 以一点为圆心的一圈伤害（技能用）
+function ring(r, dmg, extra, color, x = P.pos.x, z = P.pos.z) {
+  fx.shockRing(x, z, r, color, 0.3);
+  for (const d of live()) {
+    if (Math.hypot(d.pos.x - x, d.pos.z - z) - d.r > r) continue;
+    hitDummy(d, dmg, x, z, extra.knock ?? 6, color, extra);
+  }
+  hitFeel(extra);
+}
+
 // ---------- 判定框可视化（调参面板「判定框」开关，默认关） ----------
 const dbg = [];
 const dbgMat = () => new THREE.MeshBasicMaterial({ color: 0xff3a6a, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
@@ -464,6 +554,9 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'Space' || e.code === 'ShiftLeft') dash();
   if (['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) layout(+e.code.slice(5));
+  const si = SKILL_KEYS.indexOf(e.code);
+  if (si >= 0) useSkill(si);
+  if (e.code === 'KeyX') cycleWeapon();
   if (e.code === 'KeyR') resetStats();
   if (e.code === 'Space') e.preventDefault();
 });
@@ -488,6 +581,8 @@ const tap = (fn) => ({ down: () => { sfx.unlock(); fn(); } });
 touch.bind(document.getElementById('mAtk'), { down: () => sfx.unlock(), up: (c) => { if (!c) runner.click(); } });
 touch.bind(document.getElementById('mDash'), tap(dash));
 touch.bind(document.getElementById('mSwap'), tap(() => layout(layoutN % 4 + 1)));
+touch.bind(document.getElementById('mWeap'), tap(() => cycleWeapon()));
+for (let i = 0; i < SKILL_KEYS.length; i++) touch.bind(document.querySelector(`.mb[data-slot="${i}"]`), tap(() => useSkill(i)));
 
 // ---------- 音效试听（逐个播放，找出哪个不对） ----------
 const SFX_LIST = [
@@ -518,7 +613,7 @@ const SFX_LIST = [
     ['流星 · 爆炸', 'explode', () => sfx.explode()],
   ]],
   // 整招：按游戏里的时间顺序播（出招 + 每个判定帧），不含命中木桩声
-  ['整招（按实战时序）', Object.values(MOVES).map((m) => [m.name, m.id, () => {
+  ['整招（按实战时序）', KITS.flatMap((k) => Object.values(k.moves)).map((m) => [m.name, m.id, () => {
     MOVE_SFX[m.id]?.start?.(sfx, m, m.hits[0]?.t ?? 0.15);
     m.hits.forEach((h, i) => setTimeout(() => MOVE_SFX[m.id]?.hit?.(sfx, h, i, m), h.t * 1000));
   }])],
@@ -587,7 +682,7 @@ function dash() {
   if (P.dashCd > 0) return;
   const mv = moveInput();
   P.dashDir = mv.lengthSq() > 0 ? Math.atan2(mv.x, mv.y) : P.yaw;
-  P.dashT = 0.18; P.dashCd = 0.55; P.iframe = Math.max(P.iframe, 0.25);
+  P.dashT = 0.18; P.dashCd = 2.5; P.iframe = Math.max(P.iframe, 0.25);
   sfx.dash();
   if (runner.path !== null) { runner.cancel(); showMove(null); }
 }
@@ -596,6 +691,8 @@ function dash() {
 const _v2 = new THREE.Vector2();
 function updatePlayer(dt) {
   P.iframe -= dt; P.dashCd -= dt;
+  P.qiPause -= dt; if (P.qiPause <= 0) P.qi = Math.min(P.qiMax, P.qi + 22 * dt);
+  for (let i = 0; i < P.skillCd.length; i++) P.skillCd[i] = Math.max(0, P.skillCd[i] - dt);
   runner.update(dt);
   const m = runner.move, t = runner.t;
   const mv = moveInput();
@@ -691,14 +788,64 @@ function updateCamera(dt) {
 
 // ---------- 界面 ----------
 const $ = (id) => document.getElementById(id);
-const routeEls = ROUTES.map((r) => {
-  const el = document.createElement('div'); el.className = 'route';
-  let html = `<div class="hd"><span class="nm">${r.name}</span><span class="tg">${r.tag}</span></div><div class="steps"><span class="chip">${MOVES[TREE['']].name}</span>`;
-  for (let i = 0; i < r.seq.length; i++) html += `<span class="arr ${r.seq[i]}">▸${r.seq[i] === 'F' ? '快' : '慢'}</span><span class="chip">${MOVES[TREE[r.seq.slice(0, i + 1)]].name}</span>`;
-  el.innerHTML = html + '</div>';
-  $('routeList').appendChild(el);
-  return { r, el, chips: [...el.querySelectorAll('.chip')] };
-});
+// ---------- 武器与技能（X 换武；Q E F C 技能） ----------
+const slotEls = [...document.querySelectorAll('[data-slot]')];
+let kitI = 0;
+function setKit(i) {
+  kitI = (i + KITS.length) % KITS.length; kit = KITS[kitI];
+  if (runner.path !== null) { runner.cancel(); showMove(null); }
+  runner.moves = kit.moves; runner.tree = kit.tree;
+  if (P.c.sword) P.c.sword.visible = kit.id === 'sword';
+  buildRoutes();
+  for (const el of slotEls) {
+    const s = kit.skills[+el.dataset.slot];
+    el.querySelector('.nm').textContent = s.name;
+    const q = el.querySelector('.qc'); if (q) q.textContent = s.qi ? s.qi + ' 灵' : '回气';
+  }
+  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = kit.id === 'sword' ? '斩' : kit.name;
+}
+const cycleWeapon = () => setKit(kitI + 1);
+const SKILLS = {
+  sw_spin: () => { ring(3.2, 16, { knock: 8, launch: 2, stop: 0.05, shake: 0.3 }, '#9ef0ff'); cfx.whirl(() => P.pos, '#9ef0ff', 0.45); },
+  sw_wave: () => {
+    const f = fwd(), h = { len: 9, w: 1.6, dmg: 22, knock: 12, launch: 3, stop: 0.06, shake: 0.4 };
+    waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color: '#9ef0ff', hit: new Set(), m: spawnWaveMesh('#9ef0ff') });
+  },
+  sw_lift: () => ring(3.6, 10, { knock: 2, launch: 10, stop: 0.05 }, '#bfe8ff'),
+  ft_shock: () => ring(3, 14, { knock: 8, stop: 0.05, shake: 0.3 }, '#ffe28a'),
+  ft_bell: () => { P.iframe = Math.max(P.iframe, 0.8); cfx.flash(P.pos.x, P.pos.z, '#ffe28a', 20, 0.4, 1.2); fx.shockRing(P.pos.x, P.pos.z, 1.6, '#ffe28a', 0.35); },
+  ft_charge: () => {
+    const f = fwd();
+    P.dashT = 0.22; P.dashDir = P.yaw; P.iframe = Math.max(P.iframe, 0.25);
+    ring(2.4, 18, { knock: 10, launch: 2, stop: 0.06, shake: 0.4 }, '#ffb84a', P.pos.x + f.x * 2.2, P.pos.z + f.y * 2.2);
+  },
+  tl_nova: () => ring(3, 12, { knock: 8, launch: 2, stop: 0.04 }, '#fff3c0'),
+  tl_guard: () => { P.iframe = Math.max(P.iframe, 0.8); cfx.flash(P.pos.x, P.pos.z, '#fff3c0', 20, 0.4, 1.2); fx.shockRing(P.pos.x, P.pos.z, 1.8, '#fff3c0', 0.35); },
+  tl_put: () => { const g0 = groundAt(3); placeBlast(g0.x, g0.z, { r: 2.2, dmg: 20, knock: 10, launch: 3, keep: true, delay: 0.5 }, '#ffe28a'); },
+  qi: () => { P.qi = Math.min(P.qiMax, P.qi + 40); },
+};
+function useSkill(i) {
+  const s = kit.skills[i];
+  if (!s || P.skillCd[i] > 0 || P.qi < s.qi) return;
+  P.qi -= s.qi; P.qiPause = 0.4; P.skillCd[i] = s.cd;
+  P.yaw = aimYaw();
+  if (runner.path !== null) { runner.cancel(); showMove(null); }
+  SKILLS[s.id]();
+  sfx.unlock();
+}
+
+let routeEls = [];
+function buildRoutes() {
+  const list = $('routeList'); list.innerHTML = '';
+  routeEls = kit.routes.map((r) => {
+    const el = document.createElement('div'); el.className = 'route';
+    let html = `<div class="hd"><span class="nm">${r.name}</span><span class="tg">${r.tag}</span></div><div class="steps"><span class="chip">${kit.moves[kit.tree['']].name}</span>`;
+    for (let i = 0; i < r.seq.length; i++) html += `<span class="arr ${r.seq[i]}">▸${r.seq[i] === 'F' ? '快' : '慢'}</span><span class="chip">${kit.moves[kit.tree[r.seq.slice(0, i + 1)]].name}</span>`;
+    el.innerHTML = html + '</div>';
+    list.appendChild(el);
+    return { r, el, chips: [...el.querySelectorAll('.chip')] };
+  });
+}
 function showMove(m, path) {
   $('moveName').innerHTML = m ? `${m.name}<small>第${runner.chain}式</small>` : '';
   for (const { r, el, chips } of routeEls) {
@@ -709,6 +856,7 @@ function showMove(m, path) {
     chips.forEach((c, i) => { c.classList.toggle('lit', on && i < path.length); c.classList.toggle('now', on && i === path.length); });
   }
 }
+setKit(0);
 showMove(null, null);
 
 const PRE = 0.3;
@@ -734,7 +882,7 @@ function updateUI() {
   const m = runner.move, cur = $('cursor');
   let dt = null;
   if (m && runner.t < m.cancel) dt = Math.max(-PRE, runner.t - m.cancel);
-  else if (runner.path !== null && !MOVES[TREE[runner.path]].end) dt = runner.clock - runner.readyAt;
+  else if (runner.path !== null && !kit.moves[kit.tree[runner.path]].end) dt = runner.clock - runner.readyAt;
   cur.hidden = dt === null || dt > barSpan - PRE;
   if (!cur.hidden) cur.style.left = pct(dt);
   if (runner.path !== null && !m && !runner.open && $('moveName').textContent) showMove(null, null);
@@ -748,6 +896,13 @@ function updateUI() {
     $('lastIn').innerHTML = l.type === '起' ? `<span style="color:${lab[1]}">起手</span>` : `<span style="color:${lab[1]}">${lab[0]}</span> · ${l.dt < 0 ? '预输入 ' + Math.round(-l.dt * 1000) + 'ms' : '收招后 ' + Math.round(l.dt * 1000) + 'ms'}`;
   }
 
+  $('qiFill').style.width = P.qi / P.qiMax * 100 + '%';
+  $('qiTxt').textContent = `灵力 ${Math.floor(P.qi)} / ${P.qiMax}`;
+  for (const el of slotEls) {
+    const i = +el.dataset.slot, s = kit.skills[i], cdp = P.skillCd[i] / s.cd, ov = el.querySelector('i');
+    el.classList.toggle('off', P.skillCd[i] > 0 || P.qi < s.qi);
+    if (ov) ov.style.height = cdp * 100 + '%';
+  }
   while (stats.log.length && stats.log[0].t < realTime - 5) stats.log.shift();
   $('sTotal').textContent = Math.round(stats.total);
   $('sDps').textContent = Math.round(stats.log.reduce((s, e) => s + e.amt, 0) / 5);
@@ -771,6 +926,7 @@ function frame(now) {
   updatePlayer(dt);
   updateDummies(dt, gameTime);
   updateWaves(dt);
+  updateBolts(dt); updateBlasts(dt);
   updateDbg(raw);
   fx.update(raw * opt.timeScale);
   cfx.update(raw * opt.timeScale);
@@ -782,13 +938,13 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // 控制台调试：arena.click(); arena.step(0.3) 按固定步长推进，便于脚本化测试招式
-window.arena = { sfx, cfx, touch, aim, mouse,
+window.arena = { sfx, cfx, touch, aim, mouse, setKit, useSkill, blasts, bolts,
   runner, stats, dummies, P,
   click: () => runner.click(),
   step(sec, h = 1 / 60) {
     for (let t = 0; t < sec; t += h) {
       realTime += h; gameTime += h; hitStop = 0;
-      updateAim(); updatePlayer(h); updateDummies(h, gameTime); updateWaves(h); updateDbg(h); fx.update(h); cfx.update(h);
+      updateAim(); updatePlayer(h); updateDummies(h, gameTime); updateWaves(h); updateBolts(h); updateBlasts(h); updateDbg(h); fx.update(h); cfx.update(h);
     }
     updateCamera(1); updateBars(sec); updateUI(); composer.render();
   },

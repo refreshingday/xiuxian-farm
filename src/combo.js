@@ -70,6 +70,7 @@ export class ComboRunner {
     this.chain = 0;
     this.last = null;     // 最近一次点击：{ dt 相对可衔接点, type }
     this.on = {};         // start(move, path, type) / hit(move, hit, idx)
+    this.afford = () => true; // 灵力够不够接下一招；不够就断回第一击
   }
 
   get open() {
@@ -90,8 +91,8 @@ export class ComboRunner {
   }
 
   advance(type) {
-    const key = this.path + type;
-    if (this.tree[key]) this.start(key, type); else this.start('', '起');
+    const key = this.path + type, id = this.tree[key];
+    if (id && this.afford(this.moves[id])) this.start(key, type); else this.start('', '起');
   }
 
   start(path, type) {
