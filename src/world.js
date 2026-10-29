@@ -18,7 +18,7 @@ export const POND = { x: -7, z: -19, r: 4.6 };
 const PEAKS = [[-13, -31, 7, 2.6], [-9.5, -33, 9.5, 2.9], [-6, -31.2, 8, 2.4], [-2.4, -32.6, 10.5, 2.7], [1.2, -30.6, 6, 2], [-16.4, -28.6, 4.5, 1.8], [4, -28.4, 3.6, 1.5], [-19, -31, 6.5, 2.2]];
 const BASIN = { x: -6, z: -26.6, r: 1.7 };
 const STREAM = [BASIN.x, BASIN.z + 1.2, -6.6, -22.6];
-const HOUSES = [
+let HOUSES = [
   { cx: -15, cz: -8, w: 7, d: 6, roof: '#6e7688', wall: '#c08048', player: true },
   { cx: 17, cz: 0, w: 7, d: 6, roof: '#65708a', wall: '#b87a46' },
   { cx: -14, cz: 16, w: 6, d: 5, roof: '#727a8a', wall: '#c88a52' },
@@ -63,7 +63,19 @@ const GP = {
   plaza: [204, 198, 186], stone: [64, 60, 74], stone2: [44, 42, 52], crystal: [74, 60, 104],
 };
 const mix3 = (o, a, b, t) => { o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t; return o; };
-const PATHS = HOUSES.map((h) => [h.cx, h.cz + h.d / 2 + 0.6, 0, 0]).concat([[POND.x + 3, POND.z + 3.5, 0, 0], [FARM.x0 + 4.5, FARM.z0 - 0.6, -15, -4.4]]);
+const makePaths = () => HOUSES.map((h) => [h.cx, h.cz + h.d / 2 + 0.6, 0, 0]).concat([[POND.x + 3, POND.z + 3.5, 0, 0], [FARM.x0 + 4.5, FARM.z0 - 0.6, -15, -4.4]]);
+let PATHS = makePaths();
+// 村子布局（data/villagers.json）：房屋、茶摊、委托板。要在 new World 之前调用
+let STALL = null;
+export const BOARD = { x: -4.5, z: -7 };
+export function configureVillage(data) {
+  HOUSES = Object.entries(data.houses).map(([id, h]) => {
+    const old = HOUSES.find((o) => o.cx === h.x && o.cz === h.z) || { w: 7, d: 6, roof: '#6e7688', wall: '#c08048' };
+    return { ...old, w: h.w ?? old.w, d: h.d ?? old.d, roof: h.roof ?? old.roof, wall: h.wall ?? old.wall, id, name: h.name, cx: h.x, cz: h.z, player: id === 'home' };
+  });
+  STALL = data.stall;
+  PATHS = makePaths();
+}
 
 // 返回基础色到 out，并给出路面程度 path(0..1)、地面类型 kind
 const GS = { path: 0, kind: 0 };
@@ -730,6 +742,7 @@ export class World {
   buildVillage() {
     this.windowMats = [];
     for (const h of HOUSES) this.buildHouse(h.cx, h.cz, h.w, h.d, h);
+    this.buildVillageProps();
     this.buildPond();
     this.buildPeaks();
     this.initSky();
@@ -751,11 +764,12 @@ export class World {
     this.addCircle(0, 0, 1.3);
 
     // 灯笼柱
-    for (const [x, z] of [[5, 4], [-5, -4], [6, -1], [-5, 5], [-11, -3.5], [11, -6], [-9, 12], [9, 10], [20, -12], [26, -18]]) this.lanternPost(x, z);
+    for (const [x, z] of [[5, 4], [-5, -4], [6, -1], [-5, 5], [-11, -3.5], [11, -6], [-9, 12], [9, 10], [20, -12], [26, -18]]) if (!this.insideHouse(x, z, 1)) this.lanternPost(x, z);
 
     // 村中树木（手放）
     const trees = [[-24, -2], [-15, -23], [4, 22], [24, 2], [22, 24], [-24, 24], [-26, -16], [0, -24], [7, -15], [-2, -14]];
     trees.forEach(([x, z], i) => {
+      if (this.insideHouse(x, z, 2.5)) return;
       const t = new THREE.Group();
       t.add(mesh(this.G.trunk, this.M.trunk));
       const peach = i % 2 === 0, c = peach ? '#ffc4dc' : FOREST[i % 4];
@@ -769,6 +783,7 @@ export class World {
     // 竹丛（村子外圈）
     const bamboo = [], bleaf = [], crng = mulberry32(88);
     for (const [bx, bz] of [[-27, 6], [-28, -8], [-22, -26], [27, -6], [28, 8], [-6, 27], [10, 26], [-29, 14]]) {
+      if (this.insideHouse(bx, bz, 2.5)) continue;
       for (let k = 0; k < 7; k++) {
         const x = bx + (crng() - 0.5) * 2.4, z = bz + (crng() - 0.5) * 2.4, s = 0.8 + crng() * 0.5;
         const sy = s * (1 + crng() * 0.4);
@@ -995,7 +1010,64 @@ export class World {
     prop(new THREE.CylinderGeometry(0.34, 0.3, 0.8, 10).translate(0, 0.4, 0), toon('#9a6438', { map: TX.plank }), x1 + 0.6, z1 - 0.6);
     prop(boxUV(new THREE.BoxGeometry(0.7, 0.6, 0.6), 0.7, 0.6, 0.6, 1.5).translate(0, 0.3, 0), toon('#a8743f', { map: TX.plank }), x0 - 0.6, z1 - 0.5);
 
-    this.houses.push({ x0, x1, z0, z1, cx, cz, wallsG, roof, roofMats, hideWhenCut, t: 0, door: { x: cx, z: z1 + 1.2 }, inside: { x: cx, z: cz + 0.6 }, player: !!opt.player });
+    // 门匾：店铺和人家的名字
+    if (opt.name && !opt.player) {
+      const tex = canvasTex(256, 72, (c, w, h) => {
+        c.fillStyle = '#3a2416'; c.fillRect(0, 0, w, h); c.strokeStyle = '#d6b670'; c.lineWidth = 6; c.strokeRect(5, 5, w - 10, h - 10);
+        c.fillStyle = '#ffe7a8'; c.font = 'bold 40px "STKaiti","KaiTi","Noto Serif SC",serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(opt.name, w / 2, h / 2 + 2);
+      }, { pixel: false, repeat: false });
+      const sign = mesh(new THREE.PlaneGeometry(1.6, 0.45), toon('#ffffff', { map: tex }), { cast: false });
+      sign.position.set(cx, H + 0.05, z1 + T / 2 + 0.06); root.add(sign); hideWhenCut.push(sign);
+    }
+    this.houses.push({ id: opt.id, name: opt.name, x0, x1, z0, z1, cx, cz, wallsG, roof, roofMats, hideWhenCut, t: 0, door: { x: cx, z: z1 + 1.2 }, inside: { x: cx, z: cz + 0.6 }, player: !!opt.player });
+  }
+
+  // 铁匠铺门口的铁砧和炉子、村口茶摊、委托板
+  buildVillageProps() {
+    const line = this.M.line, stoneM = toon('#9a948e', { occ: true, map: this.T.stone }), woodM = toon('#8a5a34', { occ: true, map: this.T.plank });
+    const smithy = this.houses.find((h) => h.id === 'smithy');
+    if (smithy) {
+      const x = smithy.x0 - 1.4, z = smithy.z1 - 1.2, g = new THREE.Group();
+      g.add(at(mesh(new THREE.BoxGeometry(0.5, 0.5, 0.4).translate(0, 0.25, 0), toon('#5a3a26')), 0, 0, 0));
+      g.add(at(mesh(new THREE.BoxGeometry(0.9, 0.22, 0.4).translate(0, 0.61, 0), toon('#4a4e58')), 0, 0, 0));
+      g.add(at(mesh(new THREE.ConeGeometry(0.11, 0.4, 6).rotateZ(Math.PI / 2).translate(0.62, 0.61, 0), toon('#4a4e58')), 0, 0, 0));
+      g.position.set(x, 0, z); addOutline(g, line); this.scene.add(g); this.addCircle(x, z, 0.5);
+      const f = new THREE.Group(), fx = smithy.x0 - 1.4, fz = smithy.z0 + 1.6;
+      f.add(mesh(boxUV(new THREE.BoxGeometry(1.4, 1.0, 1.2), 1.4, 1, 1.2, 1.4).translate(0, 0.5, 0), stoneM));
+      const coal = mesh(new THREE.BoxGeometry(1.0, 0.1, 0.8), glow('#ff6a2a', 3, true), { cast: false }); coal.position.y = 1.02; f.add(coal);
+      f.add(at(mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.6, 8).translate(0, 1.8, 0), stoneM), 0.3, 0, -0.3));
+      f.position.set(fx, 0, fz); addOutline(f, line); this.scene.add(f); this.addBox(fx - 0.75, fz - 0.65, fx + 0.75, fz + 0.65);
+      this.addEmitter(fx, 1.4, fz, '#ff8a3a', 1.2, 'torch', coal);
+      this.anvil = { x: x + 0.9, z };
+    }
+    if (STALL) {
+      const { x, z } = STALL, g = new THREE.Group();
+      g.add(mesh(boxUV(new THREE.BoxGeometry(1.8, 0.1, 1.0), 1.8, 0.1, 1, 1.5).translate(0, 0.8, 0), woodM));
+      for (const [a, b] of [[-0.8, -0.4], [0.8, -0.4], [-0.8, 0.4], [0.8, 0.4]]) g.add(at(mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1).translate(0, 0.4, 0), woodM), a, 0, b));
+      for (const s of [-1, 1]) g.add(at(mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.45, 8).translate(0, 0.22, 0), woodM), s * 1.4, 0, 0.6));
+      g.add(at(mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 6).translate(0, 1.3, 0), woodM), 0, 0, 0));
+      g.add(at(mesh(new THREE.ConeGeometry(1.8, 0.7, 10).translate(0, 2.7, 0), toon('#c94f4f', { occ: true })), 0, 0, 0));
+      g.add(at(mesh(new THREE.SphereGeometry(0.16, 10, 8).scale(1, 0.8, 1), toon('#e8e0d0')), 0.4, 0.95, 0));
+      for (let i = 0; i < 3; i++) g.add(at(mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.1, 8), toon('#f0ece0')), -0.5 + i * 0.25, 0.9, 0.15));
+      const lan = mesh(new THREE.SphereGeometry(0.2, 10, 8).scale(1, 1.2, 1), glow('#ff4a2a', 1.8, true), { cast: false }); lan.position.set(1.1, 2.1, 0); g.add(lan);
+      g.position.set(x, 0, z); addOutline(g, line); this.scene.add(g);
+      this.addBox(x - 0.95, z - 0.55, x + 0.95, z + 0.55);
+      this.addEmitter(x + 1.1, 2.1, z, '#ff7a4a', 0.8, 'lantern', lan);
+      this.stall = { x, z: z + 1.4 };
+    }
+    // 委托板：两根柱子 + 木板 + 小瓦顶，上面钉着几张纸
+    {
+      const { x, z } = BOARD, g = new THREE.Group();
+      for (const s of [-1, 1]) g.add(at(mesh(new THREE.BoxGeometry(0.14, 2.2, 0.14).translate(0, 1.1, 0), woodM), s * 0.85, 0, 0));
+      g.add(at(mesh(boxUV(new THREE.BoxGeometry(1.7, 1.0, 0.08), 1.7, 1, 0.08, 1.5), woodM), 0, 1.4, 0));
+      const notes = [[-0.5, 1.6, 0.04], [0.1, 1.5, -0.08], [0.55, 1.65, 0.1], [-0.2, 1.15, 0.06], [0.45, 1.15, -0.05]];
+      for (const [a, b, r] of notes) { const n = mesh(new THREE.PlaneGeometry(0.34, 0.42), toon('#f2ead2'), { cast: false }); n.position.set(a, b, 0.05); n.rotation.z = r; g.add(n); }
+      const roof = this.gableRoof(2.1, 0.7, 0.3, toon('#5a6070', { occ: true, map: this.T.tile }), toon('#3a3e48', { occ: true }));
+      roof.position.y = 2.15; g.add(roof);
+      g.position.set(x, 0, z); addOutline(g, line); this.scene.add(g);
+      this.addBox(x - 1, z - 0.2, x + 1, z + 0.2);
+      this.board = { x, z: z + 1.2 };
+    }
   }
 
   // ---------- 池塘：带噪声轮廓的水面 + 石岸 + 小码头 ----------

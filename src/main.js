@@ -4,13 +4,14 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { loadTextures, weatherU, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, mulberry32, flat, glow, mesh } from './util.js';
+import { loadTextures, weatherU, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
 import { createChibi, animChibi } from './chibi.js';
 import { Weather } from './weather.js';
-import { World, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
+import { World, configureVillage, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
 import { FX } from './fx.js';
 import { Enemies } from './enemies.js';
-import { populateVillage, realmText } from './npc.js';
+import { realmText } from './npc.js';
+import { Village, loadVillageData } from './village.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { KE } from './comboKit.js';
@@ -115,6 +116,7 @@ await loadTextures({
   cliff_rock: { norm: 0.9 }, foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 },
   leaf_cards: { norm: 0.9, key: true }, grass_blades: { norm: 0.9, key: true }, blossom_cards: { norm: 0.9, key: true },
 });
+configureVillage(await loadVillageData().then((d) => (g.villageData = d)));
 const world = new World(scene); g.world = world;
 const enemies = new Enemies(g); g.enemies = enemies;
 const weather = new Weather(scene); g.weather = weather;
@@ -181,8 +183,6 @@ g.addStones = (n, p) => { inv.stones += n; if (p) fx.num({ x: p.x - 0.6, z: p.z 
 g.addMoney = (n, p) => { inv.money += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 文`, 'item'); };
 
 // ---------- 村民 ----------
-const npcs = populateVillage(g, mulberry32(20261027));
-g.npcs = npcs;
 
 // ---------- 刷怪 ----------
 const okSpawn = (x, z) => Math.hypot(x, z) > VILLAGE_R + 8 && Math.hypot(x - MINE.x, z - MINE.y) > MINE_R + 6 && roadDist(x, z) > 2;
@@ -364,11 +364,9 @@ function moveInput() {
 
 // ---------- 日常 / 交互（F）：各系统往 life 里登记可交互的东西，按距离挑最近的 ----------
 const life = new Life(g); g.life = life;
-life.on((P) => {
-  let best = null, bd = 2.2;
-  for (const n of npcs) { const d = n.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = { label: `交谈 · ${n.d.name}`, act: () => gui.dialog(n.talk(P.grade)), d: d - 0.5 }; } }
-  return best;
-});
+// 青竹村 21 位村民（village.js / data/villagers.json）
+const village = new Village(g, g.villageData); g.village = village;
+g.sense = () => 20 + P.layer * 8; // 神识：看清别人灵根要够高（境界系统接入前先按层数算）
 life.on((P) => {
   const cx = Math.floor(P.pos.x / CHUNK), cz = Math.floor(P.pos.z / CHUNK);
   for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
@@ -422,6 +420,7 @@ register('player', () => ({ x: P.pos.x, z: P.pos.z, hp: P.hp, maxHp: P.maxHp, qi
 });
 register('inv', () => inv.save(), (s) => inv.load(s));
 register('life', () => life.save(), (s) => life.load(s));
+register('village', () => village.save(), (s) => village.load(s));
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => world.farm.map((t) => [t.state, t.stage, t.grow]), (s) => s.forEach((v, i) => { const t = world.farm[i]; if (t) [t.state, t.stage, t.grow] = v; }));
 
@@ -506,7 +505,7 @@ function tick(dt) {
   updatePlayer(dt);
   world.update(P.pos, dt, g.nightK, g.day * 24 + g.hours);
   life.update(dt);
-  for (const n of npcs) n.update(dt, h);
+  village.update(dt);
   enemies.update(dt);
   combat.updateEffects(dt);
   ambientSpawns(dt);
@@ -565,6 +564,7 @@ function ambience(dt) {
 }
 
 function updateCamera(dt) {
+  if (g.debugCam) { const { pos: p, look: l } = g.debugCam; camera.position.set(p.x, p.y, p.z); camera.lookAt(l.x, l.y, l.z); return; } // 调试：game.debugCam = { pos, look }
   camYawT = clamp(camYawT, -0.8, 0.8);
   camYaw = lerp(camYaw, camYawT, 1 - Math.exp(-8 * dt));
   focus.lerp(P.pos, 1 - Math.exp(-8 * dt));
@@ -605,6 +605,7 @@ function updateLights(h) {
   weatherU.sky.value.copy(_fog).lerp(hemi.color, 0.5);
   const fogPush = 21 * (camZoom - 1);   // 镜头拉远时雾也往后推，别把主角雾掉
   scene.fog.near = lerp(lerp(48, 30, r), 16, m) + fogPush; scene.fog.far = lerp(lerp(95, 70, r), 38, m) + fogPush * 1.4;
+  if (g.debugCam) { scene.fog.near = 1e4; scene.fog.far = 2e4; }
   const sh = sun.shadow.camera, ext = 30 * camZoom;
   if (Math.abs(sh.right - ext) > 0.5) { Object.assign(sh, { left: -ext, right: ext, top: ext, bottom: -ext }); sh.updateProjectionMatrix(); }
   grade.uniforms.uSat.value = 1.12 - 0.25 * r;
