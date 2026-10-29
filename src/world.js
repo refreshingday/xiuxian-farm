@@ -212,6 +212,9 @@ const GROUND_FRAG = `
     c *= mix(1.0, mix(0.84, 0.62, hard), uWet);
     c *= 1.0 - gPud * 0.5;
     gWetS = uWet * (0.3 + 0.7 * hard);
+    // 季节：草地跟着变色；冬天积雪（石板上薄一些）
+    c = mix(c, c * uGrassT, 1.0 - hard);
+    c = mix(c, vec3(0.9, 0.93, 0.98) * (0.92 + gl * 0.25), uSnow * (1.0 - ws * 0.5) * (0.82 + 0.18 * n));
     diffuseColor.rgb *= c;
   }`;
 // 草地 / 土路的法线图：只扰动这两种地面，石板保持平
@@ -256,12 +259,12 @@ function groundMat(ox, oz, maps) {
       tTint: { value: maps.tint }, tMask: { value: maps.mask }, uOrigin: { value: new THREE.Vector2(ox, oz) },
       tGrass: { value: PNG.grass_ground }, tDirt: { value: PNG.dirt_path }, tStone: { value: PNG.stone_plaza },
       tGrassN: { value: PNG.grass_ground_n }, tDirtN: { value: PNG.dirt_path_n },
-      uWet: weatherU.wet, uRain: weatherU.rain, uSky: weatherU.sky, uRainT: wind,
+      uWet: weatherU.wet, uRain: weatherU.rain, uSky: weatherU.sky, uRainT: wind, uGrassT: weatherU.grassT, uSnow: weatherU.snow,
       uGrassRef: { value: lin(GP.grass) }, uPlaza: { value: lin(GP.plaza) },
       uFarm: { value: lin(mix3([0, 0, 0], GP.dirt2, GP.till, 0.75)).divide(lin(GP.dirt)) }, uSand: { value: lin(GP.sand).divide(lin(GP.dirt)) },
     });
     s.vertexShader = 'varying vec2 vGW;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = position.xz;');
-    s.fragmentShader = (PNG.grass_ground_n && PNG.dirt_path_n ? '#define GROUND_NORMALS\n' : '') + 'uniform sampler2D tTint, tMask, tGrass, tDirt, tStone, tGrassN, tDirtN;\nuniform float uWet, uRain, uRainT;\nuniform vec3 uSky;\n' + GROUND_NOISE + 'uniform vec2 uOrigin;\nuniform vec3 uGrassRef, uPlaza, uFarm, uSand;\nvarying vec2 vGW;\n'
+    s.fragmentShader = (PNG.grass_ground_n && PNG.dirt_path_n ? '#define GROUND_NORMALS\n' : '') + 'uniform sampler2D tTint, tMask, tGrass, tDirt, tStone, tGrassN, tDirtN;\nuniform float uWet, uRain, uRainT, uSnow;\nuniform vec3 uSky, uGrassT;\n' + GROUND_NOISE + 'uniform vec2 uOrigin;\nuniform vec3 uGrassRef, uPlaza, uFarm, uSand;\nvarying vec2 vGW;\n'
       + s.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>' + GROUND_FRAG).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>' + GROUND_NRM)
       .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + GROUND_WET);
   };
@@ -590,9 +593,12 @@ export class World {
     }
 
     // 房屋：进门屋顶淡出、墙体剖开（同一个世界，不切场景）
+    // 只有屋顶在变（进门 / 出门过程中）才动材质，平时 70 来座房子都跳过
     for (const h of this.houses) {
       const inside = p.x > h.x0 && p.x < h.x1 && p.z > h.z0 && p.z < h.z1;
+      if (!inside && h.t === 0 && h.settled) continue;
       h.t = approach(h.t, inside ? 1 : 0, dt * 3.5);
+      h.settled = h.t === 0;
       for (const m of h.roofMats) {
         m.opacity = 1 - h.t;
         m.transparent = h.t > 0.001;

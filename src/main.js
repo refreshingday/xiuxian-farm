@@ -840,6 +840,21 @@ updateKitUI();
 // 窗口矮时操作说明默认收起（H 打开）
 if (innerHeight < 720) document.getElementById('help').classList.add('hidden');
 
+// ---------- 季节画面（GDD 美术：春夏秋冬配色明显不同）：叶子、草地变色，冬天积雪、下雪 ----------
+const SEASON_LOOK = [
+  { leaf: [1, 1, 1], grass: [1, 1, 1], snow: 0 },
+  { leaf: [0.86, 1.0, 0.82], grass: [0.9, 1.04, 0.85], snow: 0 },
+  { leaf: [1.5, 0.82, 0.42], grass: [1.22, 0.98, 0.6], snow: 0 },
+  { leaf: [0.95, 0.98, 1.0], grass: [1.05, 1.05, 1.1], snow: 0.82 },
+];
+function applySeason() {
+  const L = SEASON_LOOK[dateOf(g.day).season];
+  weatherU.season.value.set(...L.leaf); weatherU.grassT.value.set(...L.grass); weatherU.snow.value = L.snow;
+}
+applySeason();
+life.dayHooks.push(() => { applySeason(); return ''; });
+register('season', () => 0, () => applySeason());
+
 // ---------- 标题：继续 / 新的开始 ----------
 // 新的开始（GDD「第一个小时」）：背着包袱走到青竹村外，迎面就撞上野猪妖
 function newGame() {
