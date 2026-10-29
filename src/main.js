@@ -9,7 +9,9 @@ import { createChibi, animChibi } from './chibi.js';
 import { Weather } from './weather.js';
 import { World, configureVillage, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
 import { FX } from './fx.js';
-import { Enemies } from './enemies.js';
+import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
+import { sectorAt, biomeK } from './worldmap.js';
+import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
 import { Farm } from './farm.js';
@@ -196,6 +198,13 @@ g.addMoney = (n, p) => { inv.money += n; if (p) fx.num({ x: p.x - 0.6, z: p.z },
 
 // ---------- 刷怪 ----------
 const okSpawn = (x, z) => Math.hypot(x, z) > VILLAGE_R + 8 && Math.hypot(x - MINE.x, z - MINE.y) > MINE_R + 6 && roadDist(x, z) > 2;
+// 在这里刷什么：走得越远越多本扇区的妖兽；夜里多出游魂、花妖（GDD：只在夜晚出现的敌人）
+function mobAt(x, z) {
+  const sec = sectorAt(x, z), far = Math.hypot(x, z);
+  if (g.nightK > 0.5 && far > 60 && Math.random() < 0.3) return (sec.id === 'swamp' || sec.id === 'bamboo') && Math.random() < 0.6 ? 'flower' : 'ghost';
+  if (Math.random() < biomeK(x, z) * 0.85) { const L = SECTOR_MOBS[sec.id]; return L[Math.floor(Math.random() * L.length)]; }
+  return Math.random() < 0.6 ? 'boar' : 'spider';
+}
 world.onSpawn = (cx, cz, rng) => {
   if (g.time < 1) return;
   const x0 = cx * CHUNK, z0 = cz * CHUNK;
@@ -203,19 +212,19 @@ world.onSpawn = (cx, cz, rng) => {
   for (let i = 0; i < n; i++) {
     const x = x0 + 4 + rng() * 24, z = z0 + 4 + rng() * 24;
     if (!okSpawn(x, z) || Math.hypot(x - P.pos.x, z - P.pos.z) < 16) continue;
-    enemies.spawn(rng() < 0.6 ? 'boar' : 'spider', x, z, Math.floor(dangerAt(x, z)));
+    enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)));
   }
 };
 let spawnT = 4, golemT = 0;
 function ambientSpawns(dt) {
   spawnT -= dt; golemT -= dt;
-  const near = enemies.list.filter((e) => e.type !== 'golem' && e.type !== 'boss' && e.pos.distanceTo(P.pos) < 35 * camZoom).length;
+  const near = enemies.list.filter((e) => e.type !== 'golem' && !e.boss && !e.raid && e.pos.distanceTo(P.pos) < 35 * camZoom).length;
   if (spawnT <= 0) {
-    spawnT = 2.5 - g.nightK * 1.2;
+    spawnT = (2.5 - g.nightK * 1.2) * (g.bloodMoon ? 0.6 : 1);
     if (near < 11 + g.nightK * 7 && !P.dead) {
       const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * camZoom;
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
-      if (okSpawn(x, z)) enemies.spawn(Math.random() < 0.6 ? 'boar' : 'spider', x, z, Math.floor(dangerAt(x, z)));
+      if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)));
     }
   }
   const dm = Math.hypot(P.pos.x - MINE.x, P.pos.z - MINE.y);
@@ -405,6 +414,11 @@ const quests = new Quests(g, await loadQuestData()); g.quests = quests;
 g.onKill = (e) => g.emit('kill', e);
 // 世界地图上的宗门、坊市、秘境、妖王巢穴、奇地、矿点（landmarks.js + data/world_map.json）
 const landmarks = new Landmarks(g, await (await fetch('data/world_map.json')).json()); g.landmarks = landmarks;
+// 妖王巢穴：地图上每个妖王一个（加上原型矿洞里的赤岩妖王）
+for (const L of landmarks.list) if (L.kind === 'boss' && BOSS_BY_NAME[L.name]) enemies.lairs.push({ type: BOSS_BY_NAME[L.name], x: L.x, z: L.z, deadDay: -99 });
+// 世界事件：血月、妖虫夜袭（events.js）
+const events = new Events(g); g.events = events;
+g.itemName = itemName;
 function interact() {
   if (gui.blocking || P.dead || g.paused) return;
   life.find()?.act?.();
@@ -444,6 +458,7 @@ register('realm', () => realm.save(), (s) => realm.load(s));
 register('alchemy', () => alchemy.save(), (s) => alchemy.load(s));
 register('quests', () => quests.save(), (s) => quests.load(s));
 register('landmarks', () => landmarks.save(), (s) => landmarks.load(s));
+register('events', () => ({ ...events.save(), lairs: enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
 
@@ -459,13 +474,13 @@ document.getElementById('loading').classList.add('hidden');
 const hpLayer = document.getElementById('hpLayer');
 const targetBar = new HealthBar({ parent: document.body, big: true, max: 1 });
 targetBar.el.style.display = 'none';
-const BAR_Y = { boar: 1.7, spider: 1.4, golem: 2.7 };
+const barY = (e) => e.T.h ?? 2;
 const fadingBars = [];
 let focusE = null, focusT = 0;
-const enemyName = (e) => e.type === 'boss' ? `赤岩妖王${e.phase === 2 ? ' · 狂暴' : ''}` : e.T.name;
+const enemyName = (e) => (e.boss ? `${e.T.name}${e.phase === 2 ? ' · 狂暴' : ''}` : `${e.T.name}${e.blood ? '（血月）' : ''}`);
 function focusOn(e, hp) { focusE = e; targetBar.dead = false; targetBar.snap(hp, e.maxHp, enemyName(e)); }
 g.onEnemyHit = (e, amt, crit) => {
-  if (e.type !== 'boss') {
+  if (!e.boss) {
     e.bar ??= new HealthBar({ parent: hpLayer, max: e.maxHp });
     e.bar.hp = e.hp + amt; e.bar.damage(amt, crit);
   }
@@ -476,7 +491,7 @@ g.onEnemyHit = (e, amt, crit) => {
 g.onEnemyGone = (e) => {
   const dead = e.hp <= 0;
   if (e.bar) {
-    if (dead) { e.bar.hp = 0; e.bar.die(); fadingBars.push({ bar: e.bar, x: e.pos.x, y: BAR_Y[e.type] ?? 2, z: e.pos.z, t: 0.9 }); }
+    if (dead) { e.bar.hp = 0; e.bar.die(); fadingBars.push({ bar: e.bar, x: e.pos.x, y: barY(e), z: e.pos.z, t: 0.9 }); }
     else e.bar.remove();
     e.bar = null;
   }
@@ -490,7 +505,7 @@ function placeBar(bar, dt, x, y, z) {
   if (!front) bar.el.style.visibility = 'hidden';
 }
 function updateHpBars(dt) {
-  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, (BAR_Y[e.type] ?? 2) + e.pos.y, e.pos.z);
+  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, barY(e) + e.pos.y, e.pos.z);
   for (let i = fadingBars.length - 1; i >= 0; i--) {
     const f = fadingBars[i]; f.t -= dt; placeBar(f.bar, dt, f.x, f.y, f.z);
     f.bar.el.style.opacity = Math.min(1, f.t / 0.4).toFixed(3);
@@ -530,6 +545,7 @@ function tick(dt) {
   life.update(dt);
   realm.update(dt);
   landmarks.update(dt);
+  events.update(dt);
   scanMarks(dt);
   farm.update();
   alchemy.update(dt);
@@ -636,6 +652,8 @@ function updateLights(h) {
   weatherU.sky.value.copy(_fog).lerp(hemi.color, 0.5);
   const fogPush = 21 * (camZoom - 1);   // 镜头拉远时雾也往后推，别把主角雾掉
   scene.fog.near = lerp(lerp(48, 30, r), 16, m) + fogPush; scene.fog.far = lerp(lerp(95, 70, r), 38, m) + fogPush * 1.4;
+  // 血月：夜里天色发红
+  if (g.bloodMoon && g.nightK > 0.2) { const bk = g.nightK * (1 - m); _fog.lerp(_ca.setHex(0x4a0c10), bk * 0.7); hemi.color.lerp(_ca.setHex(0xff4a3a), bk * 0.5); scene.fog.color.copy(_fog); scene.background.copy(_fog); }
   // 天劫：劫云压顶，天色变暗发紫
   const tk = realm.dark;
   if (tk > 0.01) { sun.intensity *= 1 - 0.8 * tk; hemi.intensity *= 1 - 0.5 * tk; _fog.lerp(_ca.setHex(0x2a2440), tk * 0.8); scene.fog.color.copy(_fog); scene.background.copy(_fog); }
