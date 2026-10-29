@@ -30,7 +30,7 @@
     { "n": 12, "name": "万妖谷", "ang": 48, "dist": 880, "realm": "元婴", "mech": "妖族领地 / 兽潮源头" },
     { "n": 13, "name": "血魔宫", "ang": 194, "dist": 870, "realm": "元婴", "mech": "业力 / 隐藏入口" },
     { "n": 14, "name": "剑宗 · 万剑峰", "ang": 350, "dist": 860, "realm": "元婴", "mech": "九重剑阶" },
-    { "n": 15, "name": "天劫峰", "ang": 0, "dist": 1150, "realm": "化神", "mech": "登顶生存战 / 最终渡劫" }
+    { "n": 15, "name": "天劫峰", "ang": 0, "dist": 1150, "realm": "化神", "mech": "心魔路 / 天劫峰妖王" }
   ],
   "sects": [
     { "name": "青锋剑派", "sector": "snow", "ang": 15, "dist": 180, "size": "小宗", "style": "剑法入门，炼气可拜入" },
@@ -90,7 +90,8 @@
     { "name": "千年蛟母", "ang": 110, "dist": 960, "realm": "元婴" },
     { "name": "炎麒麟", "ang": 180, "dist": 985, "realm": "元婴" },
     { "name": "古剑傀", "ang": 250, "dist": 905, "realm": "元婴" },
-    { "name": "鬼王", "ang": 300, "dist": 980, "realm": "元婴" }
+    { "name": "鬼王", "ang": 300, "dist": 980, "realm": "元婴" },
+    { "name": "太古雷鹏", "ang": 0, "dist": 1150, "realm": "化神" }
   ],
   "hubs": [
     { "name": "青石坊市", "ang": 250, "dist": 300, "realm": "筑基" },
@@ -100,6 +101,7 @@
   "secretRealms": [
     { "name": "废弃驿站", "ang": 232, "dist": 195, "realm": "炼气" },
     { "name": "万竹迷阵", "ang": 42, "dist": 400, "realm": "筑基" },
+    { "name": "流沙地宫", "ang": 228, "dist": 600, "realm": "金丹" },
     { "name": "沉船泽", "ang": 104, "dist": 860, "realm": "元婴" },
     { "name": "古战场秘境", "ang": 290, "dist": 875, "realm": "元婴" }
   ]
