@@ -90,7 +90,8 @@
     { "name": "千年蛟母", "ang": 110, "dist": 960, "realm": "元婴" },
     { "name": "炎麒麟", "ang": 180, "dist": 985, "realm": "元婴" },
     { "name": "古剑傀", "ang": 250, "dist": 905, "realm": "元婴" },
-    { "name": "鬼王", "ang": 300, "dist": 980, "realm": "元婴" }
+    { "name": "鬼王", "ang": 300, "dist": 980, "realm": "元婴" },
+    { "name": "太古雷鹏", "ang": 0, "dist": 1150, "realm": "化神" }
   ],
   "hubs": [
     { "name": "青石坊市", "ang": 250, "dist": 300, "realm": "筑基" },
