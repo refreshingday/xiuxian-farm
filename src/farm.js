@@ -146,7 +146,10 @@ export class Farm {
 
   // 新的一天：按昨天浇没浇水结算
   newDay(date) {
-    const g = this.g, M = g.player.mods || {}, rain = g.weatherToday === 'rain' || !!M.autoWater, wood = g.rootPassive?.('木') ?? 0, ice = g.rootPassive?.('冰') ?? 0;
+    const g = this.g, M = { ...(g.player.mods || {}) };
+    if (g.inv.count('zhen_ju')) { M.soilQi = (M.soilQi || 0) + 1; M.herbAge = (M.herbAge || 0) + 1; } // 聚灵阵盘
+    if (g.inv.count('zhen_yu')) M.autoWater = 1;                                                     // 灵雨阵盘
+    const rain = g.weatherToday === 'rain' || !!M.autoWater, wood = g.rootPassive?.('木') ?? 0, ice = g.rootPassive?.('冰') ?? 0;
     const ageRate = this.ageRate * (1 + (M.herbAge || 0)), earth = g.rootPassive?.('土') ?? 0;
     if (M.soilQi) for (const t of this.tiles) if (t.state > 0) t.qi = Math.min(QI_MAX, t.qi + M.soilQi); // 聚灵阵
     let withered = 0, hungry = 0, ripened = 0;

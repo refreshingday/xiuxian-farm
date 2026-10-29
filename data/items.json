@@ -861,6 +861,81 @@
    "sell": 0,
    "buy": 3000,
    "desc": "红绳编的同心结。送给好感 8 颗心以上的人，就是求结道侣（筑基之后）。"
+  },
+  "chick": {
+   "name": "灵鸡苗",
+   "icon": "🐣",
+   "cat": "tool",
+   "sell": 0,
+   "buy": 400,
+   "desc": "带回家放进灵兽圈（灵田西边），每天喂一样庄稼，第二天下灵蛋。最多 4 只。"
+  },
+  "calf": {
+   "name": "灵牛犊",
+   "icon": "🐮",
+   "cat": "tool",
+   "sell": 0,
+   "buy": 1600,
+   "desc": "带回家放进灵兽圈，每天喂一样庄稼，第二天出灵乳。最多 2 头。"
+  },
+  "egg": {
+   "name": "灵蛋",
+   "icon": "🥚",
+   "cat": "food",
+   "sell": 80,
+   "heal": 25,
+   "desc": "灵鸡下的蛋，补气血。"
+  },
+  "milk": {
+   "name": "灵乳",
+   "icon": "🥛",
+   "cat": "food",
+   "sell": 160,
+   "qiHeal": 40,
+   "heal": 15,
+   "desc": "灵牛的乳，补灵力。"
+  },
+  "fu_fire": {
+   "name": "爆炎符",
+   "icon": "🧧",
+   "cat": "pill",
+   "sell": 120,
+   "desc": "制符台画的攻击符。用了就往前方甩出去，炸开一片火。"
+  },
+  "fu_ice": {
+   "name": "寒冰符",
+   "icon": "🧊",
+   "cat": "pill",
+   "sell": 120,
+   "desc": "制符台画的控制符。用了周围的妖兽冻住 3 秒。"
+  },
+  "fu_tp": {
+   "name": "传送符",
+   "icon": "📯",
+   "cat": "pill",
+   "sell": 200,
+   "desc": "捏碎就回到自家门口。"
+  },
+  "zhen_ju": {
+   "name": "聚灵阵盘",
+   "icon": "🔯",
+   "cat": "tool",
+   "sell": 0,
+   "desc": "阵法台布的阵：放在背包里，灵田每天自生 1 点灵气、药龄长得快一倍。"
+  },
+  "zhen_yu": {
+   "name": "灵雨阵盘",
+   "icon": "☔",
+   "cat": "tool",
+   "sell": 0,
+   "desc": "阵法台布的阵：放在背包里，每天早上自动浇遍灵田。"
+  },
+  "zhen_jie": {
+   "name": "渡劫阵旗",
+   "icon": "🎏",
+   "cat": "tool",
+   "sell": 0,
+   "desc": "阵法台布的阵：放在背包里，天劫伤害 −25%。"
   }
  },
  "recipes": {
@@ -1091,7 +1166,9 @@
     "spring",
     "zhenqi",
     "lamp_oil",
-    "tongxin"
+    "tongxin",
+    "chick",
+    "calf"
    ],
    "buys": [
     "crop",
@@ -1137,6 +1214,85 @@
     "crop",
     "food"
    ]
+  },
+  "wanderer2": {
+   "name": "陆远的小摊",
+   "sells": [
+    "fu_fire",
+    "fu_ice",
+    "fu_tp",
+    "talisman_paper",
+    "lingtu",
+    "pill_avert",
+    "seed_renshen"
+   ],
+   "buys": [
+    "mat",
+    "boss",
+    "rare",
+    "herb"
+   ]
+  }
+ },
+ "crafts": {
+  "fu_fire": {
+   "station": "fu",
+   "in": {
+    "talisman_paper": 1,
+    "yaodan": 1
+   },
+   "n": 2
+  },
+  "fu_ice": {
+   "station": "fu",
+   "in": {
+    "talisman_paper": 1,
+    "shard": 2
+   },
+   "n": 2
+  },
+  "fu_tp": {
+   "station": "fu",
+   "in": {
+    "talisman_paper": 2,
+    "spring": 1
+   },
+   "n": 1
+  },
+  "zhenqi": {
+   "station": "zhen",
+   "in": {
+    "shard": 5,
+    "iron": 5
+   },
+   "n": 1
+  },
+  "zhen_ju": {
+   "station": "zhen",
+   "in": {
+    "shard": 15,
+    "yaodan": 8,
+    "lingtu": 5
+   },
+   "n": 1
+  },
+  "zhen_yu": {
+   "station": "zhen",
+   "in": {
+    "shard": 12,
+    "spring": 10,
+    "silk": 5
+   },
+   "n": 1
+  },
+  "zhen_jie": {
+   "station": "zhen",
+   "in": {
+    "shard": 20,
+    "meteor_iron": 2,
+    "core_stone": 3
+   },
+   "n": 1
   }
  }
 }

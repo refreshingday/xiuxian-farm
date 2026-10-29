@@ -2,13 +2,13 @@
 // 灵草的药龄变体（@10 十年 / @100 百年）按需生成。
 import { SEASONS } from './calendar.js';
 
-export const ITEMS = {}, CROPS = {}, SHOPS = {}, RECIPES = {};
+export const ITEMS = {}, CROPS = {}, SHOPS = {}, RECIPES = {}, CRAFTS = {};
 const CAT_ORDER = ['tool', 'seed', 'herb', 'crop', 'food', 'pill', 'rare', 'mat', 'boss'];
 export const CAT_NAME = { tool: '工具', seed: '种子', herb: '灵草', crop: '作物', food: '食物', pill: '丹药', rare: '天材地宝', mat: '材料', boss: '妖王材料' };
 
 export async function loadItems() {
   const d = await (await fetch('data/items.json')).json();
-  Object.assign(CROPS, d.crops); Object.assign(SHOPS, d.shops); Object.assign(RECIPES, d.recipes); delete RECIPES._note;
+  Object.assign(CROPS, d.crops); Object.assign(SHOPS, d.shops); Object.assign(RECIPES, d.recipes); delete RECIPES._note; Object.assign(CRAFTS, d.crafts || {});
   for (const [id, c] of Object.entries(d.crops)) {
     c.id = id;
     const when = c.seasons.map((s) => SEASONS[s]).join('/');

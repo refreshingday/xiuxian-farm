@@ -16,6 +16,7 @@ import { Sects } from './sects.js';
 import { SecretRealms } from './secret.js';
 import { Places } from './places.js';
 import { Social } from './social.js';
+import { Home } from './home.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
@@ -446,6 +447,8 @@ const places = new Places(g, landmarks); g.places = places;
 // 节日、道侣、结局（social.js）
 const social = new Social(g); g.social = social;
 social.valley = landmarks.list.find((L) => L.name === '百花谷');
+// 家：灵兽圈、帮工、洞府升级、制符台 / 阵法台、建房（home.js）
+const home = new Home(g); g.home = home;
 // 妖王巢穴：地图上每个妖王一个（加上原型矿洞里的赤岩妖王）
 for (const L of landmarks.list) if (L.kind === 'boss' && BOSS_BY_NAME[L.name]) enemies.lairs.push({ type: BOSS_BY_NAME[L.name], x: L.x, z: L.z, deadDay: -99 });
 // 世界事件：血月、妖虫夜袭（events.js）
@@ -486,6 +489,7 @@ register('player', () => ({ x: P.pos.x, z: P.pos.z, hp: P.hp, maxHp: P.maxHp, qi
 });
 register('inv', () => inv.save(), (s) => inv.load(s));
 register('life', () => life.save(), (s) => life.load(s));
+register('home', () => home.save(), (s) => home.load(s)); // 先于村民：新盖的房子和搬来的人要先在
 register('village', () => village.save(), (s) => village.load(s));
 register('realm', () => realm.save(), (s) => realm.load(s));
 register('alchemy', () => alchemy.save(), (s) => alchemy.load(s));
@@ -589,6 +593,7 @@ function tick(dt) {
   secrets.update(dt);
   places.update(dt);
   social.update(dt);
+  home.update(dt);
   scanMarks(dt);
   farm.update();
   alchemy.update(dt);

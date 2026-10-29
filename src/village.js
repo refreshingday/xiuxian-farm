@@ -161,6 +161,8 @@ export class Village {
     g.life.dayHooks.push(() => { for (const v of this.list) { v.talked = false; v.gifted = false; } });
   }
   update(dt) { for (const v of this.list) v.update(dt, this.g.hours); }
+  // 新搬来的村民（在空地上建了房子以后）
+  add(d) { const v = new Villager(this, d, 0); this.list.push(v); this.byId[d.id] = v; return v; }
 
   shopOpen(v) { const [a, b] = v.d.hours || [0, 0]; return v.d.shop && this.g.hours >= a && this.g.hours < b && v.place === 'work'; }
   talk(v, line) {
@@ -168,7 +170,7 @@ export class Village {
     v.talking = 4;
     if (!v.talked) { v.talked = true; v.addAff(10); }
     if (!line) g.emit?.('talk', v);
-    const choices = [...(g.realm?.rootChoices?.(v) || []), ...(g.social?.choices(v) || [])];
+    const choices = [...(g.realm?.rootChoices?.(v) || []), ...(g.social?.choices(v) || []), ...(g.home?.choices(v) || [])];
     if (v.injured) { g.ui.dialog({ name: v.name, sub: '重伤卧床', line: pick(['咳咳……兽潮那天伤得不轻，过几天就好了……', '多谢你来看我……']), hint: `${v.injured - g.day} 天后才能下床，这几天店和委托都停了。` }); return; }
     // 被夺了灵根的村民：不再理你，商店、委托全停（GDD 第 9 节）
     if (v.robbed) {

@@ -199,7 +199,7 @@ export class Realm {
   }
   startTrib(home, pillK) {
     const g = this.g, P = g.player, target = levelInfo(P.layer).realm + 1;
-    this.trib = { t: -4, stage: 0, home, target, mech: TRIB[target], k: pillK * (P.avert ? 0.5 : 1) * (home ? 0.75 : 1) * (1 - (P.mods?.tribRes || 0)), next: 0, beastT: 6, fires: [], x: P.pos.x, z: P.pos.z };
+    this.trib = { t: -4, stage: 0, home, target, mech: TRIB[target], k: pillK * (P.avert ? 0.5 : 1) * (home ? 0.75 : 1) * (1 - (P.mods?.tribRes || 0)) * (g.inv.count('zhen_jie') ? 0.75 : 1), next: 0, beastT: 6, fires: [], x: P.pos.x, z: P.pos.z };
     P.avert = false;
     g.toast(`劫云汇聚……\n${REALMS[target]}天劫将至${home ? '（洞府阵法护身）' : '（野外渡劫，会引来妖兽）'}`, 4);
     g.shake(0.6); this.sfx((s) => s.thunderCharge(1));

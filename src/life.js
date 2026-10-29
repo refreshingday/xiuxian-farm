@@ -61,7 +61,7 @@ export class Life {
         // 在安全点睡觉回满；在自家洞府睡觉额外得打坐修为（约占修为来源的 20%）
         P.hp = P.maxHp; P.qi = P.maxQi;
         if (o.meditate !== false) {
-          const xp = Math.round(g.xpNeed() * 0.22 * (1 + (P.mods?.meditate || 0) + (g.social?.spouse ? 0.1 : 0))); // 道侣双修：多一成
+          const xp = Math.round(g.xpNeed() * 0.22 * (1 + (P.mods?.meditate || 0) + (g.social?.spouse ? 0.1 : 0) + (g.home?.meditateBonus() || 0))); // 道侣双修：多一成
           g.addXP(xp, P.pos, true);
           note = `打坐一夜，修为 +${Math.round(xp * (g.rootMul?.() ?? 1))}`;
         } else note = '一夜好眠';
