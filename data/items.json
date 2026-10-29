@@ -1,0 +1,54 @@
+{
+  "_note": "物品数据（GDD 第 12 节：数据驱动，HTML 与引擎版共用）。价格单位：文（金钱）。crops 里的每种作物自动生成一种种子 seed_<id>。灵草熟了可以继续留在地里长药龄，收获时 ≥10 年记为「十年」、≥100 年记为「百年」（物品 id 后缀 @10 / @100，售价 ×2 / ×5）。",
+  "crops": {
+    "radish": { "name": "胡萝卜", "icon": "🥕", "kind": "crop", "days": 3, "seasons": [0], "seed": 15, "sell": 35, "heal": 8 },
+    "cabbage": { "name": "白菜", "icon": "🥬", "kind": "crop", "days": 4, "seasons": [0, 2], "seed": 20, "sell": 50, "heal": 10 },
+    "potato": { "name": "土豆", "icon": "🥔", "kind": "crop", "days": 6, "seasons": [0], "seed": 30, "sell": 80, "heal": 15 },
+    "strawberry": { "name": "草莓", "icon": "🍓", "kind": "crop", "days": 8, "seasons": [0], "seed": 60, "sell": 160, "heal": 12, "regrow": 3 },
+    "corn": { "name": "玉米", "icon": "🌽", "kind": "crop", "days": 8, "seasons": [1, 2], "seed": 50, "sell": 120, "heal": 15, "regrow": 4 },
+    "pepper": { "name": "辣椒", "icon": "🌶️", "kind": "crop", "days": 5, "seasons": [1], "seed": 35, "sell": 70, "heal": 6 },
+    "eggplant": { "name": "茄子", "icon": "🍆", "kind": "crop", "days": 5, "seasons": [1, 2], "seed": 30, "sell": 65, "heal": 10 },
+    "melon": { "name": "西瓜", "icon": "🍉", "kind": "crop", "days": 10, "seasons": [1], "seed": 90, "sell": 300, "heal": 30 },
+    "rice": { "name": "稻谷", "icon": "🌾", "kind": "crop", "days": 7, "seasons": [1, 2], "seed": 40, "sell": 100, "heal": 12 },
+    "pumpkin": { "name": "南瓜", "icon": "🎃", "kind": "crop", "days": 10, "seasons": [2], "seed": 100, "sell": 320, "heal": 30 },
+    "yam": { "name": "红薯", "icon": "🍠", "kind": "crop", "days": 6, "seasons": [2], "seed": 35, "sell": 90, "heal": 18 },
+    "grape": { "name": "葡萄", "icon": "🍇", "kind": "crop", "days": 9, "seasons": [2], "seed": 80, "sell": 200, "heal": 14, "regrow": 3 },
+
+    "lingcao": { "name": "灵草", "icon": "🌿", "kind": "herb", "days": 3, "seasons": [0, 1, 2], "seed": 40, "sell": 60, "qi": 1, "heal": 30, "qiHeal": 30, "elem": "木" },
+    "ninglu": { "name": "凝露草", "icon": "🍃", "kind": "herb", "days": 4, "seasons": [0, 1], "seed": 70, "sell": 110, "qi": 1, "qiHeal": 50, "elem": "水" },
+    "chiyang": { "name": "赤阳花", "icon": "🌺", "kind": "herb", "days": 5, "seasons": [1], "seed": 120, "sell": 200, "qi": 2, "elem": "火" },
+    "yuehua": { "name": "月华草", "icon": "🌼", "kind": "herb", "days": 5, "seasons": [2], "seed": 120, "sell": 200, "qi": 2, "elem": "金" },
+    "renshen": { "name": "人参", "icon": "🌱", "kind": "herb", "days": 7, "seasons": [0, 1, 2], "seed": 200, "sell": 320, "qi": 2, "heal": 60, "elem": "土" },
+    "xuanbing": { "name": "玄冰莲", "icon": "❄️", "kind": "herb", "days": 6, "seasons": [3], "seed": 260, "sell": 420, "qi": 3, "elem": "水" }
+  },
+  "items": {
+    "yaodan": { "name": "妖丹", "icon": "🔮", "cat": "mat", "sell": 80, "soilQi": 6, "desc": "妖兽体内凝结的丹核。炼丹主料，也能化开补充灵田灵气。" },
+    "shard": { "name": "灵石碎片", "icon": "💠", "cat": "mat", "sell": 40, "soilQi": 3, "desc": "碎掉的灵石。埋进灵田能补一点灵气。" },
+    "spring": { "name": "灵泉水", "icon": "💧", "cat": "mat", "sell": 30, "soilQi": 2, "desc": "带灵气的泉水，浇进灵田补灵气。" },
+    "lingtu": { "name": "灵土", "icon": "🟫", "cat": "mat", "sell": 50, "soilQi": 4, "desc": "灵脉附近的土。翻进灵田补灵气。" },
+    "iron": { "name": "铁矿", "icon": "🪨", "cat": "mat", "sell": 25, "desc": "炼气圈的主矿。铁匠收，炼器用。" },
+    "hide": { "name": "野猪皮", "icon": "🟤", "cat": "mat", "sell": 30, "desc": "野猪妖的厚皮。" },
+    "tusk": { "name": "獠牙", "icon": "🦷", "cat": "mat", "sell": 45, "desc": "野猪妖的獠牙，铁匠喜欢拿来做刀柄。" },
+    "silk": { "name": "蛛丝", "icon": "🕸️", "cat": "mat", "sell": 35, "desc": "毒蛛吐的丝，坚韧，能做符纸。" },
+    "venom": { "name": "毒囊", "icon": "🟢", "cat": "mat", "sell": 60, "desc": "毒蛛的毒囊，药师用来以毒攻毒。" },
+    "core_stone": { "name": "傀儡核", "icon": "🟠", "cat": "mat", "sell": 90, "desc": "石傀胸口的发光核心。" },
+    "heart": { "name": "赤岩之心", "icon": "❤️‍🔥", "cat": "boss", "sell": 1500, "desc": "赤岩妖王的心核。妖王材料：可炼破境丹。" },
+    "wolf_fang": { "name": "狼王牙", "icon": "🐺", "cat": "boss", "sell": 1500, "desc": "赤枫狼王的獠牙。妖王材料：可炼破境丹。" },
+    "talisman_paper": { "name": "符纸", "icon": "📜", "cat": "mat", "sell": 20, "desc": "画符用的黄纸。" },
+    "tea": { "name": "灵茶", "icon": "🍵", "cat": "food", "sell": 40, "heal": 20, "qiHeal": 20, "desc": "村口茶摊的灵茶，回一点气血和灵力。" },
+    "bun": { "name": "肉包子", "icon": "🥟", "cat": "food", "sell": 15, "heal": 25, "desc": "热乎乎的肉包子。" },
+    "wine": { "name": "桃花酿", "icon": "🍶", "cat": "food", "sell": 90, "heal": 15, "desc": "村里自酿的桃花酒。" },
+
+    "pill_heal": { "name": "回春丹", "icon": "💊", "cat": "pill", "sell": 120, "heal": 80, "desc": "回复 80 气血。" },
+    "pill_qi": { "name": "聚气丹", "icon": "🔵", "cat": "pill", "sell": 120, "qiHeal": 100, "desc": "灵力回满。" },
+    "pill_xp": { "name": "培元丹", "icon": "🟡", "cat": "pill", "sell": 200, "xp": 60, "desc": "服下增长修为。同种丹药吃多了效果递减（丹毒）。" },
+    "pill_break": { "name": "破境丹", "icon": "🟣", "cat": "pill", "sell": 3000, "desc": "用妖王材料炼成。修为圆满后服下，劫云出现，渡过天劫即可突破大境界。" },
+    "pill_avert": { "name": "避劫丹", "icon": "⚪", "cat": "pill", "sell": 600, "desc": "渡劫时服下，天劫伤害大幅降低。" }
+  },
+  "shops": {
+    "merchant": { "name": "钱记杂货", "sells": ["seed_radish", "seed_cabbage", "seed_potato", "seed_strawberry", "seed_corn", "seed_pepper", "seed_eggplant", "seed_melon", "seed_rice", "seed_pumpkin", "seed_yam", "seed_grape", "bun", "talisman_paper", "spring"], "buys": ["crop", "food", "mat"] },
+    "doctor": { "name": "苏氏药铺", "sells": ["seed_lingcao", "seed_ninglu", "seed_chiyang", "seed_yuehua", "seed_renshen", "seed_xuanbing", "pill_heal", "pill_qi", "lingtu"], "buys": ["herb", "pill", "mat"] },
+    "smith": { "name": "赵家铁铺", "sells": [], "buys": ["mat", "boss"] },
+    "tea": { "name": "云来茶摊", "sells": ["tea", "wine", "bun"], "buys": ["crop", "food"] }
+  }
+}

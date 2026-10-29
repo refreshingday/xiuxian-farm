@@ -38,24 +38,25 @@ export class Weather {
     this.lines = new THREE.LineSegments(geo, this.mat);
     this.lines.frustumCulled = false; this.lines.visible = false;
     scene.add(this.lines);
-    this.raining = false;
-    this.timer = 4 + Math.random() * 8; // 游戏内小时
+    this.raining = false; this.dayRain = false;
+    this.timer = 99; // 游戏内小时
     this.rain = 0; this.wet = 0;
   }
 
   toggle() {
-    this.raining = !this.raining;
+    this.raining = this.dayRain = !this.raining;
     this.timer = this.raining ? 3 : 8;
     return this.raining;
   }
+  // 当天天气（calendar.rollWeather）：雨天大部分时间在下，中间偶尔停一会儿；晴天不下
+  setDay(rain) { this.dayRain = this.raining = rain; this.timer = rain ? 3 + Math.random() * 5 : 99; }
 
   // dh：本帧经过的游戏内小时；m：矿洞程度（矿洞里没雨）
   update(dt, dh, focus, time, m) {
     this.timer -= dh;
-    if (this.timer <= 0) {
-      if (this.raining) { this.raining = false; this.timer = 6 + Math.random() * 14; }
-      else if (Math.random() < 0.45) { this.raining = true; this.timer = 1.5 + Math.random() * 3.5; }
-      else this.timer = 3 + Math.random() * 8;
+    if (this.timer <= 0 && this.dayRain) {
+      this.raining = !this.raining;
+      this.timer = this.raining ? 3 + Math.random() * 5 : 0.5 + Math.random();
     }
     this.rain = approach(this.rain, this.raining ? 1 : 0, dt * 0.3);
     // 下雨约 40 分钟（游戏内）湿透，停雨后约 3 小时晾干

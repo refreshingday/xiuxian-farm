@@ -14,7 +14,8 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 村庄 / 农田 / 池塘 / 矿场 / 道路 — 🟨 — 2026-10-27 — 手工骨架，模型为代码占位
 - 地面·树·草着色器（风、遮挡透明、卡通描边）— 🟩 — 2026-10-27
 - PNG 贴图 8 张（Codex 生成）— 🟩 — 2026-10-28 — 程序贴图太平；`loadTextures()` 预载，程序贴图兜底
-- 昼夜 + 季节显示 — 🟨 — 2026-10-27 — 时间流动有，季节只显示文字
+- 历法（`calendar.js`）：一天 6:00–次日 2:00，1 游戏小时 = 1 分钟；14 天一季、7 天一周、14 天月相；每天按季节掷雨 — 🟩 — 2026-10-30 — GDD 第 3 节
+- 昼夜 + 季节显示 — 🟨 — 2026-10-27 — 季节还只显示文字，场景不变色
 - 下雨（R 键切换，地面变湿）— 🟩 — 2026-10-27
 - 矿场暗雾光照 — 🟨 — 2026-10-27 — 平地 + 光照假象，不做地下层
 
@@ -25,6 +26,9 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - NPC 对话（F 交谈）— 🟨 — 2026-10-27 — 简单台词，无任务
 
 ## 玩家 / 成长 (`main.js`)
+- 日常（`life.js`）：床上睡觉（回满 + 打坐修为 + 自动存档）、2:00 不在家就昏倒（丢 10% 钱）、死亡丢 10% 钱和一半低价材料（包袱留在原地，天亮前可捡）、丹毒递减 — 🟩 — 2026-10-30
+- 存读档（`save.js`，localStorage，只存差异）+ 标题画面（继续 / 新的开始）+ 菜单（Esc）— 🟩 — 2026-10-30
+- 物品 / 背包 / 快捷栏 1–8（`items.js` + `data/items.json`，数据驱动）、金钱 + 灵石 — 🟩 — 2026-10-30 — 战斗时快捷栏淡出
 - 移动、冲刺（Space/Shift）— 🟩 — 2026-10-27
 - HP / 灵气 / 修为 / 炼气 1–9 层突破 — 🟨 — 2026-10-27 — 筑基天劫未实装
 - 物品栏（灵草/妖丹/灵石/妖心）— 🟨 — 2026-10-27 — 只计数
@@ -63,6 +67,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-10-30 — GDD 落地第一块：历法、睡觉 / 昏倒、存读档、物品背包快捷栏、妖兽掉落表、夜晚敌人 +30% / 掉落 +50%、野生灵草 3 天重生
 - 2026-10-29 — 试炼场三武器战斗搬进主世界（combat.js），妖兽加五行属性和浮空物理
 - 2026-10-28 — 实验场加 Codex 素材分组（g1_village…g6_ruins）与对比模式
 - 2026-10-28 — 耕地贴图接入；贴图改由 Claude 直接驱动 Codex CLI 生成（codex-texture skill）

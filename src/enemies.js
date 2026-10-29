@@ -15,12 +15,14 @@ function geos() {
 }
 
 // elem = 五行属性（GDD：克制 ×1.5，被克 ×0.75，见 comboKit.js 的 KE）
+// drops = [物品 id, 概率]（data/items.json）；stones = 掉落灵石 [最少, 最多]
 export const TYPES = {
-  boar: { name: '野猪妖', hp: 75, r: 0.75, speed: 3.4, dmg: 12, xp: 14, elem: '土' },
-  spider: { name: '毒蛛', hp: 50, r: 0.7, speed: 3.0, dmg: 8, xp: 12, elem: '木' },
-  golem: { name: '石傀', hp: 150, r: 0.9, speed: 2.2, dmg: 18, xp: 26, elem: '金' },
-  boss: { name: '赤岩妖王', hp: 1500, r: 1.9, speed: 2.6, dmg: 24, xp: 320, elem: '火' },
+  boar: { name: '野猪妖', hp: 75, r: 0.75, speed: 3.4, dmg: 12, xp: 14, elem: '土', drops: [['yaodan', 0.35], ['hide', 0.5], ['tusk', 0.25]] },
+  spider: { name: '毒蛛', hp: 50, r: 0.7, speed: 3.0, dmg: 8, xp: 12, elem: '木', drops: [['yaodan', 0.3], ['silk', 0.5], ['venom', 0.2]] },
+  golem: { name: '石傀', hp: 150, r: 0.9, speed: 2.2, dmg: 18, xp: 26, elem: '金', drops: [['shard', 0.5], ['core_stone', 0.2], ['iron', 0.4]], stones: [1, 2] },
+  boss: { name: '赤岩妖王', hp: 1500, r: 1.9, speed: 2.6, dmg: 24, xp: 320, elem: '火', drops: [['heart', 1], ['yaodan', 1]], stones: [8, 12] },
 };
+const NIGHT = 0.5; // nightK 超过这个算夜晚：敌人属性 +30%，掉落 +50%（GDD 第 3 节）
 const GRAV = 26;
 
 function build(type) {
@@ -104,10 +106,10 @@ export class Enemies {
   spawn(type, x, z, lvl = 0) {
     const T = TYPES[type];
     const { root, parts, mats } = build(type);
-    const hpMul = 1 + lvl * 0.35;
+    const night = this.game.nightK > NIGHT, hpMul = (1 + lvl * 0.35) * (night && type !== 'boss' ? 1.3 : 1);
     const e = {
       type, T, root, parts, mats, pos: root.position, r: T.r, hp: T.hp * hpMul, maxHp: T.hp * hpMul,
-      dmg: T.dmg * (1 + lvl * 0.2), lvl, speed: T.speed, yaw: Math.random() * 6.28, kx: 0, kz: 0,
+      dmg: T.dmg * (1 + lvl * 0.2) * (night && type !== 'boss' ? 1.3 : 1), lvl, night, speed: T.speed, yaw: Math.random() * 6.28, kx: 0, kz: 0,
       state: 'idle', st: 0, cd: 1 + Math.random(), flash: 0, home: new THREE.Vector2(x, z),
       tx: x, tz: z, walk: 0, touchCd: 0, alive: true, phase: 1, queue: [], hitOnce: false, chargeDir: 0,
       elem: T.elem, boss: type === 'boss', vy: 0, airSpin: 0, airRot: 0, spiked: false, rootT: 0, stuck: [],
@@ -164,12 +166,12 @@ export class Enemies {
     g.sfx?.kill();
     fx.burst(e.pos, e.type === 'boss' ? '#ff6a2a' : '#b9a8ff', e.type === 'boss' ? 120 : 24, { speed: e.type === 'boss' ? 9 : 5, up: 4, life: 0.8 });
     g.addXP(e.T.xp * (1 + e.lvl * 0.3), e.pos);
-    const roll = Math.random();
-    if (e.type === 'boar' && roll < 0.5) g.addItem('core', 1, e.pos);
-    if (e.type === 'spider' && roll < 0.4) g.addItem('core', 1, e.pos);
-    if (e.type === 'golem') g.addItem('stone', 1 + (roll < 0.4 ? 1 : 0), e.pos);
+    const luck = e.night || g.nightK > NIGHT ? 1.5 : 1;
+    let k = 0;
+    for (const [id, p] of e.T.drops) if (Math.random() < p * luck) g.addItem(id, 1, { x: e.pos.x, z: e.pos.z + 0.5 * k++ });
+    if (e.T.stones) { const [a, b] = e.T.stones; g.addStones(Math.round((a + Math.random() * (b - a)) * luck), e.pos); }
+    g.onKill?.(e);
     if (e.type === 'boss') {
-      g.addItem('heart', 1, e.pos); g.addItem('stone', 8, e.pos);
       g.toast('击败 赤岩妖王！获得 赤岩之心', 4);
       g.shake(1.2);
       this.bossCd = 120;

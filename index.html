@@ -44,8 +44,43 @@
   .realm { font-size: 12px; margin-top: 7px; color: #ffe7a8; }
   #clock { position: fixed; right: 16px; top: 16px; text-align: right; min-width: 200px; }
   #timeText { font-size: 14px; } #regionText { font-family: "STKaiti", "KaiTi", serif; font-size: 18px; margin-top: 2px; color: #ffe7a8; letter-spacing: 1px; }
-  #inv { position: fixed; right: 16px; top: 92px; font-size: 13px; }
-  #inv b { color: #ffe7a8; margin-right: 6px; }
+  #money { position: fixed; right: 16px; top: 92px; font-size: 14px; padding: 6px 12px; }
+  #menuBtns { position: fixed; right: 16px; top: 132px; display: flex; gap: 6px; }
+  #menuBtns button { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  /* 快捷栏（1–8），战斗时淡出 */
+  #hotbar { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); display: flex; gap: 4px; transition: opacity .3s; }
+  #hotbar.fight { opacity: .2; pointer-events: none; }
+  .hs { position: relative; width: 44px; height: 44px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: none; }
+  .hs.sel { border-color: #ffe7a8; box-shadow: inset 0 0 0 2px rgba(255, 231, 168, .8), 0 0 8px rgba(255, 231, 168, .5); }
+  .hs kbd { position: absolute; left: 2px; top: 1px; font-size: 9px; padding: 0 2px; line-height: 12px; }
+  .hs .hi { font-size: 22px; }
+  .hs .hn { position: absolute; right: 3px; bottom: 1px; font-size: 11px; font-style: normal; text-shadow: 0 1px 2px #000; }
+  #hotName { position: fixed; left: 50%; bottom: 132px; transform: translateX(-50%); font-size: 12px; opacity: .85; text-shadow: 0 1px 3px #000; pointer-events: none; }
+  /* 弹出面板：背包 / 商店 / 菜单 */
+  #panelBack { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; z-index: 20; }
+  #panel { width: min(580px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: rgba(22, 26, 24, .95); border: 1px solid var(--line); border-radius: 10px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18), 0 8px 30px rgba(0,0,0,.5); }
+  #phead { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 8px; border-bottom: 1px solid rgba(214,182,112,.25); }
+  #ptitle { font-family: "STKaiti", "KaiTi", serif; font-size: 22px; letter-spacing: 2px; color: #ffe7a8; }
+  #pbody { overflow-y: auto; padding: 8px 14px 14px; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+  .prow { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px dashed rgba(255,255,255,.08); }
+  .pic { font-size: 26px; width: 34px; text-align: center; flex: none; }
+  .ptxt { flex: 1; min-width: 0; } .ptxt b { font-weight: normal; color: #ffe7a8; } .ptxt i { font-style: normal; color: #bfe6ff; margin-left: 6px; font-size: 12px; }
+  .ptxt small { display: block; font-size: 11px; opacity: .7; line-height: 1.4; }
+  .pbtns { display: flex; gap: 6px; flex: none; }
+  .pcat { margin-top: 10px; font-size: 12px; color: #ffe7a8; opacity: .8; }
+  .pmoney { font-size: 14px; margin-bottom: 6px; }
+  .ptabs { display: flex; gap: 6px; margin: 6px 0; }
+  .pempty { opacity: .6; padding: 12px 4px; font-size: 13px; line-height: 1.6; }
+  #panel button, #dialog button, #title button { font: inherit; font-size: 13px; color: var(--ink); background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 5px; padding: 6px 11px; cursor: pointer; touch-action: manipulation; }
+  #panel button:hover, #dialog button:hover, #title button:hover { background: rgba(214,182,112,.25); }
+  button.on { background: rgba(214,182,112,.45) !important; } button.off { opacity: .45; }
+  button.wide { display: block; width: 100%; margin-top: 8px; padding: 10px !important; font-size: 16px !important; }
+  #fade { position: fixed; inset: 0; background: #05070c; opacity: 0; pointer-events: none; transition: opacity .8s; z-index: 30; }
+  #fade.on { opacity: 1; }
+  #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(10, 24, 30, .45), rgba(5, 10, 20, .88)); z-index: 25; }
+  #title h1 { margin: 0; font-family: "STKaiti", "KaiTi", serif; font-weight: normal; font-size: clamp(48px, 9vw, 86px); letter-spacing: 12px; color: #ffe7a8; text-shadow: 0 4px 20px rgba(0,0,0,.8), 0 0 30px rgba(255, 200, 120, .35); }
+  #title .sub { letter-spacing: 6px; opacity: .75; margin: 4px 0 26px; }
+  #titleBtns { width: min(340px, 86vw); }
   #skills { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; }
   .slot { position: relative; width: 72px; height: 58px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 4px rgba(214,182,112,.18); display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; font-size: 12px; }
   .slot.off { opacity: .45; }
@@ -55,20 +90,26 @@
   .slot small { font-size: 10px; opacity: .7; }
   #sk0 { width: 96px; } #skWeap span { font-family: "STKaiti", "KaiTi", serif; font-size: 16px; color: #ffe7a8; }
   kbd { font-family: inherit; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 0 5px; }
-  #prompt { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 6px 14px; border-radius: 16px; font-size: 14px; }
-  #dialog { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); width: min(680px, 92vw); background: rgba(24, 20, 16, 0.86); border: 1px solid rgba(255, 220, 160, .3); border-radius: 12px; padding: 14px 18px; }
+  #prompt { position: fixed; left: 50%; bottom: 152px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 6px 14px; border-radius: 16px; font-size: 14px; }
+  #dialog { position: fixed; z-index: 15; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(680px, 92vw); background: rgba(24, 20, 16, 0.86); border: 1px solid rgba(255, 220, 160, .3); border-radius: 12px; padding: 14px 18px; }
   .dname { font-family: "STKaiti", "KaiTi", serif; font-size: 22px; color: #ffe7a8; letter-spacing: 2px; }
   .dsub { font-size: 12px; opacity: .7; margin: 2px 0 8px; }
   .dline { font-size: 16px; line-height: 1.6; }
   .dinfo { font-size: 13px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.2); color: #bfe6ff; }
   .dhint { font-size: 12px; margin-top: 4px; color: #ffcf9a; }
+  .dinfo:empty, .dhint:empty { display: none; }
+  .dchoices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .dchoices button { font-size: 15px !important; padding: 7px 16px !important; }
+  .dmore { position: absolute; right: 16px; bottom: 8px; color: #ffe7a8; animation: dmore 1s ease-in-out infinite alternate; }
+  @keyframes dmore { to { transform: translateY(3px); opacity: .5; } }
+  body.talking #skills, body.talking #hotbar, body.talking #hotName, body.talking #prompt { visibility: hidden; }
   #help { position: fixed; left: 16px; bottom: 16px; font-size: 12px; line-height: 1.75; width: 230px; }
   #help b { color: #ffe7a8; }
-  #comboName { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; color: #ffe7a8; text-shadow: 0 2px 6px rgba(0,0,0,.8); pointer-events: none; white-space: nowrap; }
+  #comboName { position: fixed; left: 50%; bottom: 190px; transform: translateX(-50%); font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; color: #ffe7a8; text-shadow: 0 2px 6px rgba(0,0,0,.8); pointer-events: none; white-space: nowrap; }
   #comboName small { font-size: 14px; letter-spacing: 1px; opacity: .8; margin-left: 8px; }
   body.talking #help { display: none; }
   @media (max-width: 1150px) { #help { bottom: 90px; } }
-  #toast { position: fixed; left: 50%; top: 22%; transform: translate(-50%, -10px); font-family: "STKaiti", "KaiTi", serif; font-size: 24px; letter-spacing: 2px; color: #fff3d0; text-shadow: 0 2px 8px #000, 0 0 16px rgba(255,200,120,.6); opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; text-align: center; }
+  #toast { position: fixed; z-index: 26; white-space: pre-line; line-height: 1.5; left: 50%; top: 22%; transform: translate(-50%, -10px); font-family: "STKaiti", "KaiTi", serif; font-size: 24px; letter-spacing: 2px; color: #fff3d0; text-shadow: 0 2px 8px #000, 0 0 16px rgba(255,200,120,.6); opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; text-align: center; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
   #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(255, 30, 20, .7); opacity: 0; }
   #hurt.on { animation: hurt .45s ease-out; }
@@ -89,8 +130,13 @@
   body.mobile #help, body.mobile .slot kbd, body.mobile #prompt kbd { display: none; }
   body.mobile #status { width: 260px; transform: scale(.78); transform-origin: 0 0; left: calc(10px + env(safe-area-inset-left)); top: 10px; }
   body.mobile #clock { transform: scale(.8); transform-origin: 100% 0; right: calc(10px + env(safe-area-inset-right)); top: 10px; }
-  body.mobile #inv { top: 64px; right: calc(10px + env(safe-area-inset-right)); font-size: 11px; padding: 6px 9px; }
-  body.mobile #mobTime { display: block; position: fixed; top: 100px; right: calc(10px + env(safe-area-inset-right)); font-size: 12px; padding: 6px 10px; }
+  body.mobile #money { top: 64px; right: calc(10px + env(safe-area-inset-right)); font-size: 12px; padding: 5px 9px; }
+  body.mobile #menuBtns { top: 98px; right: calc(10px + env(safe-area-inset-right)); }
+  body.mobile #mobTime { display: block; font-size: 12px; padding: 6px 10px; touch-action: none; }
+  body.mobile #hotbar { bottom: auto; top: calc(8px + env(safe-area-inset-top)); z-index: 4; }
+  body.mobile .hs { width: 38px; height: 38px; } body.mobile .hs kbd { display: none; } body.mobile .hs .hi { font-size: 19px; }
+  body.mobile #hotName { display: none; }
+  body.mobile .hb.big { top: 54px; }
   body.mobile #stickZone { display: block; position: fixed; left: 0; bottom: 0; width: 45vw; height: 65vh; z-index: 3; touch-action: none; }
   body.mobile #stick { display: block; position: fixed; left: calc(100px + env(safe-area-inset-left)); top: calc(100% - 110px); width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(14, 22, 24, .35); border: 2px solid rgba(214, 182, 112, .4); pointer-events: none; z-index: 3; opacity: .55; transition: opacity .15s; }
   body.mobile #stick.live { opacity: 1; }
@@ -106,21 +152,19 @@
   body.mobile #skills [data-slot="2"] { right: 78px; bottom: 160px; }
   body.mobile #skills [data-slot="3"] { right: 21px; bottom: 171px; }
   body.mobile #skWeap { right: 0; bottom: 236px; }
-  body.mobile #skHerb { right: 58px; bottom: 236px; }
   body.mobile #prompt { bottom: 24px; padding: 10px 18px; font-size: 15px; z-index: 4; touch-action: none; }
   body.mobile #prompt::before { content: '👆 '; }
   body.mobile #comboName { bottom: 76px; font-size: 22px; }
   body.mobile #dialog { bottom: 16px; }
   @media (max-height: 500px) {
     body.mobile #skills { width: 290px; height: 230px; }
-    body.mobile #skWeap { right: 232px; bottom: 62px; }
-    body.mobile #skHerb { right: 232px; bottom: 4px; }
-    body.mobile #mobTime { top: 10px; right: calc(222px + env(safe-area-inset-right)); }
+    body.mobile #skWeap { right: 232px; bottom: 30px; }
   }
   @media (max-width: 700px) {
     body.mobile #prompt { bottom: 316px; right: calc(14px + env(safe-area-inset-right)); left: auto; transform: none; }
     body.mobile #comboName { bottom: 360px; }
-    body.mobile .hb.big { top: 120px; }
+    body.mobile .hb.big { top: 200px; }
+    body.mobile #hotbar { top: 150px; left: calc(10px + env(safe-area-inset-left)); transform: none; }
   }
 </style>
 <script type="importmap">
@@ -143,15 +187,18 @@
 </div>
 
 <div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
-<div id="mobTime" class="panel">⏩ 按住加速时间</div>
-<div id="inv" class="panel">灵草 <b id="invHerb">0</b>妖丹 <b id="invCore">0</b>灵石 <b id="invStone">0</b>赤岩之心 <b id="invHeart">0</b></div>
+<div id="money" class="panel"></div>
+<div id="menuBtns"><div id="mobTime" class="panel">⏩ 按住加速</div><button id="bagBtn">🎒 背包</button><button id="menuBtn">☰ 菜单</button></div>
+<div id="hotbar"></div><div id="hotName"></div>
 <div id="hpLayer"></div>
 
 <div id="prompt" class="hidden"></div>
 <div id="dialog" class="hidden">
   <div class="dname"></div><div class="dsub"></div>
   <div class="dline"></div><div class="dinfo"></div><div class="dhint"></div>
+  <div class="dchoices"></div><div class="dmore">▼</div>
 </div>
+<div id="panelBack" class="hidden"><div id="panel"><div id="phead"><span id="ptitle"></span><button id="pclose">✕</button></div><div id="pbody"></div></div></div>
 
 <div id="skills">
   <div class="slot" id="sk0"><kbd>左键</kbd><span id="atkName">连招</span></div>
@@ -161,7 +208,6 @@
   <div class="slot" data-slot="3"><kbd>C</kbd><span class="nm"></span><small class="qc"></small><i class="cd"></i></div>
   <div class="slot" id="skDash"><kbd>空格</kbd><span>身法</span><i class="cd"></i></div>
   <div class="slot" id="skWeap"><kbd>X 换武</kbd><span id="weapName">剑</span></div>
-  <div class="slot" id="skHerb"><kbd>1</kbd><span>灵草</span><i class="cd"></i></div>
 </div>
 
 <div id="help" class="panel">
@@ -171,7 +217,8 @@
   　第一击免费，之后每招耗灵力<br>
   <b>Q E R C</b> 技能　<b>X</b> 换武（剑 / 拳 / 符）<br>
   <b>空格 / Shift</b> 身法闪避（无敌，冷却 2.5 秒）<br>
-  <b>1</b> 服灵草　<b>F</b> 交谈 / 种田 / 采集<br>
+  <b>1–8</b> 快捷栏（灵草 / 丹药直接吃）<br>
+  <b>F</b> 交谈 / 种田 / 采集 / 睡觉　<b>Tab</b> 背包　<b>Esc</b> 菜单<br>
   <b>滚轮</b> 转镜头　<b>按住 T</b> 加速时间　<b>H</b> 隐藏说明<br>
   东北方的大路通往 <b>玄晶矿洞</b>，深处有妖王。
 </div>
@@ -180,6 +227,8 @@
 <div id="toast"></div>
 <div id="hurt"></div>
 <div id="dead" class="hidden">重伤昏迷……</div>
+<div id="fade"></div>
+<div id="title"><h1>灵田问道</h1><div class="sub">SPIRIT FIELDS</div><div id="titleBtns"></div></div>
 <div id="loading">灵气汇聚中…</div>
 
 <script type="module" src="src/main.js"></script>

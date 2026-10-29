@@ -39,6 +39,16 @@ export const roadDist = (x, z) => segDist(x, z, 0, 0, MINE_GATE.x, MINE_GATE.y);
 export const mapleAmount = (x, z) => smooth(0.55, 0.66, fbm(x * 0.008, z * 0.008, 11, 2)) * smooth(60, 110, Math.hypot(x, z));
 export const dangerAt = (x, z) => clamp((Math.hypot(x, z) - 40) / 60, 0, 6);
 
+// 野生灵草：多数是灵草，离村越远越可能长出凝露草、人参（按位置固定，不吃区块的随机序列）
+const HERB_GLOW = { lingcao: '#7dffe0', ninglu: '#8ad8ff', renshen: '#ffd27a', chiyang: '#ff8a5a', yuehua: '#fff2a0' };
+export function wildHerb(x, z) {
+  const r = hash01(Math.floor(x * 10), Math.floor(z * 10), 7), far = clamp((Math.hypot(x, z) - 60) / 200, 0, 1);
+  if (r < 0.04 + far * 0.08) return 'renshen';
+  if (r < 0.2 + far * 0.1) return mapleAmount(x, z) > 0.5 ? 'chiyang' : 'ninglu';
+  if (r < 0.26 + far * 0.1) return 'yuehua';
+  return 'lingcao';
+}
+
 export function regionName(x, z) {
   if (Math.hypot(x - MINE.x, z - MINE.y) < MINE_R + 1) return '玄晶矿洞';
   if (Math.hypot(x, z) < VILLAGE_R) return '青竹村';
@@ -446,8 +456,10 @@ export class World {
     this.houses = [];
     this.ores = [];
     this.farm = [];
-    this.picked = new Set(); // 只存改动：被采过的野生灵草
+    this.picked = new Map(); // 只存改动：被采过的野生灵草 id → 采摘那天（3 天后重新长出来）
+    this.day = 1;
     this.mineFactor = 0;
+    this.herbGlows = {};
     this.onSpawn = null;
     this.time = 0;
     this.initAssets();
@@ -644,7 +656,7 @@ export class World {
         bushes.push({ x, z, s: 0.8 + rng() * 0.6, rot: rng() * 6.28, c: rng() < maple ? '#d8803a' : FOREST[Math.floor(rng() * 5)] });
       } else if (r > 0.94 && !clear && dangerAt(x, z) > 0.2) {
         const id = `${k}:${hi++}`;
-        if (!this.picked.has(id)) herbs.push(this.makeHerb(x, z, id, group));
+        if (!this.herbGone(id)) herbs.push(this.makeHerb(x, z, id, group, wildHerb(x, z)));
       }
       const inPlaza = dv < 8.5, inMine = dm < MINE_R + 1, onRoad = rd < 1.8;
       if (!inPlaza && !inMine && !onRoad) {
@@ -685,10 +697,10 @@ export class World {
     if (this.onSpawn) this.onSpawn(cx, cz, rng);
   }
 
-  makeHerb(x, z, id, parent) {
+  makeHerb(x, z, id, parent, kind = 'lingcao') {
     const g = new THREE.Group();
     g.add(mesh(this.G.stem, toon('#3f9a5a'), { cast: false }));
-    const b = mesh(this.G.bulb, this.M.herbGlow, { cast: false }); b.position.y = 0.62; g.add(b);
+    const b = mesh(this.G.bulb, this.herbGlows[kind] ??= glow(HERB_GLOW[kind] || '#7dffe0', 3), { cast: false }); b.position.y = 0.62; g.add(b);
     for (let i = 0; i < 3; i++) {
       const l = mesh(this.G.leaf, toon('#4fbf7a'), { cast: false });
       l.position.set(Math.cos(i * 2.1) * 0.15, 0.15, Math.sin(i * 2.1) * 0.15);
@@ -697,11 +709,12 @@ export class World {
     }
     g.position.set(x, 0, z);
     parent.add(g);
-    return { id, x, z, mesh: g };
+    return { id, x, z, mesh: g, kind };
   }
+  herbGone(id) { return this.picked.has(id) && this.day - this.picked.get(id) < 3; }
 
   pickHerb(ch, h) {
-    this.picked.add(h.id);
+    this.picked.set(h.id, this.day);
     ch.group.remove(h.mesh);
     ch.herbs.splice(ch.herbs.indexOf(h), 1);
   }

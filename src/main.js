@@ -17,6 +17,11 @@ import { KE } from './comboKit.js';
 import { Combat, DASH_CD } from './combat.js';
 import { HealthBar, screenOf } from './hpbar.js';
 import { TouchControls } from './touch.js';
+import { DAY_START, dateOf, clockText, rollWeather } from './calendar.js';
+import { loadItems, Inventory, item, itemName } from './items.js';
+import { UI, btn, el } from './ui.js';
+import { Life, near } from './life.js';
+import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
 
 // ---------- 渲染 ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -94,16 +99,16 @@ function sample(h, idx, out) {
 }
 
 // ---------- 游戏状态 ----------
-const DAY_SEC = 480;
 const g = {
-  scene, camera, time: 0, hours: 7, day: 1, nightK: 0, scheduled: [],
+  scene, camera, time: 0, hours: DAY_START, day: 1, weatherToday: 'clear', nightK: 0, scheduled: [], paused: true,
   after(sec, fn) { this.scheduled.push({ t: this.time + sec, fn }); },
   shakeV: 0, shake(v) { this.shakeV = Math.max(this.shakeV, v); },
-  toast(msg, sec = 2.2) { const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), sec * 1000); },
+  toast(msg, sec = 2.2) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), sec * 1000); },
 };
 const fx = new FX(scene, camera); g.fx = fx;
 const cfx = new ComboFX(scene, fx, { soft: true });
 const sfx = new SFX(); g.sfx = sfx;
+await loadItems();
 await loadTextures({
   grass_ground: { normal: 2 }, dirt_path: { normal: 2.5 }, stone_plaza: {},
   roof_tiles: { norm: 0.88, rep: 0.5 }, wood_planks: { norm: 0.88, rep: 0.5 }, tilled_soil: { norm: 0.9 },
@@ -120,14 +125,17 @@ const P = {
   r: 0.4, yaw: 0, vy: 0, vel: new THREE.Vector3(), kx: 0, kz: 0,
   hp: 100, maxHp: 100, qi: 100, maxQi: 100, layer: 1, xp: 0, grade: 2, elem: '金',
   work: 0, dashT: 0, dashCd: 0, dashDir: 0, iframe: 0, pillCd: 0,
-  inv: { herb: 3, core: 0, stone: 0, heart: 0 }, dead: false,
+  dead: false,
 };
+const inv = new Inventory(); g.inv = inv;
+const gui = new UI(); g.ui = gui;
 P.pos = P.c.root.position;
 P.pos.set(0, 0, 4);
 scene.add(P.c.root);
 g.player = P;
 
 const xpNeed = () => 40 + P.layer * 30;
+g.xpNeed = xpNeed;
 const atkMul = () => 1 + P.layer * 0.25;  // 招式伤害按炼气一层设计，随境界放大
 
 P.hurt = (dmg, fx0, fz0, knock = 6) => {
@@ -146,18 +154,20 @@ P.hurt = (dmg, fx0, fz0, knock = 6) => {
 };
 function die() {
   P.dead = true; P.hp = 0;
+  combat.cancel();
+  const lost = life.deathDrop();
   document.getElementById('dead').classList.remove('hidden');
   fx.burst(P.pos, '#ffffff', 30, { speed: 5, up: 4 });
   P.c.root.visible = false;
   g.after(2.8, () => {
-    P.dead = false; P.hp = P.maxHp; P.qi = P.maxQi; P.pos.set(-15, 0, -3.5); P.c.root.visible = true; P.iframe = 2;
+    P.dead = false; P.hp = P.maxHp; P.qi = P.maxQi; P.pos.set(life.bed.x + 1.3, 0, life.bed.z + 0.6); P.c.root.visible = true; P.iframe = 2;
     document.getElementById('dead').classList.add('hidden');
-    g.toast('你在家中醒来，伤势已愈');
+    g.toast('你在家中醒来，伤势已愈' + (lost ? '\n' + lost : ''), 4);
   });
 }
-g.addXP = (n, p) => {
-  if (P.layer >= 9) { fx.num(p, '修为已满', 'xp'); return; }
-  P.xp += n; fx.num({ x: p.x + 0.6, z: p.z }, `+${Math.round(n)} 修为`, 'xp');
+g.addXP = (n, p, quiet) => {
+  if (P.layer >= 9) { if (!quiet) fx.num(p, '修为已满', 'xp'); return; }
+  P.xp += n; if (!quiet) fx.num({ x: p.x + 0.6, z: p.z }, `+${Math.round(n)} 修为`, 'xp');
   while (P.xp >= xpNeed() && P.layer < 9) {
     P.xp -= xpNeed(); P.layer++;
     P.maxHp += 12; P.maxQi += 8; P.hp = P.maxHp; P.qi = P.maxQi;
@@ -166,8 +176,9 @@ g.addXP = (n, p) => {
     g.toast(P.layer === 9 ? '炼气圆满！需渡天劫方可筑基（未实装）' : `突破！${realmText(1, P.layer)}`, 3);
   }
 };
-const ITEM = { herb: '灵草', core: '妖丹', stone: '灵石', heart: '赤岩之心' };
-g.addItem = (k, n, p) => { P.inv[k] += n; fx.num({ x: p.x - 0.6, z: p.z }, `+${n} ${ITEM[k]}`, 'item'); };
+g.addItem = (id, n, p) => { inv.add(id, n); if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} ${itemName(id)}`, 'item'); };
+g.addStones = (n, p) => { inv.stones += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 灵石`, 'item'); };
+g.addMoney = (n, p) => { inv.money += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 文`, 'item'); };
 
 // ---------- 村民 ----------
 const npcs = populateVillage(g, mulberry32(20261027));
@@ -221,28 +232,31 @@ addEventListener('keydown', (e) => {
   sfx.unlock();
   if (e.repeat) { keys.add(e.code); return; }
   keys.add(e.code);
+  if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Escape') { if (gui.panelOpen) gui.closePanel(); else if (gui.dialogOpen) gui.closeDialog(); else if (!g.title) openMenu(); return; }
+  if (g.title) return;
+  if (gui.dialogOpen) { if (['KeyF', 'Space', 'Enter'].includes(e.code)) gui.advance(); return; }
+  if (gui.panelOpen) { if (e.code === 'Tab' || e.code === 'KeyB') gui.closePanel(); return; }
   if (e.code === 'KeyF') interact();
-  if (e.code === 'Escape') closeDialog();
+  if (e.code === 'Tab' || e.code === 'KeyB') openBag();
   if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
   const si = SKILL_KEYS.indexOf(e.code);
   if (si >= 0) useSkill(si);
   if (e.code === 'KeyX') cycleWeapon();
-  if (e.code === 'Digit1') eatHerb();
+  if (e.code.startsWith('Digit')) { const i = +e.code.slice(5) - 1; if (i >= 0 && i < 8) hotKey(i); }
   if (e.code === 'Space' || e.code === 'ShiftLeft') dash();
-  if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); mouseDown.fill(false); });
 renderer.domElement.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); });
 // 左键松开才出招（按下只"上膛"）；按下时若在对话中，这次点击只用来关对话框
 let armed = false;
-renderer.domElement.addEventListener('pointerdown', (e) => { sfx.unlock(); closeDialog(); if (e.pointerType === 'touch') return; mouseDown[e.button] = true; if (e.button === 0) armed = !dialogOpen; });
+renderer.domElement.addEventListener('pointerdown', (e) => { sfx.unlock(); if (gui.dialogOpen) { gui.advance(); return; } if (e.pointerType === 'touch') return; mouseDown[e.button] = true; if (e.button === 0) armed = !gui.blocking; });
 addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; mouseDown[e.button] = false; if (e.button === 0 && armed) { armed = false; attackClick(); } });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 // 滚轮转镜头
 renderer.domElement.addEventListener('wheel', (e) => { camYawT -= e.deltaY * 0.0012; }, { passive: true });
-document.getElementById('dialog').addEventListener('pointerdown', closeDialog);
 
 // 手机模式：摇杆 + 按钮（与电脑操作并存，按最近使用的输入自动切换）
 const touch = new TouchControls();
@@ -253,7 +267,10 @@ const slotEls = [...document.querySelectorAll('#skills [data-slot]')];
 for (const el of slotEls) touch.bind(el, tap(() => useSkill(+el.dataset.slot)));
 touch.bind(document.getElementById('skDash'), tap(dash));
 touch.bind(document.getElementById('skWeap'), tap(cycleWeapon));
-touch.bind(document.getElementById('skHerb'), tap(eatHerb));
+// 快捷栏：点一下选中（能吃的直接吃）；背包 / 菜单按钮
+document.getElementById('hotbar').addEventListener('pointerdown', (e) => { const s = e.target.closest('.hs'); if (!s) return; e.stopPropagation(); sfx.unlock(); hotKey(+s.dataset.i); });
+document.getElementById('bagBtn').addEventListener('click', () => openBag());
+document.getElementById('menuBtn').addEventListener('click', () => openMenu());
 touch.bind(document.getElementById('prompt'), tap(interact));
 touch.bind(document.getElementById('mobTime'), { hold: 'time' });
 touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
@@ -291,7 +308,12 @@ function hitOres(test) {
     if (!o.alive || !test(o.x, o.z, o.r)) continue;
     o.hp--; any = true;
     fx.burst({ x: o.x, z: o.z }, '#ffd36b', 8, { speed: 4, life: 0.4 });
-    if (o.hp <= 0) { o.alive = false; o.group.visible = false; o.col.off = true; o.respawn = 90; g.addItem('stone', 1 + Math.floor(Math.random() * 2), o); }
+    if (o.hp <= 0) {
+      o.alive = false; o.group.visible = false; o.col.off = true; o.respawn = 90;
+      g.addItem('iron', 1 + Math.floor(Math.random() * 2), o);
+      if (Math.random() < 0.4) g.addItem('shard', 1, { x: o.x, z: o.z + 0.5 });
+      if (Math.random() < 0.15) g.addStones(1, { x: o.x, z: o.z + 1 });
+    }
   }
   return any;
 }
@@ -306,11 +328,11 @@ const runner = combat.runner;
 g.onSlam = (e) => combat.slamAround(e);
 
 function attackClick() {
-  if (P.dead || dialogOpen || P.dashT > 0 || P.work > 0) return;
+  if (P.dead || gui.blocking || g.paused || P.dashT > 0 || P.work > 0) return;
   combat.click();
 }
 function useSkill(i) {
-  if (P.dead || dialogOpen || P.work > 0) return;
+  if (P.dead || gui.blocking || g.paused || P.work > 0) return;
   combat.useSkill(i);
 }
 function cycleWeapon() { combat.cycle(); }
@@ -319,15 +341,14 @@ const comboEl = document.getElementById('comboName');
 function showMove(m) { comboEl.innerHTML = m ? `${m.name}<small>第${runner.chain}式</small>` : ''; }
 combat.onMove = showMove;
 
-function eatHerb() {
-  if (P.inv.herb <= 0 || P.pillCd > 0 || P.dead) { if (P.inv.herb <= 0) g.toast('没有灵草了——去田里种，或在野外采集'); return; }
-  P.inv.herb--; P.pillCd = 1;
-  P.hp = Math.min(P.maxHp, P.hp + 30); P.qi = Math.min(P.maxQi, P.qi + 30);
-  fx.burst(P.pos, '#7dffb0', 20, { speed: 2, up: 4, life: 0.8, grav: -1 });
-  fx.num(P.pos, '+30', 'heal');
+// 快捷栏 1–8：选中；能吃的（灵草、丹药、食物）按下就吃
+function hotKey(i) {
+  inv.sel = i; gui.renderHotbar(inv);
+  const id = inv.hot[i], it = id && item(id);
+  if (it && (it.heal || it.qiHeal || it.xp || it.cat === 'pill') && !gui.blocking) life.use(id);
 }
 function dash() {
-  if (P.dashCd > 0 || P.dead) return;
+  if (P.dashCd > 0 || P.dead || g.paused || gui.blocking) return;
   const mv = moveInput();
   P.dashDir = mv.lengthSq() > 0 ? Math.atan2(mv.x, mv.y) : P.yaw;
   P.dashT = 0.18; P.dashCd = DASH_CD; P.iframe = Math.max(P.iframe, 0.25);
@@ -341,58 +362,73 @@ function moveInput() {
   return v;
 }
 
-// ---------- 交互（F） ----------
-let dialogOpen = false;
-function findInteract() {
+// ---------- 日常 / 交互（F）：各系统往 life 里登记可交互的东西，按距离挑最近的 ----------
+const life = new Life(g); g.life = life;
+life.on((P) => {
   let best = null, bd = 2.2;
-  for (const n of npcs) { const d = n.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = { kind: 'npc', n, label: `交谈 · ${n.d.name}` }; } }
-  if (best) return best;
+  for (const n of npcs) { const d = n.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = { label: `交谈 · ${n.d.name}`, act: () => gui.dialog(n.talk(P.grade)), d: d - 0.5 }; } }
+  return best;
+});
+life.on((P) => {
   const cx = Math.floor(P.pos.x / CHUNK), cz = Math.floor(P.pos.z / CHUNK);
   for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
     const ch = world.chunks.get(`${cx + dx},${cz + dz}`); if (!ch) continue;
-    for (const h of ch.herbs) if (Math.hypot(h.x - P.pos.x, h.z - P.pos.z) < 1.6) return { kind: 'herb', ch, h, label: '采集 · 野生灵草' };
-  }
-  const fx0 = P.pos.x + Math.sin(P.yaw) * 0.9, fz0 = P.pos.z + Math.cos(P.yaw) * 0.9;
-  const t = world.farmTileAt(fx0, fz0) || world.farmTileAt(P.pos.x, P.pos.z);
-  if (t) {
-    if (t.state === 0) return { kind: 'farm', t, label: '开垦' };
-    if (t.state === 1) return { kind: 'farm', t, label: '播种 · 灵草种子' };
-    if (t.stage >= 2) return { kind: 'farm', t, label: '收获 · 灵草' };
-    return { kind: 'none', label: `灵草生长中…（${Math.round((t.stage * 2.5 + t.grow) / 5 * 100)}%）` };
+    for (const h of ch.herbs) {
+      const d = near(P, h, 1.6);
+      if (d !== false) return { label: '采集 · 野生' + itemName(h.kind), act: () => { world.pickHerb(ch, h); g.addItem(h.kind, 1, P.pos); }, d };
+    }
   }
   return null;
-}
+});
+life.on((P) => {
+  const fx0 = P.pos.x + Math.sin(P.yaw) * 0.9, fz0 = P.pos.z + Math.cos(P.yaw) * 0.9;
+  const t = world.farmTileAt(fx0, fz0) || world.farmTileAt(P.pos.x, P.pos.z);
+  if (!t) return null;
+  const act = (fn) => () => { P.work = 0.001; fn(); fx.burst({ x: t.x, z: t.z }, '#c8a070', 8, { speed: 2, y: 0.1, bright: 0.8 }); };
+  if (t.state === 0) return { label: '开垦', act: act(() => { t.state = 1; }), d: 1 };
+  if (t.state === 1) return { label: '播种 · 灵草种子', act: act(() => { t.state = 2; t.stage = 0; t.grow = 0; }), d: 1 };
+  if (t.stage >= 2) return { label: '收获 · 灵草', act: act(() => { t.state = 1; g.addItem('lingcao', 1 + (Math.random() < 0.35 ? 1 : 0), { x: t.x, z: t.z }); }), d: 1 };
+  return { label: `灵草生长中…（${Math.round((t.stage * 2.5 + t.grow) / 5 * 100)}%）`, d: 1 };
+});
 function interact() {
-  if (dialogOpen) { closeDialog(); return; }
-  const it = findInteract(); if (!it || P.dead) return;
-  if (it.kind === 'npc') openDialog(it.n.talk(P.grade));
-  if (it.kind === 'herb') { world.pickHerb(it.ch, it.h); g.addItem('herb', 1, P.pos); }
-  if (it.kind === 'farm') {
-    const t = it.t; P.work = 0.001;
-    if (t.state === 0) t.state = 1;
-    else if (t.state === 1) { t.state = 2; t.stage = 0; t.grow = 0; }
-    else if (t.stage >= 2) { t.state = 1; g.addItem('herb', 1 + (Math.random() < 0.35 ? 1 : 0), { x: t.x, z: t.z }); }
-    fx.burst({ x: t.x, z: t.z }, '#c8a070', 8, { speed: 2, y: 0.1, bright: 0.8 });
-  }
+  if (gui.blocking || P.dead || g.paused) return;
+  life.find()?.act?.();
 }
-function openDialog(d) {
-  dialogOpen = true;
-  const el = document.getElementById('dialog');
-  el.querySelector('.dname').textContent = d.name;
-  el.querySelector('.dsub').textContent = d.sub;
-  el.querySelector('.dline').textContent = '「' + d.line + '」';
-  el.querySelector('.dinfo').textContent = d.info;
-  el.querySelector('.dhint').textContent = d.hint;
-  el.classList.remove('hidden');
-  document.body.classList.add('talking');
+
+// ---------- 背包 / 菜单 / 存档 ----------
+inv.onChange = () => gui.renderHotbar(inv);
+function openBag() { if (!g.title) gui.openBag(inv, { onUse: (id) => life.use(id) }); }
+function openMenu() {
+  gui.panel('菜单', (body) => {
+    const info = saveInfo();
+    body.append(btn('🎒 背包', () => { gui.closePanel(); openBag(); }, 'wide'));
+    body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
+    body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
+    body.append(btn('❓ 操作说明', () => { gui.closePanel(); document.getElementById('help').classList.remove('hidden'); }, 'wide'));
+    body.append(btn('🔄 重新开始', () => { if (confirm('放弃当前进度，从头开始？')) { clearSave(); location.reload(); } }, 'wide'));
+  });
 }
-function closeDialog() { dialogOpen = false; document.getElementById('dialog').classList.add('hidden'); document.body.classList.remove('talking'); }
+const metaText = () => { const d = dateOf(g.day); return `${d.seasonName}季第${d.dayOfSeason}天 ${clockText(g.hours)} · ${realmText(1, P.layer)}`; };
+g.save = () => writeSave({ text: metaText() });
+register('time', () => ({ day: g.day, hours: g.hours }), (s) => {
+  g.day = s.day; g.hours = s.hours; world.day = g.day;
+  g.weatherToday = rollWeather(g.day); weather.setDay(g.weatherToday === 'rain');
+});
+register('player', () => ({ x: P.pos.x, z: P.pos.z, hp: P.hp, maxHp: P.maxHp, qi: P.qi, maxQi: P.maxQi, layer: P.layer, xp: P.xp, elem: P.elem, kit: combat.kitI }), (s) => {
+  P.pos.set(s.x, 0, s.z); focus.copy(P.pos);
+  Object.assign(P, { hp: s.hp, maxHp: s.maxHp, qi: s.qi, maxQi: s.maxQi, layer: s.layer, xp: s.xp, elem: s.elem, dead: false });
+  P.c.root.visible = true; combat.setKit(s.kit || 0);
+  for (const e of [...enemies.list]) enemies.remove(e);
+});
+register('inv', () => inv.save(), (s) => inv.load(s));
+register('life', () => life.save(), (s) => life.load(s));
+register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
+register('farm', () => world.farm.map((t) => [t.state, t.stage, t.grow]), (s) => s.forEach((v, i) => { const t = world.farm[i]; if (t) [t.state, t.stage, t.grow] = v; }));
 
 // ---------- 主循环 ----------
 let hitStop = 0, last = performance.now();
 const focus = new THREE.Vector3().copy(P.pos);
-const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'timeText', 'regionText', 'invHerb', 'invCore', 'invStone', 'invHeart', 'prompt', 'skDash', 'skHerb', 'atkName', 'weapName'].map((k) => [k, document.getElementById(k)]));
-const SEASONS = ['春', '夏', '秋', '冬'];
+const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'timeText', 'regionText', 'money', 'prompt', 'skDash', 'atkName', 'weapName', 'hotbar'].map((k) => [k, document.getElementById(k)]));
 
 world.update(P.pos, 0, 0, g.day * 24 + g.hours, true);
 document.getElementById('loading').classList.add('hidden');
@@ -400,6 +436,7 @@ document.getElementById('loading').classList.add('hidden');
 // ---------- 血条：头顶小血条 + 顶部目标大血条（与试炼场同一套 hpbar.js） ----------
 const hpLayer = document.getElementById('hpLayer');
 const targetBar = new HealthBar({ parent: document.body, big: true, max: 1 });
+targetBar.el.style.display = 'none';
 const BAR_Y = { boar: 1.7, spider: 1.4, golem: 2.7 };
 const fadingBars = [];
 let focusE = null, focusT = 0;
@@ -453,21 +490,22 @@ function frame(now) {
   composer.render();
 }
 function tick(dt) {
+  // 菜单 / 对话 / 标题画面：暂停（GDD：只在菜单和对话时暂停）
+  if (g.paused || gui.blocking) { updateCamera(dt); updateLights(g.hours % 24); updateUI(); return; }
   if (hitStop > 0) { hitStop -= dt; dt *= 0.08; }
   g.time += dt;
   for (let i = g.scheduled.length - 1; i >= 0; i--) if (g.scheduled[i].t <= g.time) { const s = g.scheduled[i]; g.scheduled.splice(i, 1); s.fn(); }
 
-  // 时间
-  const speed = keys.has('KeyT') || touch.held.has('time') ? 40 : 1, dh = dt * 24 / DAY_SEC * speed;
-  g.hours += dh;
-  if (g.hours >= 24) { g.hours -= 24; g.day++; }
-  const h = g.hours;
+  // 时间：6:00 → 次日 2:00，1 游戏小时 = 1 分钟（calendar.js）
+  const dh = life.tick(dt, keys.has('KeyT') || touch.held.has('time'));
+  const h = g.hours % 24;
   g.nightK = 1 - smooth(5, 7, h) + smooth(18.5, 20, h);
   g.nightK = clamp(g.nightK, 0, 1);
 
   weather.update(dt, dh, P.pos, g.time, world.mineFactor);
   updatePlayer(dt);
-  world.update(P.pos, dt, g.nightK, g.day * 24 + h);
+  world.update(P.pos, dt, g.nightK, g.day * 24 + g.hours);
+  life.update(dt);
   for (const n of npcs) n.update(dt, h);
   enemies.update(dt);
   combat.updateEffects(dt);
@@ -487,7 +525,6 @@ function updatePlayer(dt) {
   if (P.dead) combat.cancel(); else combat.update(dt);
   updateAim();
   const mv = moveInput();
-  if (mv.lengthSq() > 0 && dialogOpen) closeDialog();
   if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
   // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里
   const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, 6);
@@ -602,18 +639,18 @@ function updateUI() {
   ui.qiText.textContent = `${Math.floor(P.qi)} / ${P.maxQi}`;
   ui.xpFill.style.width = (P.layer >= 9 ? 100 : P.xp / xpNeed() * 100) + '%';
   ui.realm.textContent = realmText(1, P.layer) + (P.layer >= 9 ? '（圆满）' : `　修为 ${Math.floor(P.xp)}/${xpNeed()}`);
-  const hh = Math.floor(g.hours), mm = Math.floor((g.hours - hh) * 60 / 10) * 10;
-  ui.timeText.textContent = `${SEASONS[Math.floor((g.day - 1) / 7) % 4]} · 第${g.day}天　${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}${g.nightK > 0.5 ? ' 🌙' : ' ☀'}`;
+  const d = dateOf(g.day);
+  ui.timeText.textContent = `${d.seasonName}季 ${d.dayOfSeason}日 ${d.weekName}　${d.moonIcon} ${clockText(g.hours)}${g.weatherToday === 'rain' ? ' 🌧' : g.nightK > 0.5 ? ' 🌙' : ' ☀'}`;
   ui.regionText.textContent = regionName(P.pos.x, P.pos.z);
-  ui.invHerb.textContent = P.inv.herb; ui.invCore.textContent = P.inv.core; ui.invStone.textContent = P.inv.stone; ui.invHeart.textContent = P.inv.heart;
-  const it = dialogOpen ? null : findInteract();
+  ui.money.textContent = `💰 ${inv.money} 文　💎 ${inv.stones}`;
+  // 战斗时快捷栏淡出（GDD 第 12 节 HUD）
+  ui.hotbar.classList.toggle('fight', !!runner.move || enemies.list.some((e) => e.state !== 'idle' && e.pos.distanceTo(P.pos) < 12));
+  const it = gui.blocking || g.paused ? null : life.find();
   ui.prompt.classList.toggle('hidden', !it);
-  if (it) ui.prompt.innerHTML = it.kind === 'none' ? it.label : `<kbd>F</kbd> ${it.label}`;
+  if (it) ui.prompt.innerHTML = it.act ? `<kbd>F</kbd> ${it.label}` : it.label;
   const cd = (el, v, max, ok) => { el.querySelector('.cd').style.height = (clamp(v / max, 0, 1) * 100) + '%'; el.classList.toggle('off', !ok); };
   for (const el of slotEls) { const i = +el.dataset.slot, s = combat.kit.skills[i]; cd(el, combat.skillCd[i], s.cd, P.qi >= s.qi); }
   cd(ui.skDash, P.dashCd, DASH_CD, true);
-  cd(ui.skHerb, P.pillCd, 1, P.inv.herb > 0);
-  ui.skHerb.querySelector('span').textContent = `灵草 ×${P.inv.herb}`;
 }
 // 换武器 / 切手机模式时刷新技能槽名字
 function updateKitUI() {
@@ -627,8 +664,26 @@ updateKitUI();
 // 窗口矮时操作说明默认收起（H 打开）
 if (innerHeight < 720) document.getElementById('help').classList.add('hidden');
 
+// ---------- 标题：继续 / 新的开始 ----------
+function newGame() {
+  inv.money = 200; inv.add('seed_lingcao', 5); inv.add('lingcao', 3);
+  g.weatherToday = rollWeather(g.day); weather.setDay(g.weatherToday === 'rain');
+  g.onNewGame?.();
+}
+function startPlay() {
+  g.title = false; g.paused = false;
+  document.getElementById('title').classList.add('hidden');
+  gui.renderHotbar(inv);
+  g.toast(touch.on ? '左下摇杆移动 · 右下按钮出招（自动瞄准）· 拖动画面转镜头 · 点提示交互' : '左键连招（松开出招，快慢分支）· QERC 技能 · X 换武 · F 交互 · Tab 背包 · H 操作说明', 4);
+}
+{
+  g.title = true;
+  const box = document.getElementById('titleBtns'), info = saveInfo();
+  if (info) box.append(btn(`继续 · ${info.text}`, () => { readSave(); startPlay(); }, 'wide'));
+  box.append(btn(info ? '新的开始（覆盖存档）' : '开始问道', () => { if (info) clearSave(); newGame(); startPlay(); }, 'wide'));
+  if (new URLSearchParams(location.search).has('skipTitle')) { if (info) readSave(); else newGame(); startPlay(); }
+}
 requestAnimationFrame(frame);
-g.toast(touch.on ? '左下摇杆移动 · 右下按钮出招（自动瞄准）· 拖动画面转镜头 · 点提示交互' : '左键连招（松开出招，快慢分支）· QERC 技能 · X 换武 · F 交互 · H 查看操作', 4);
 // 调试入口
 window.game = g; g.combo = runner; g.combat = combat;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
