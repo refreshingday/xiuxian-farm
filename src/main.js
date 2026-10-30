@@ -20,7 +20,7 @@ import { Home } from './home.js';
 import { Gamepad, PAD } from './gamepad.js';
 import { TUNE } from './combo.js';
 import { Events } from './events.js';
-import { Realm, levelInfo, xpNeed as realmXP, ROOT_LIFE } from './realm.js';
+import { Realm, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
 import { Farm } from './farm.js';
 import { Alchemy } from './alchemy.js';
@@ -161,6 +161,8 @@ g.player = P;
 
 const xpNeed = () => realmXP(P.layer);
 g.xpNeed = xpNeed;
+g.xpScale = () => xpScale(P.layer);
+g.killXpK = (lvl) => killXpK(P.layer, lvl);
 g.atkMul = () => atkMul();
 // 招式伤害按炼气一层设计，随境界放大（每进一个大境界再跳一截）；兵器淬火另算
 const atkMul = () => (1 + P.layer * 0.25 + levelInfo(P.layer).realm * 0.5) * (1 + P.atkBonus);
@@ -679,7 +681,7 @@ function tick(dt) {
   g.nightK = 1 - smooth(5, 7, h) + smooth(18.5, 20, h);
   g.nightK = clamp(g.nightK, 0, 1);
 
-  weather.update(dt, dh, P.pos, g.time, world.mineFactor);
+  weather.update(dt, dh, P.pos, g.time, world.mineFactor, g.nightK);
   updatePlayer(dt);
   world.update(P.pos, dt, g.nightK, g.day * 24 + g.hours);
   life.update(dt);
@@ -884,16 +886,19 @@ updateKitUI();
 // 窗口矮时操作说明默认收起（H 打开）
 if (innerHeight < 720) document.getElementById('help').classList.add('hidden');
 
-// ---------- 季节画面（GDD 美术：春夏秋冬配色明显不同）：叶子、草地变色，冬天积雪、下雪 ----------
+// ---------- 季节画面（GDD 美术：春夏秋冬配色明显不同；秋叶、雪地、结冰水面）----------
+// 叶子、草地变色；春天飘花瓣，秋天飘落叶、地上铺落叶；冬天积雪、下雪、池塘和瀑布结冰
 const SEASON_LOOK = [
-  { leaf: [1, 1, 1], grass: [1, 1, 1], snow: 0 },
+  { leaf: [1, 1, 1], grass: [1, 1, 1], snow: 0, drift: 'petal' },
   { leaf: [0.86, 1.0, 0.82], grass: [0.9, 1.04, 0.85], snow: 0 },
-  { leaf: [1.5, 0.82, 0.42], grass: [1.22, 0.98, 0.6], snow: 0 },
-  { leaf: [0.95, 0.98, 1.0], grass: [1.05, 1.05, 1.1], snow: 0.82 },
+  { leaf: [1.05, 0.95, 0.9], grass: [1.55, 0.93, 0.48], snow: 0, autumn: 0.78, litter: 1, drift: 'leaf' },
+  { leaf: [0.95, 0.98, 1.0], grass: [1.05, 1.05, 1.1], snow: 0.82, ice: 1 },
 ];
 function applySeason() {
   const L = SEASON_LOOK[dateOf(g.day).season];
   weatherU.season.value.set(...L.leaf); weatherU.grassT.value.set(...L.grass); weatherU.snow.value = L.snow;
+  weatherU.ice.value = L.ice || 0; weatherU.autumn.value = L.autumn || 0; weatherU.litter.value = L.litter || 0; world.setIce(!!L.ice);
+  weather.drift.set(L.drift || null);
 }
 applySeason();
 life.dayHooks.push(() => { applySeason(); return ''; });

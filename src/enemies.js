@@ -54,7 +54,7 @@ export const TYPES = {
 // 妖王（GDD 第 7 节：20 个；炼气圈 1、筑基 / 金丹 / 元婴各 6、化神 1，再加原型的赤岩妖王）。
 // 复用本地妖兽的模型放大，多阶段；只掉材料（突破材料 + 丹方）。attacks 从 slam 砸地 / ring 弹幕 / charge 冲锋 / summon 召唤 里挑，
 // sig = 自己的招（bossmoves.js），狂暴后出得更勤
-const B = (o) => ({ r: 1.9, speed: 2.6, dmg: 24, xp: 320, boss: true, h: 4.6, scale: 2.2, attacks: ['slam', 'ring', 'charge'], sig: [], drops: [], ...o });
+const B = (o) => ({ r: 1.9, speed: 2.6, dmg: 24, xp: 800, boss: true, h: 4.6, scale: 2.2, attacks: ['slam', 'ring', 'charge'], sig: [], drops: [], ...o });
 export const BOSSES = {
   boss: B({ name: '赤岩妖王', hp: 1500, elem: '火', kind: 'brute', look: 'golem', c: ['#5a3a3a', '#3e2828', '#ff4a1a'], minion: 'golem', drop: 'heart', recipe: 'pill_break', lvl: 2, scale: 2.3, attacks: ['slam', 'ring'], sig: ['quake', 'magma'] }),
   wolfking: B({ name: '赤枫狼王', hp: 1500, elem: '火', kind: 'charger', look: 'wolf', c: ['#a84a2a', '#5a2414', '#ffd23a'], minion: 'wolf', drop: 'wolf_fang', recipe: 'pill_break', lvl: 4, moon: true, attacks: ['charge', 'slam'], sig: ['pounce', 'howl'] }),
@@ -328,7 +328,7 @@ export class Enemies {
     const g = this.game, fx = g.fx;
     g.sfx?.kill();
     fx.burst(e.pos, e.boss ? '#ff6a2a' : '#b9a8ff', e.boss ? 120 : 24, { speed: e.boss ? 9 : 5, up: 4, life: 0.8 });
-    g.addXP(e.T.xp * (1 + e.lvl * 0.3), e.pos);
+    g.addXP(e.T.xp * (1 + e.lvl * 0.3) * (g.killXpK?.(e.lvl) ?? 1), e.pos);
     const luck = (e.night || g.nightK > NIGHT ? 1.5 : 1) * (e.blood ? 2 : 1) * (1 + (g.player.mods?.luck || 0));
     let k = 0;
     for (const [id, p] of e.T.drops) if (Math.random() < p * luck) g.addItem(id, Math.random() < p * luck - 1 ? 2 : 1, { x: e.pos.x, z: e.pos.z + 0.5 * k++ });

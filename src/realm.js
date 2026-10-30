@@ -25,8 +25,17 @@ export function levelInfo(L) {
   const k = L - 10, r = 1 + Math.floor(k / 4), s = k % 4;
   return { realm: r, stage: s, name: REALMS[r] + STAGE[s], top: s === 3 };
 }
-// 修为需求：时长分配约 炼气 3h / 筑基 7h / 金丹 9h / 元婴 11h / 化神 10h（GDD 第 5 节）
-export const xpNeed = (L) => Math.round(40 * 1.24 ** (L - 1) + 30 * L);
+// 修为需求（GDD 第 5 节）：炼气 3h（约 9 天）/ 筑基 7h（21 天）/ 金丹 9h（27 天）/ 元婴 11h（33 天）/ 化神 10h（30 天）。
+// 按「每天约打 30 只同级妖兽；击杀 60%、打坐 20%、丹药 20%」反推每层要多少修为：炼气一天一层，筑基起一层要 5–8 天
+const XP_TABLE = [300, 850, 1100, 1500, 1800, 2300, 2700, 3200, 3700, 12000, 16000, 20000, 25000, 27000, 33000, 40000, 48000,
+  50000, 58000, 67000, 77000, 78000, 80000, 82000, 85000];
+export const xpNeed = (L) => XP_TABLE[Math.max(1, Math.min(L, XP_TABLE.length)) - 1];
+// 这一层的修士该去打几级的妖兽（≈ 对应境界圈的危险度，见 worldmap.dangerFor）
+export const foeLevel = (L) => L <= 9 ? (L - 1) * 0.5 : 4.3 + (L - 10) * 1.45;
+// 同级妖兽一只给的修为相对炼气一层的倍数；打坐、培元丹都按它放大，守住 60 / 20 / 20 的比例
+export const xpScale = (L) => 1 + 0.3 * foeLevel(L);
+// 打比自己低太多的妖兽，修为递减（不能一直在村口刷野猪）
+export const killXpK = (L, lvl) => { const gap = foeLevel(L) - lvl; return gap > 3 ? Math.max(0.15, 1 - (gap - 3) * 0.12) : 1; };
 
 export class Realm {
   constructor(g) {

@@ -40,6 +40,7 @@ export class Weather {
     this.lines = new THREE.LineSegments(geo, this.mat);
     this.lines.frustumCulled = false; this.lines.visible = false;
     scene.add(this.lines);
+    this.drift = new Drift(scene);
     this.raining = false; this.dayRain = false;
     this.timer = 99; // 游戏内小时
     this.rain = 0; this.wet = 0;
@@ -53,8 +54,9 @@ export class Weather {
   // 当天天气（calendar.rollWeather）：雨天大部分时间在下，中间偶尔停一会儿；晴天不下
   setDay(rain) { this.dayRain = this.raining = rain; this.timer = rain ? 3 + Math.random() * 5 : 99; }
 
-  // dh：本帧经过的游戏内小时；m：矿洞程度（矿洞里没雨）
-  update(dt, dh, focus, time, m) {
+  // dh：本帧经过的游戏内小时；m：矿洞程度（矿洞里没雨）；night：夜色程度
+  update(dt, dh, focus, time, m, night = 0) {
+    this.drift.update(focus, time, m, night);
     this.timer -= dh;
     if (this.timer <= 0 && this.dayRain) {
       this.raining = !this.raining;
@@ -71,5 +73,91 @@ export class Weather {
     this.lines.visible = r > 0.01;
     weatherU.rain.value = r;
     weatherU.wet.value = this.wet;
+  }
+}
+
+// 秋天飘落叶、春天飘花瓣：围着玩家循环的小片，翻转、左右飘都在着色器里算
+const DN = 260, DBOX = 40, DHGT = 9;
+const DRIFT = {
+  leaf: { amt: 1, size: [0.13, 0.08], fall: [0.8, 1.5], colors: ['#d9541e', '#e8892a', '#f0b43c', '#b8361f'] },
+  petal: { amt: 0.55, size: [0.07, 0.055], fall: [0.5, 0.9], colors: ['#ffc4d8', '#ffd9e6', '#fff0f5', '#f7a8c4'] },
+};
+export class Drift {
+  constructor(scene) {
+    const pos = [], corner = [], rnd = [], idx = [];
+    for (let i = 0; i < DN; i++) {
+      const x = Math.random() * DBOX, y = Math.random() * DHGT, z = Math.random() * DBOX, r = Math.random();
+      for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { pos.push(x, y, z); corner.push(cx, cy); rnd.push(r); }
+      const k = i * 4; idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('aCorner', new THREE.Float32BufferAttribute(corner, 2));
+    geo.setAttribute('aRnd', new THREE.Float32BufferAttribute(rnd, 1));
+    geo.setIndex(idx);
+    this.mat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      uniforms: {
+        uTime: { value: 0 }, uFocus: { value: new THREE.Vector3() }, uAmt: { value: 0 }, uLight: { value: 1 },
+        uSize: { value: new THREE.Vector2() }, uFall: { value: new THREE.Vector2() }, uCol: { value: [0, 1, 2, 3].map(() => new THREE.Color()) },
+      },
+      vertexShader: `
+        attribute vec2 aCorner;
+        attribute float aRnd;
+        uniform float uTime, uAmt;
+        uniform vec3 uFocus;
+        uniform vec2 uSize, uFall;
+        varying vec2 vUv;
+        varying float vR;
+        void main() {
+          vUv = aCorner; vR = aRnd;
+          float t = uTime * (0.7 + aRnd * 0.6) + aRnd * 40.0;
+          float y = mod(position.y - uTime * mix(uFall.x, uFall.y, aRnd), ${DHGT.toFixed(1)});
+          vec3 o = uFocus - vec3(${(DBOX / 2).toFixed(1)}, 0.0, ${(DBOX / 2).toFixed(1)});
+          vec2 p = position.xz + vec2(uTime * 0.7 + sin(t * 0.9) * 1.1, cos(t * 0.6) * 0.8); // 顺风飘、左右摆
+          vec3 w = vec3(o.x + mod(p.x - o.x, ${DBOX.toFixed(1)}), y, o.z + mod(p.y - o.z, ${DBOX.toFixed(1)}));
+          // 一边落一边翻：先绕 x 再绕 y 转
+          float a = t * 2.4, b = t * 1.3;
+          vec3 l = vec3(aCorner.x * uSize.x, 0.0, aCorner.y * uSize.y);
+          l = vec3(l.x, -l.z * sin(a), l.z * cos(a));
+          l = vec3(l.x * cos(b) + l.z * sin(b), l.y, -l.x * sin(b) + l.z * cos(b));
+          // 只显示一部分（uAmt），出现 / 落地时缩小
+          float k = step(aRnd, uAmt) * smoothstep(0.0, 0.5, y) * smoothstep(${DHGT.toFixed(1)}, ${(DHGT - 1.5).toFixed(1)}, y);
+          gl_Position = projectionMatrix * viewMatrix * vec4(w + l * k, 1.0);
+        }`,
+      fragmentShader: `
+        uniform vec3 uCol[4];
+        uniform float uLight;
+        varying vec2 vUv;
+        varying float vR;
+        void main() {
+          if (vUv.y * vUv.y > (1.0 - vUv.x * vUv.x) * (0.75 + 0.25 * vUv.x)) discard; // 叶形：一头圆一头尖
+          int i = int(fract(vR * 7.31) * 4.0);
+          vec3 c = i == 0 ? uCol[0] : i == 1 ? uCol[1] : i == 2 ? uCol[2] : uCol[3];
+          c *= 1.0 - step(abs(vUv.y), 0.08) * 0.22; // 叶脉
+          gl_FragColor = vec4(c * uLight, 1.0);
+          #include <colorspace_fragment>
+        }`,
+    });
+    this.mesh = new THREE.Mesh(geo, this.mat);
+    this.mesh.frustumCulled = false; this.mesh.visible = false;
+    scene.add(this.mesh);
+    this.kind = null;
+  }
+  // kind：'leaf' | 'petal' | null
+  set(kind) {
+    this.kind = kind; const D = DRIFT[kind];
+    if (!D) return;
+    const u = this.mat.uniforms;
+    u.uSize.value.set(...D.size); u.uFall.value.set(...D.fall);
+    D.colors.forEach((c, i) => u.uCol.value[i].set(c));
+  }
+  update(focus, time, m, night) {
+    const D = DRIFT[this.kind], u = this.mat.uniforms;
+    const amt = D ? D.amt * (1 - m) : 0;
+    this.mesh.visible = amt > 0.01;
+    if (!this.mesh.visible) return;
+    u.uAmt.value = amt; u.uTime.value = time; u.uLight.value = 1 - night * 0.72;
+    u.uFocus.value.set(focus.x, 0, focus.z);
   }
 }

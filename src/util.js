@@ -96,14 +96,18 @@ function occPatch(s) {
 export const wind = { value: 0 };
 // 天气：雨量、地面湿度、天空色（线性），地面着色器直接引用
 export const weatherU = { rain: { value: 0 }, wet: { value: 0 }, sky: { value: new THREE.Color(0xbfd4e8) },
-  // 季节：叶子 / 草的色调（秋天发黄发红）和积雪（冬天）。main.js 按日期设置
-  season: { value: new THREE.Vector3(1, 1, 1) }, grassT: { value: new THREE.Vector3(1, 1, 1) }, snow: { value: 0 } };
+  // 季节：叶子 / 草的色调（秋天发黄发红）、积雪和结冰（冬天）、地上的落叶（秋天）。main.js 按日期设置
+  season: { value: new THREE.Vector3(1, 1, 1) }, grassT: { value: new THREE.Vector3(1, 1, 1) }, snow: { value: 0 }, ice: { value: 0 }, litter: { value: 0 },
+  autumn: { value: 0 } }; // 秋叶：按明暗换成红橙（深绿也能变红，不只是乘个色调）
+const SEASON_UNI = 'uniform vec3 uSeason;\nuniform float uSnow, uAutumn;\n';
+const seasonU = (s) => { s.uniforms.uSeason = weatherU.season; s.uniforms.uSnow = weatherU.snow; s.uniforms.uAutumn = weatherU.autumn; };
 const SEASON_LEAF = `
   diffuseColor.rgb *= uSeason;
+  diffuseColor.rgb = mix(diffuseColor.rgb, dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)) * vec3(3.5, 1.4, 0.26), uAutumn);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.96, 1.0), uSnow * SNOW_K);`;
 function leafPatch(s, mat) {
   const tex = mat.userData.leafTex || PNG.foliage;
-  s.uniforms.uSeason = weatherU.season; s.uniforms.uSnow = weatherU.snow;
+  seasonU(s);
   const season = SEASON_LEAF.replace('SNOW_K', 'smoothstep(0.1, 0.7, normalize(vLeafN).y)');
   s.vertexShader = 'varying vec3 vLeafP;\nvarying vec3 vLeafN;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLeafP = position; vLeafN = normal;');
   if (tex) {
@@ -116,10 +120,10 @@ function leafPatch(s, mat) {
     vec3 tx = texture2D(tLeaf, q.zy).rgb * bw.x + texture2D(tLeaf, q.xz).rgb * bw.y + texture2D(tLeaf, q.xy).rgb * bw.z;
     diffuseColor.rgb *= tx * 1.14;${season}
   }`);
-    s.fragmentShader = 'uniform vec3 uSeason;\nuniform float uSnow;\n' + s.fragmentShader;
+    s.fragmentShader = SEASON_UNI + s.fragmentShader;
     return;
   }
-  s.fragmentShader = 'uniform vec3 uSeason;\nuniform float uSnow;\nvarying vec3 vLeafP;\nvarying vec3 vLeafN;\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  s.fragmentShader = SEASON_UNI + 'varying vec3 vLeafP;\nvarying vec3 vLeafN;\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
   {
     vec3 q = floor(vLeafP * 12.0 + 0.5) / 12.0 * 2.6;
     vec3 ci = floor(q), f = fract(q);
@@ -164,8 +168,8 @@ function grassPatch(s) {
 }
 // 叶片卡：每片是一个四边形，顶点都在片中心，在视空间展开成正对镜头的叶簇（随风微转）
 function cardPatch(s) {
-  s.uniforms.uWind = wind; s.uniforms.uSeason = weatherU.season; s.uniforms.uSnow = weatherU.snow;
-  s.fragmentShader = 'uniform vec3 uSeason;\nuniform float uSnow;\n' + s.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>' + SEASON_LEAF.replace('SNOW_K', '0.55'));
+  s.uniforms.uWind = wind; seasonU(s);
+  s.fragmentShader = SEASON_UNI + s.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>' + SEASON_LEAF.replace('SNOW_K', '0.55'));
   s.vertexShader = 'attribute vec4 aCard;\nuniform float uWind;\n' + s.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
   {
     float cardS = length(modelMatrix[0].xyz);
