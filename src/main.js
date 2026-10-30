@@ -180,6 +180,13 @@ P.hurt = (dmg, fx0, fz0, knock = 6) => {
   if (P.hp <= 0) { if (realm.trib) realm.failTrib(); else die(); }
   return true;
 };
+// 持续伤害（毒雾、火地）：不给无敌帧、不击退；闪避中踩过去不扣
+P.dot = (dmg) => {
+  if (P.dead || P.dashT > 0) return;
+  dmg = Math.max(1, Math.round(dmg * Math.max(0.3, 1 - (P.mods.dmgTaken || 0))));
+  if (P.hp <= dmg) { P.iframe = 0; P.hurt(dmg, P.pos.x, P.pos.z, 0); return; }
+  P.hp -= dmg; P.c.flash = 0.08; fx.num(P.pos, '-' + dmg, 'hurt');
+};
 function die() {
   P.dead = true; P.hp = 0;
   combat.cancel();
@@ -384,6 +391,7 @@ const combat = new Combat({
 });
 const runner = combat.runner;
 g.onSlam = (e) => combat.slamAround(e);
+g.hitStop = (sec) => { hitStop = Math.max(hitStop, sec); };
 
 function attackClick() {
   if (P.dead || gui.blocking || g.paused || P.dashT > 0 || P.work > 0 || realm.fly) return;
@@ -547,7 +555,8 @@ targetBar.el.style.display = 'none';
 const barY = (e) => e.T.h ?? 2;
 const fadingBars = [];
 let focusE = null, focusT = 0;
-const enemyName = (e) => (e.boss ? `${e.T.name}${e.phase === 2 ? ' · 狂暴' : ''}` : `${e.T.name}${e.blood ? '（血月）' : ''}`);
+const BOSS_TAG = { open: ' · 破绽', down: ' · 倒地' };
+const enemyName = (e) => (e.boss ? `${e.T.name}${e.phase === 2 ? ' · 狂暴' : ''}${BOSS_TAG[e.state] || ''}` : `${e.T.name}${e.blood ? '（血月）' : ''}`);
 function focusOn(e, hp) { focusE = e; targetBar.dead = false; targetBar.snap(hp, e.maxHp, enemyName(e)); }
 g.onEnemyHit = (e, amt, crit) => {
   if (!e.boss) {
@@ -669,13 +678,14 @@ function tick(dt) {
 
 const NOMOVE = new THREE.Vector2();
 function updatePlayer(dt) {
-  P.iframe -= dt; P.dashCd -= dt; P.pillCd -= dt;
+  P.iframe -= dt; P.dashCd -= dt; P.pillCd -= dt; P.slowT = (P.slowT || 0) - dt;
+  if (P.slowT > 0 && Math.random() < 0.3) fx.mote(P.pos.x + (Math.random() - 0.5) * 0.8, 0.1, P.pos.z + (Math.random() - 0.5) * 0.8, '#bfe8ff', { life: 0.5, size: 0.6, vy: 0.4 }); // 被冻慢 / 缠住
   if (P.dead) combat.cancel(); else combat.update(dt);
   updateAim();
   const mv = moveInput();
   if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
   // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里；御剑飞行时走得快、悬在半空
-  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0)));
+  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0)) * (P.slowT > 0 ? 0.55 : 1));
   if (realm.fly) { st.y = 1.1 + Math.sin(g.time * 3) * 0.08; P.vy = 0; st.ghost = true; }
   flySword.visible = realm.fly;
   let vx = st.vx, vz = st.vz;

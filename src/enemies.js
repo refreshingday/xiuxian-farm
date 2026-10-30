@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { flat, toon, glow, mesh, at, angDiff, lerpAngle, setFlash, clamp } from './util.js';
 import { ARENA } from './world.js';
+import { SIG } from './bossmoves.js';
 
 const G = {};
 function geos() {
@@ -47,33 +48,35 @@ export const TYPES = {
   bandit: T({ name: '劫修', hp: 140, r: 0.7, speed: 4.0, dmg: 16, xp: 30, elem: '金', kind: 'charger', look: 'zombie', c: ['#3a3e48', '#22242a', '#ff4a3a'], h: 2.2, drops: [['yaodan', 0.5], ['shard', 0.5]], stones: [2, 5] }),
   // 魔道：血魔宫的魔修（魔道入侵村庄、青锋剑派灭门危机）
   demoncult: T({ name: '魔修', hp: 150, r: 0.7, speed: 4.2, dmg: 17, xp: 34, elem: '火', kind: 'charger', look: 'zombie', c: ['#5a1a24', '#2a0a10', '#ff3a3a'], h: 2.2, drops: [['yaodan', 0.5], ['shard', 0.4]], stones: [2, 4] }),
+  foxclone: T({ name: '狐影', hp: 1, r: 1.4, speed: 6, dmg: 20, xp: 0, elem: '火', kind: 'charger', look: 'wolf', c: ['#f0a85a', '#a85a2a', '#ff6aff'], h: 3.6, drops: [] }), // 九尾妖狐的分身：一碰就散
   insect: T({ name: '妖虫', hp: 40, r: 0.55, speed: 3.6, dmg: 7, xp: 10, elem: '木', kind: 'charger', look: 'bug', c: ['#5a3a2a', '#c8a03a', '#ffcc3a'], h: 1.1, drops: [['yaodan', 0.2]] }),
 };
 // 妖王（GDD 第 7 节：20 个；炼气圈 1、筑基 / 金丹 / 元婴各 6、化神 1，再加原型的赤岩妖王）。
-// 复用本地妖兽的模型放大，多阶段；只掉材料（突破材料 + 丹方）。attacks 从 slam 砸地 / ring 弹幕 / charge 冲锋 / summon 召唤 里挑
-const B = (o) => ({ r: 1.9, speed: 2.6, dmg: 24, xp: 320, boss: true, h: 4.6, scale: 2.2, attacks: ['slam', 'ring', 'charge'], drops: [], ...o });
+// 复用本地妖兽的模型放大，多阶段；只掉材料（突破材料 + 丹方）。attacks 从 slam 砸地 / ring 弹幕 / charge 冲锋 / summon 召唤 里挑，
+// sig = 自己的招（bossmoves.js），狂暴后出得更勤
+const B = (o) => ({ r: 1.9, speed: 2.6, dmg: 24, xp: 320, boss: true, h: 4.6, scale: 2.2, attacks: ['slam', 'ring', 'charge'], sig: [], drops: [], ...o });
 export const BOSSES = {
-  boss: B({ name: '赤岩妖王', hp: 1500, elem: '火', kind: 'brute', look: 'golem', c: ['#5a3a3a', '#3e2828', '#ff4a1a'], minion: 'golem', drop: 'heart', recipe: 'pill_break', lvl: 2, scale: 2.3 }),
-  wolfking: B({ name: '赤枫狼王', hp: 1500, elem: '火', kind: 'charger', look: 'wolf', c: ['#a84a2a', '#5a2414', '#ffd23a'], minion: 'wolf', drop: 'wolf_fang', recipe: 'pill_break', lvl: 4, moon: true }),
-  frosthorn: B({ name: '霜角兽王', hp: 1600, elem: '水', kind: 'charger', look: 'boar', c: ['#e0eef8', '#8aa8c0', '#7ad8ff'], minion: 'snowwolf', drop: 'b_frosthorn', recipe: 'pill_break2', lvl: 9 }),
-  viperking: B({ name: '竹叶青王', hp: 1500, elem: '木', kind: 'charger', look: 'snake', c: ['#5ac85a', '#2a6a2a', '#ffe24a'], minion: 'python', drop: 'b_viper', recipe: 'pill_break2', lvl: 9 }),
-  spiderqueen: B({ name: '毒蛛后', hp: 1400, elem: '木', kind: 'shooter', look: 'spider', c: ['#4a2a5a', '#c84ac8', '#ff6aff'], shot: '#e05aff', minion: 'spider', drop: 'b_spiderqueen', recipe: 'pill_break2', lvl: 9 }),
-  flameking: B({ name: '炎兽王', hp: 1600, elem: '火', kind: 'charger', look: 'boar', c: ['#c84a1a', '#6a1a0a', '#ffd03a'], minion: 'flamebeast', drop: 'b_flamehorn', recipe: 'pill_break2', lvl: 9 }),
-  bronze: B({ name: '铜甲傀儡', hp: 1800, elem: '金', kind: 'brute', look: 'golem', c: ['#b8783a', '#7a4a1a', '#ffd27a'], minion: 'puppet', drop: 'b_bronze', recipe: 'pill_break2', lvl: 9 }),
-  ghostgeneral: B({ name: '游魂将', hp: 1400, elem: '阴', kind: 'shooter', look: 'ghost', c: ['#8a9ae8', '#4a5aa8', '#ffffff'], shot: '#b8c8ff', minion: 'ghost', drop: 'b_ghostseal', recipe: 'pill_break2', lvl: 9 }),
-  snowwolfking: B({ name: '雪狼王', hp: 1800, elem: '水', kind: 'charger', look: 'wolf', c: ['#f4f8fc', '#a8b8c8', '#7ad8ff'], minion: 'snowwolf', drop: 'b_snowwolf', recipe: 'pill_break3', lvl: 15 }),
-  pythonking: B({ name: '青鳞蟒王', hp: 1900, elem: '木', kind: 'charger', look: 'snake', c: ['#3a8a6a', '#1a4a3a', '#ffe24a'], minion: 'python', drop: 'b_python', recipe: 'pill_break3', lvl: 15 }),
-  jiaoking: B({ name: '沼蛟', hp: 1900, elem: '水', kind: 'charger', look: 'snake', c: ['#2a5ab8', '#14306a', '#9ef0ff'], minion: 'jiao', drop: 'b_jiao', recipe: 'pill_break3', lvl: 15 }),
-  crowking: B({ name: '火鸦王', hp: 1600, elem: '火', kind: 'shooter', look: 'crow', c: ['#1a1418', '#e04a1a', '#ffd03a'], shot: '#ff8a2a', minion: 'firecrow', drop: 'b_crow', recipe: 'pill_break3', lvl: 15 }),
-  scorpionking: B({ name: '沙蝎王', hp: 1800, elem: '土', kind: 'shooter', look: 'scorpion', c: ['#d8a850', '#8a5a2a', '#ff4a2a'], shot: '#ffa03a', minion: 'scorpion', drop: 'b_scorpion', recipe: 'pill_break3', lvl: 15 }),
-  zombieking: B({ name: '尸王', hp: 2000, elem: '土', kind: 'brute', look: 'zombie', c: ['#6a7a5a', '#3a4a34', '#d0ff8a'], minion: 'zombie', drop: 'b_zombie', recipe: 'pill_break3', lvl: 15 }),
-  snowdemon: B({ name: '雪妖王', hp: 2200, elem: '水', kind: 'shooter', look: 'ghost', c: ['#e8f4ff', '#8ab8e0', '#7ad8ff'], shot: '#bff4ff', minion: 'icebeast', drop: 'b_snowdemon', recipe: 'pill_break4', lvl: 20 }),
-  fox: B({ name: '九尾妖狐', hp: 2100, elem: '火', kind: 'charger', look: 'wolf', c: ['#f0a85a', '#a85a2a', '#ff6aff'], minion: 'wolf', drop: 'b_fox', recipe: 'pill_break4', lvl: 20, attacks: ['slam', 'ring', 'charge', 'ring'] }),
-  jiaomu: B({ name: '千年蛟母', hp: 2400, elem: '水', kind: 'charger', look: 'snake', c: ['#1a4ac8', '#0a2470', '#9ef0ff'], minion: 'jiao', drop: 'b_jiaomu', recipe: 'pill_break4', lvl: 20 }),
-  qilin: B({ name: '炎麒麟', hp: 2400, elem: '火', kind: 'charger', look: 'boar', c: ['#e8a83a', '#a83a1a', '#fff0a0'], minion: 'flamebeast', drop: 'b_qilin', recipe: 'pill_break4', lvl: 20 }),
-  swordpuppet: B({ name: '古剑傀', hp: 2400, elem: '金', kind: 'brute', look: 'golem', c: ['#8a8aa0', '#4a4a60', '#9ef0ff'], minion: 'puppet', drop: 'b_swordpuppet', recipe: 'pill_break4', lvl: 20 }),
-  ghostking: B({ name: '鬼王', hp: 2200, elem: '阴', kind: 'shooter', look: 'ghost', c: ['#6a4a9a', '#2a1a4a', '#ff6a8a'], shot: '#c87aff', minion: 'ghost', drop: 'b_ghostking', recipe: 'pill_break4', lvl: 20 }),
-  roc: B({ name: '太古雷鹏', hp: 3200, elem: '雷', kind: 'shooter', look: 'crow', c: ['#3a3a5a', '#c8b8ff', '#e8e0ff'], shot: '#d8c8ff', minion: 'firecrow', drop: 'b_roc', recipe: 'pill_break5', lvl: 25, scale: 3, attacks: ['slam', 'ring', 'charge', 'ring', 'slam'] }),
+  boss: B({ name: '赤岩妖王', hp: 1500, elem: '火', kind: 'brute', look: 'golem', c: ['#5a3a3a', '#3e2828', '#ff4a1a'], minion: 'golem', drop: 'heart', recipe: 'pill_break', lvl: 2, scale: 2.3, attacks: ['slam', 'ring'], sig: ['quake', 'magma'] }),
+  wolfking: B({ name: '赤枫狼王', hp: 1500, elem: '火', kind: 'charger', look: 'wolf', c: ['#a84a2a', '#5a2414', '#ffd23a'], minion: 'wolf', drop: 'wolf_fang', recipe: 'pill_break', lvl: 4, moon: true, attacks: ['charge', 'slam'], sig: ['pounce', 'howl'] }),
+  frosthorn: B({ name: '霜角兽王', hp: 1600, elem: '水', kind: 'charger', look: 'boar', c: ['#e0eef8', '#8aa8c0', '#7ad8ff'], minion: 'snowwolf', drop: 'b_frosthorn', recipe: 'pill_break2', lvl: 9, attacks: ['slam', 'ring'], sig: ['frostnova', 'icecharge'] }),
+  viperking: B({ name: '竹叶青王', hp: 1500, elem: '木', kind: 'charger', look: 'snake', c: ['#5ac85a', '#2a6a2a', '#ffe24a'], minion: 'python', drop: 'b_viper', recipe: 'pill_break2', lvl: 9, attacks: ['charge', 'ring'], sig: ['venom', 'constrict'] }),
+  spiderqueen: B({ name: '毒蛛后', hp: 1400, elem: '木', kind: 'shooter', look: 'spider', c: ['#4a2a5a', '#c84ac8', '#ff6aff'], shot: '#e05aff', minion: 'spider', drop: 'b_spiderqueen', recipe: 'pill_break2', lvl: 9, attacks: ['ring'], sig: ['web', 'eggs', 'venom'] }),
+  flameking: B({ name: '炎兽王', hp: 1600, elem: '火', kind: 'charger', look: 'boar', c: ['#c84a1a', '#6a1a0a', '#ffd03a'], minion: 'flamebeast', drop: 'b_flamehorn', recipe: 'pill_break2', lvl: 9, attacks: ['slam', 'ring'], sig: ['firetrail', 'eruption'] }),
+  bronze: B({ name: '铜甲傀儡', hp: 1800, elem: '金', kind: 'brute', look: 'golem', c: ['#b8783a', '#7a4a1a', '#ffd27a'], minion: 'puppet', drop: 'b_bronze', recipe: 'pill_break2', lvl: 9, attacks: ['slam', 'ring'], sig: ['whirl', 'stomp'] }),
+  ghostgeneral: B({ name: '游魂将', hp: 1400, elem: '阴', kind: 'shooter', look: 'ghost', c: ['#8a9ae8', '#4a5aa8', '#ffffff'], shot: '#b8c8ff', minion: 'ghost', drop: 'b_ghostseal', recipe: 'pill_break2', lvl: 9, attacks: ['ring', 'slam'], sig: ['blink', 'souls'] }),
+  snowwolfking: B({ name: '雪狼王', hp: 1800, elem: '水', kind: 'charger', look: 'wolf', c: ['#f4f8fc', '#a8b8c8', '#7ad8ff'], minion: 'snowwolf', drop: 'b_snowwolf', recipe: 'pill_break3', lvl: 15, attacks: ['charge'], sig: ['pounce', 'icicles', 'frostnova'] }),
+  pythonking: B({ name: '青鳞蟒王', hp: 1900, elem: '木', kind: 'charger', look: 'snake', c: ['#3a8a6a', '#1a4a3a', '#ffe24a'], minion: 'python', drop: 'b_python', recipe: 'pill_break3', lvl: 15, attacks: ['charge', 'slam'], sig: ['constrict', 'whirl'] }),
+  jiaoking: B({ name: '沼蛟', hp: 1900, elem: '水', kind: 'charger', look: 'snake', c: ['#2a5ab8', '#14306a', '#9ef0ff'], minion: 'jiao', drop: 'b_jiao', recipe: 'pill_break3', lvl: 15, attacks: ['charge', 'ring'], sig: ['tidewave', 'whirlpool'] }),
+  crowking: B({ name: '火鸦王', hp: 1600, elem: '火', kind: 'shooter', look: 'crow', c: ['#1a1418', '#e04a1a', '#ffd03a'], shot: '#ff8a2a', minion: 'firecrow', drop: 'b_crow', recipe: 'pill_break3', lvl: 15, attacks: ['ring'], sig: ['dive', 'foxfire'] }),
+  scorpionking: B({ name: '沙蝎王', hp: 1800, elem: '土', kind: 'shooter', look: 'scorpion', c: ['#d8a850', '#8a5a2a', '#ff4a2a'], shot: '#ffa03a', minion: 'scorpion', drop: 'b_scorpion', recipe: 'pill_break3', lvl: 15, attacks: ['ring', 'charge'], sig: ['burrow', 'tailstab'] }),
+  zombieking: B({ name: '尸王', hp: 2000, elem: '土', kind: 'brute', look: 'zombie', c: ['#6a7a5a', '#3a4a34', '#d0ff8a'], minion: 'zombie', drop: 'b_zombie', recipe: 'pill_break3', lvl: 15, attacks: ['slam'], sig: ['grasp', 'raise'] }),
+  snowdemon: B({ name: '雪妖王', hp: 2200, elem: '水', kind: 'shooter', look: 'ghost', c: ['#e8f4ff', '#8ab8e0', '#7ad8ff'], shot: '#bff4ff', minion: 'icebeast', drop: 'b_snowdemon', recipe: 'pill_break4', lvl: 20, attacks: ['ring'], sig: ['spiral', 'frostnova', 'icicles'] }),
+  fox: B({ name: '九尾妖狐', hp: 2100, elem: '火', kind: 'charger', look: 'wolf', c: ['#f0a85a', '#a85a2a', '#ff6aff'], minion: 'wolf', drop: 'b_fox', recipe: 'pill_break4', lvl: 20, attacks: ['charge', 'ring'], sig: ['foxfire', 'clones', 'blink'] }),
+  jiaomu: B({ name: '千年蛟母', hp: 2400, elem: '水', kind: 'charger', look: 'snake', c: ['#1a4ac8', '#0a2470', '#9ef0ff'], minion: 'jiao', drop: 'b_jiaomu', recipe: 'pill_break4', lvl: 20, attacks: ['charge'], sig: ['tsunami', 'tidewave', 'whirlpool'] }),
+  qilin: B({ name: '炎麒麟', hp: 2400, elem: '火', kind: 'charger', look: 'boar', c: ['#e8a83a', '#a83a1a', '#fff0a0'], minion: 'flamebeast', drop: 'b_qilin', recipe: 'pill_break4', lvl: 20, attacks: ['slam'], sig: ['meteor', 'firetrail', 'eruption'] }),
+  swordpuppet: B({ name: '古剑傀', hp: 2400, elem: '金', kind: 'brute', look: 'golem', c: ['#8a8aa0', '#4a4a60', '#9ef0ff'], minion: 'puppet', drop: 'b_swordpuppet', recipe: 'pill_break4', lvl: 20, attacks: ['ring'], sig: ['swordrain', 'whirl', 'stomp'] }),
+  ghostking: B({ name: '鬼王', hp: 2200, elem: '阴', kind: 'shooter', look: 'ghost', c: ['#6a4a9a', '#2a1a4a', '#ff6a8a'], shot: '#c87aff', minion: 'ghost', drop: 'b_ghostking', recipe: 'pill_break4', lvl: 20, attacks: ['ring'], sig: ['soulpull', 'blink', 'souls'] }),
+  roc: B({ name: '太古雷鹏', hp: 3200, elem: '雷', kind: 'shooter', look: 'crow', c: ['#3a3a5a', '#c8b8ff', '#e8e0ff'], shot: '#d8c8ff', minion: 'firecrow', drop: 'b_roc', recipe: 'pill_break5', lvl: 25, scale: 3, attacks: ['ring'], sig: ['thunder', 'storm', 'dive'] }),
 };
 for (const [k, v] of Object.entries(BOSSES)) TYPES[k] = v;
 export const BOSS_BY_NAME = Object.fromEntries(Object.entries(BOSSES).map(([k, v]) => [v.name, k]));
@@ -203,6 +206,7 @@ export class Enemies {
     this.game = game;
     this.list = [];
     this.proj = [];
+    this.zones = []; // 地上留着的火 / 毒 / 冰 / 漩涡（妖王招式留下的）
     this.boss = null;
     this.projGeo = flat(new THREE.IcosahedronGeometry(0.22, 0));
     // 妖王巢穴：{ type, x, z, deadDay } —— 打死后 3 天重新出现（材料不够、渡劫失败可以再打）
@@ -220,6 +224,7 @@ export class Enemies {
       state: 'idle', st: 0, cd: 1 + Math.random(), flash: 0, home: new THREE.Vector2(x, z),
       tx: x, tz: z, walk: Math.random() * 6, touchCd: 0, alive: true, phase: 1, queue: [], hitOnce: false, chargeDir: 0,
       elem: T.elem, boss: !!T.boss, kind: T.kind, vy: 0, airSpin: 0, airRot: 0, spiked: false, rootT: 0, stuck: [],
+      gen: 0, hop: 0, hasteT: 0, open: 0, tick: null,
     };
     root.position.set(x, 0, z);
     g.scene.add(root);
@@ -240,8 +245,13 @@ export class Enemies {
   // h = 命中参数（combat.js / comboAir.js）：launch 挑飞 | lift 空中托住 | spike 砸向地面 | pull 吸到身前
   // tag = 伤害数字后缀（克 / 弱）
   damage(e, amt, fromX, fromZ, knock = 6, crit = false, h = null, tag = '') {
-    if (!e.alive) return;
+    if (!e.alive || e.hidden) return;
+    if (e.fake) { this.poof(e); return; }
     const P = this.game.player, air = e.pos.y > 0.02 || e.vy > 0;
+    // GDD 第 4 节：技能能打断普通妖兽的前摇；妖王只能在破绽时被技能打断，打断后倒地，倒地时挨打 ×1.5
+    if (e.boss && e.state === 'down') { amt *= 1.5; tag ||= '倒'; }
+    if (h?.skill && e.boss && e.state === 'open') this.knockDown(e);
+    else if (h?.skill && !e.boss && e.state === 'windup') { e.state = 'recover'; e.st = 0.8; e.cd = Math.max(e.cd, 1.5); e.parts.body.rotation.z = 0; this.game.fx.num(e.pos, '打断', 'crit'); }
     e.hp -= amt;
     e.flash = 0.12;
     this.game.onEnemyHit?.(e, amt, crit);
@@ -268,6 +278,40 @@ export class Enemies {
     if (e.hp <= 0) this.kill(e);
   }
 
+  // 分身被打中：散成一团狐火
+  poof(e) { this.game.fx.burst(e.pos, '#ff6aff', 30, { speed: 5, up: 3, y: 1.5 }); this.game.sfx?.impact({}); this.remove(e); }
+  // 妖王破绽时被技能打中：倒地 3 秒，排好的后续招作废
+  knockDown(e) {
+    const g = this.game;
+    e.state = 'down'; e.st = 3; e.gen++; e.tick = null; e.hop = 0; e.open = 0;
+    g.fx.num(e.pos, '打断！', 'crit'); g.fx.nums.at(-1).p.y += e.T.h - 1;
+    g.fx.shockRing(e.pos.x, e.pos.z, 4, '#ffe28a'); g.fx.burst(e.pos, '#ffe28a', 40, { speed: 6, up: 4 });
+    g.shake(0.9); g.hitStop?.(0.12); g.toast(`${e.T.name} 被打倒了！趁现在！`, 1.8);
+  }
+  // 地上留一片：dmg = 每 0.8 秒扣一次（不给无敌帧），slow = 踩着走得慢，pull = 往中间吸（米 / 秒）
+  zone(o) {
+    const g = this.game, col = new THREE.Color(o.color || '#ff7a2a');
+    const m = new THREE.Mesh(g.fx.circleGeo, new THREE.MeshBasicMaterial({ color: col.multiplyScalar(1.4), transparent: true, opacity: 0, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
+    m.position.set(o.x, 0.06 + this.zones.length % 8 * 0.002, o.z); m.scale.setScalar(o.r); g.scene.add(m);
+    this.zones.push({ ...o, m, t: 0, tick: 0 });
+  }
+  updateZones(dt) {
+    const g = this.game, P = g.player;
+    for (let i = this.zones.length - 1; i >= 0; i--) {
+      const z = this.zones[i]; z.t += dt; z.tick -= dt;
+      z.m.material.opacity = Math.max(0, Math.min(1, z.t * 4, (z.life - z.t) * 2)) * 0.32;
+      if (Math.random() < dt * 2 * z.r) g.fx.mote(z.x + (Math.random() - 0.5) * z.r * 1.4, 0.1, z.z + (Math.random() - 0.5) * z.r * 1.4, z.color, { life: 0.7, size: 0.7, vy: z.slow ? 0.2 : 1 });
+      const dx = z.x - P.pos.x, dz = z.z - P.pos.z, d = Math.hypot(dx, dz);
+      if (!P.dead && d < z.r + P.r * 0.5) {
+        if (z.slow) P.slowT = Math.max(P.slowT || 0, 0.3);
+        if (z.pull && d > 0.3) { const k = z.pull * 10 * dt; P.kx += dx / d * k; P.kz += dz / d * k; }
+        if (z.dmg && z.tick <= 0) { z.tick = 0.8; P.dot?.(z.dmg); }
+      }
+      if (z.t >= z.life) { g.scene.remove(z.m); z.m.material.dispose(); this.zones.splice(i, 1); }
+    }
+  }
+  clearZones() { for (const z of this.zones) { this.game.scene.remove(z.m); z.m.material.dispose(); } this.zones.length = 0; }
+
   kill(e) {
     const g = this.game, fx = g.fx;
     g.sfx?.kill();
@@ -284,7 +328,8 @@ export class Enemies {
       if (e.lair) e.lair.deadDay = g.day;
       g.toast(`击败 ${e.T.name}！获得 ${g.itemName?.(e.T.drop) ?? e.T.drop}`, 4);
       g.shake(1.2);
-      fx.clearTele();
+      fx.clearTele(); this.clearZones();
+      for (const o of [...this.list]) if (o.fake) this.poof(o);
     }
     g.onKill?.(e);
     this.remove(e);
@@ -294,7 +339,9 @@ export class Enemies {
     const m = mesh(this.projGeo, glow(color, 3.5), { cast: false });
     m.position.set(x, y, z); m.scale.setScalar(size);
     this.game.scene.add(m);
-    this.proj.push({ m, vx: Math.sin(yaw) * speed, vz: Math.cos(yaw) * speed, life: 3.2, dmg, r: 0.3 * size, color });
+    const p = { m, vx: Math.sin(yaw) * speed, vz: Math.cos(yaw) * speed, life: 3.2, dmg, r: 0.3 * size, color };
+    this.proj.push(p);
+    return p;
   }
 
   // 妖王苏醒：走到巢穴 14 米内（打死后 3 天才会再出现）
@@ -324,7 +371,8 @@ export class Enemies {
       const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, dist = Math.hypot(dx, dz);
       const toP = Math.atan2(dx, dz);
       let mx = 0, mz = 0, spd = 0, face = null;
-      e.st -= dt; e.cd -= dt; e.touchCd -= dt; e.rootT -= dt; e.slowT = (e.slowT || 0) - dt;
+      e.st -= dt; e.cd -= dt; e.touchCd -= dt; e.rootT -= dt; e.slowT = (e.slowT || 0) - dt; e.hasteT -= dt;
+      if (e.fake && (e.life -= dt) <= 0) { this.poof(e); continue; }
       // 浮空受重力；浮空或被定身（缚符）时不能行动，前摇 / 冲锋被打断
       const air = e.pos.y > 0.02 || e.vy > 0;
       if (air) { e.vy -= GRAV * dt; e.pos.y += e.vy * dt; e.airRot += e.airSpin * dt; if (e.pos.y <= 0) this.land(e); }
@@ -422,13 +470,19 @@ export class Enemies {
         const up = e.state === 'windup' || (e.boss && (e.state === 'ring' || e.state === 'roar')) ? -2.6 : sw * 0.4;
         for (const a of pt.arms) a.rotation.x += (up - a.rotation.x) * Math.min(1, dt * 12);
       }
-      pt.body.position.y = (pt.float || pt.wings.length ? Math.sin(g.time * 3 + e.walk) * 0.15 : Math.abs(sw) * 0.06) + (e.state === 'windup' && e.kind === 'charger' ? -0.1 : 0);
+      pt.body.position.y = (pt.float || pt.wings.length ? Math.sin(g.time * 3 + e.walk) * 0.15 : Math.abs(sw) * 0.06) + (e.state === 'windup' && e.kind === 'charger' ? -0.1 : 0) + e.hop;
       if (!e.boss) pt.body.rotation.x = e.airRot;
+      else { // 破绽：往前耷拉着喘气；倒地：侧躺
+        const k = Math.min(1, dt * 8);
+        pt.body.rotation.x += ((e.state === 'open' ? 0.3 : 0) - pt.body.rotation.x) * k;
+        pt.body.rotation.z += ((e.state === 'down' ? 1.25 : 0) - pt.body.rotation.z) * k;
+      }
       if (e.flash > 0) { e.flash -= dt; setFlash(e.mats, e.flash > 0 ? 0.9 : 0); }
 
       if (dist > 80 && !e.boss && !e.raid) this.remove(e);
-      if (e.boss && dist > 45) { g.toast(`${e.T.name} 退回了巢穴深处`, 2.5); fx.clearTele(); this.remove(e); }
+      if (e.boss && dist > 45) { g.toast(`${e.T.name} 退回了巢穴深处`, 2.5); fx.clearTele(); this.clearZones(); this.remove(e); }
     }
+    this.updateZones(dt);
 
     // 投射物
     for (let i = this.proj.length - 1; i >= 0; i--) {
@@ -438,7 +492,7 @@ export class Enemies {
       if (Math.random() < 0.5) fx.mote(p.m.position.x, p.m.position.y, p.m.position.z, p.color, { life: 0.3, size: 0.8, vy: 0 });
       const d = Math.hypot(P.pos.x - p.m.position.x, P.pos.z - p.m.position.z);
       let dead = p.life <= 0;
-      if (!dead && d < p.r + P.r && !P.dead) { if (P.hurt(p.dmg, p.m.position.x, p.m.position.z)) dead = true; }
+      if (!dead && d < p.r + P.r && !P.dead) { if (P.hurt(p.dmg, p.m.position.x, p.m.position.z)) { dead = true; if (p.slow) P.slowT = Math.max(P.slowT || 0, p.slow); } }
       if (dead) { g.scene.remove(p.m); this.proj.splice(i, 1); }
     }
   }
@@ -462,7 +516,8 @@ export class Enemies {
     const g = this.game, P = g.player;
     const mv = (this.bossMove = { mx: 0, mz: 0, spd: 0, face: toP });
     if (e.phase === 1 && e.hp < e.maxHp * 0.5) {
-      e.phase = 2; e.state = 'roar'; e.st = 1.4; e.queue = ['summon'];
+      e.phase = 2; e.state = 'roar'; e.st = 1.4; e.queue = ['summon']; e.gen++; e.tick = null; e.hop = 0;
+      if (e.hidden) { e.hidden = false; e.root.visible = true; }
       g.toast(`${e.T.name} 狂暴了！`, 2.5); g.shake(1);
       for (const m of e.mats) { m.userData.baseE?.set('#ff2a00'); m.userData.baseEI = 0.12; }
       setFlash(e.mats, 0);
@@ -475,14 +530,32 @@ export class Enemies {
       case 'idle': case 'chase': case 'walk': {
         const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z;
         const keep = e.kind === 'shooter' ? 8 : 3;
-        if (dist > keep) { mv.mx = dx / dist; mv.mz = dz / dist; mv.spd = e.speed * (p2 ? 1.3 : 1); }
+        if (dist > keep) { mv.mx = dx / dist; mv.mz = dz / dist; mv.spd = e.speed * (p2 ? 1.3 : 1) * (e.hasteT > 0 ? 1.5 : 1); }
         if (dist < e.r + P.r + 0.3 && e.touchCd <= 0) { P.hurt(e.dmg * 0.6, e.pos.x, e.pos.z, 9); e.touchCd = 1; }
         if (e.st <= 0 && !P.dead) {
-          if (!e.queue.length) e.queue = shuffle(p2 ? [...e.T.attacks, 'summon'] : [...e.T.attacks]);
+          // 一轮里每招出一次；狂暴后自己的招出两遍，再叫一次帮手
+          if (!e.queue.length) e.queue = shuffle(p2 ? [...e.T.attacks, ...e.T.sig, ...e.T.sig, 'summon'] : [...e.T.attacks, ...e.T.sig]);
           this.bossStart(e, e.queue.shift(), toP, p2);
         }
         break;
       }
+      case 'act':
+        e.tick?.(dt, mv, dist, toP);
+        if (e.st <= 0) {
+          e.tick = null; e.hop = 0;
+          if (e.hidden) { e.hidden = false; e.root.visible = true; }
+          if (e.open > 0) this.openUp(e, e.open); else { e.state = 'walk'; e.st = p2 ? 0.7 : 1.2; }
+        }
+        break;
+      case 'open': // 破绽：站着喘气、头上冒金星
+        mv.face = null;
+        if (Math.random() < 0.5) { const a = g.time * 6 + Math.random(); g.fx.mote(e.pos.x + Math.sin(a) * 1.4, e.T.h * 0.85, e.pos.z + Math.cos(a) * 1.4, '#ffe28a', { life: 0.4, size: 1, vy: 0, bright: 3 }); }
+        if (e.st <= 0) { e.state = 'walk'; e.st = 0.4; }
+        break;
+      case 'down':
+        mv.face = null;
+        if (e.st <= 0) { e.state = 'walk'; e.st = 0.6; g.fx.burst(e.pos, '#c9b8a0', 20, { speed: 5, up: 3 }); }
+        break;
       case 'slam': case 'ring': case 'summon':
         if (e.st <= 0) { e.state = 'walk'; e.st = p2 ? 0.7 : 1.2; }
         break;
@@ -494,9 +567,16 @@ export class Enemies {
         mv.face = e.chargeDir; mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = 17;
         g.fx.mote(e.pos.x + (Math.random() - 0.5) * 2, 0.3, e.pos.z + (Math.random() - 0.5) * 2, e.T.c[2], { life: 0.5, size: 1.5 });
         if (!e.hitOnce && dist < e.r + P.r + 0.3) { e.hitOnce = true; P.hurt(e.dmg * 1.2, e.pos.x, e.pos.z, 14); }
-        if (e.st <= 0) { e.state = 'walk'; e.st = p2 ? 0.8 : 1.3; }
+        if (e.st <= 0) this.openUp(e, p2 ? 0.7 : 1.0); // 冲过头了，收不住脚
         break;
     }
+  }
+  // 收招后的破绽：这时候用技能打它会把它打倒
+  openUp(e, sec) {
+    const g = this.game;
+    e.state = 'open'; e.st = sec;
+    g.fx.num(e.pos, '破绽', 'crit'); g.fx.nums.at(-1).p.y += e.T.h - 1;
+    if (!this.openTip) { this.openTip = true; g.toast('妖王露出了破绽！\n这时用技能（Q / E / R）打中它，能把它打倒', 3.5); }
   }
 
   bossStart(e, a, toP, p2) {
@@ -531,7 +611,7 @@ export class Enemies {
       const n = e.T.moon ? 2 + Math.round((g.moonK?.() ?? 0) * 2) : 2;
       for (let i = 0; i < n; i++) { const ang = i / n * 6.28; this.spawn(e.T.minion, e.pos.x + Math.cos(ang) * 4, e.pos.z + Math.sin(ang) * 4, Math.max(0, e.lvl - 2)).state = 'chase'; }
       g.shake(0.6);
-    }
+    } else SIG[a](this, e, toP, p2);
   }
 }
 

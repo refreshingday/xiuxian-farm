@@ -26,6 +26,9 @@ export class Combat {
   constructor(o) {
     Object.assign(this, o);
     const P = this.P;
+    // 技能打出的伤害带 h.skill（能打断前摇 / 把破绽中的妖王打倒）；技能放出的符、剑气、延时也算
+    this.skillTag = false;
+    this.hit = (d, dmg, x, z, knock, color, h) => o.hit(d, dmg, x, z, knock, color, this.skillTag && !h?.skill ? { ...h, skill: true } : h);
     this.kitI = 0; this.kit = KITS[0];
     this.runner = new ComboRunner(TUNE, this.kit.moves, this.kit.tree);
     this.runner.afford = (m) => P.qi >= (m.qi || 0); // 灵力不够就断回第一击
@@ -64,7 +67,7 @@ export class Combat {
   click() { this.runner.click(); }
 
   // ---------- 工具 ----------
-  live() { return this.targets().filter((t) => t.alive); }
+  live() { return this.targets().filter((t) => t.alive && !t.hidden); }
   fwd() { return new THREE.Vector2(Math.sin(this.P.yaw), Math.cos(this.P.yaw)); }
   // 出招朝向：瞄准方向 ±35°、6 米内有妖兽就软吸附过去（GDD：不做硬锁定）
   aimYaw() {
@@ -83,7 +86,8 @@ export class Combat {
     const P = this.P;
     return { cfx: this.cfx, fx: this.fx, x: P.pos.x, y: P.pos.y, z: P.pos.z, yaw: P.yaw, fx0: Math.sin(P.yaw), fz0: Math.cos(P.yaw), color: m.color || '#9ef0ff', cx, cz, getPos: () => P.pos, getY: () => P.pos.y };
   }
-  later(t, fn) { this.timers.push({ t, fn }); }
+  later(t, fn) { const tag = this.skillTag; this.timers.push({ t, fn: tag ? () => this.asSkill(fn) : fn }); }
+  asSkill(fn) { const o = this.skillTag; this.skillTag = true; try { fn(); } finally { this.skillTag = o; } }
   hitFeel(h) { if (h.stop) this.stop(h.stop); this.shake(h.shake ?? 0.15); }
   // 前方（±40°）最近、高度够得着的目标
   frontTarget(range) {
@@ -193,7 +197,7 @@ export class Combat {
     this.cancel();
     // 先摆技能动作，出手那一刻才生效
     this.skill = { m: { pose: s.pose, hits: [{ t: s.ht }], cancel: 0.32, dur: 0.4 }, t: 0 };
-    this.later(s.ht, () => SKILLS[s.id](this));
+    this.later(s.ht, () => this.asSkill(() => SKILLS[s.id](this)));
     this.sfx.unlock();
     return true;
   }
@@ -247,6 +251,7 @@ export class Combat {
   handPos() { return this.P.c.arms[0].hand.getWorldPosition(new THREE.Vector3()); }
   // 飞符：一张旋转的符纸，h.home 弧度 / 秒拐弯追前方最近的妖兽；h.chain = 打中后电弧跳到附近另一只
   spawnBolt(x, z, yaw, h, color) {
+    if (this.skillTag) h.skill = true;
     const t = this.cfx.talisman(h.glyph || '敕', color, 1.4);
     t.g.position.set(x, 1.1, z); this.scene.add(t.g);
     this.bolts.push({ x, z, yaw, left: h.range, h, color, hit: new Set(), zapped: new Set(), t, spin: rand(0, TAU) });
@@ -335,6 +340,7 @@ export class Combat {
   // 陷阱符：mode = lob 从手里抛过去 | fall 从天上飘落 | seal 巨符压下来。落地处先亮法阵（预警），delay 秒后生效
   // keep 的会一直埋着，有妖兽踩进去或引爆才炸，6 秒后失效
   placeBlast(x, z, h, color) {
+    if (this.skillTag) h.skill = true;
     const cfx = this.cfx, mode = h.mode || 'lob', seal = mode === 'seal', delay = h.delay ?? 0.2;
     const b = { x, z, h, color, mode, keep: !!h.keep, delay, t: 0, armed: false, landed: false, fuse: Infinity, mul: 1,
       fly: mode === 'lob' ? Math.min(delay, 0.45) : delay,
@@ -546,7 +552,7 @@ export class Combat {
 const SKILLS = {
   sw_spin: (c) => { c.ring(3.2, 16, { knock: 8, launch: 2, stop: 0.05, shake: 0.3 }, '#9ef0ff'); c.cfx.whirl(() => c.P.pos, '#9ef0ff', 0.45); if (c.sfx.ok) c.sfx.spin(0); },
   sw_wave: (c) => {
-    const f = c.fwd(), P = c.P, h = { len: 9, w: 1.6, dmg: 22, knock: 12, launch: 3, stop: 0.06, shake: 0.4 };
+    const f = c.fwd(), P = c.P, h = { len: 9, w: 1.6, dmg: 22, knock: 12, launch: 3, stop: 0.06, shake: 0.4, skill: true };
     c.waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color: '#9ef0ff', hit: new Set(), m: c.spawnWaveMesh('#9ef0ff') });
     if (c.sfx.ok) c.sfx.galeRelease();
   },
