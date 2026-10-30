@@ -133,6 +133,7 @@ export class Life {
     if (!(it.heal || it.qiHeal || it.xp)) return false;
     if (P.pillCd > 0) return false;
     inv.take(id); P.pillCd = 0.8;
+    g.emit?.('pill', id);
     const M = P.mods || {}, tk = it.base || id;
     const k = it.cat === 'pill' ? 0.7 ** (((this.tox[tk] = (this.tox[tk] || 0) + 1) - 1) * (1 - (M.tox || 0))) * (1 + (M.pillPow || 0)) : 1;
     if (it.heal) { const v = Math.round(it.heal * k); P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + v, 'heal'); }

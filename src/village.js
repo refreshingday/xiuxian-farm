@@ -66,6 +66,8 @@ class Villager {
   }
 
   update(dt, hour) {
+    // 跟着你出委托（jobs.js 的「同伴」）：位置和动作由 jobs.js 管
+    if (this.job) { this.c.root.visible = true; this.c.root.rotation.y = this.yaw; animChibi(this.c, dt, this.job.anim); return; }
     const w = this.g.world;
     const pl = this.schedPlace(hour);
     if (pl !== this.place) { this.place = pl; this.goTo(this.spot(pl)); }

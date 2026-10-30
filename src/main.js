@@ -25,6 +25,7 @@ import { Village, loadVillageData } from './village.js';
 import { Farm } from './farm.js';
 import { Alchemy } from './alchemy.js';
 import { Quests, loadQuestData } from './quests.js';
+import { Jobs } from './jobs.js';
 import { Landmarks } from './landmarks.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
@@ -501,6 +502,8 @@ const home = new Home(g); g.home = home;
 for (const L of landmarks.list) if (L.kind === 'boss' && BOSS_BY_NAME[L.name]) enemies.lairs.push({ type: BOSS_BY_NAME[L.name], x: L.x, z: L.z, deadDay: -99 });
 // 世界事件：血月、妖虫夜袭（events.js）
 const events = new Events(g); g.events = events;
+// 委托板的进阶委托：护送、守护、寻踪、异象、切磋、精英讨伐 + 词缀（jobs.js）
+const jobs = new Jobs(g); g.jobs = jobs;
 g.itemName = itemName;
 function interact() {
   if (gui.blocking || P.dead || g.paused) return;
@@ -586,7 +589,7 @@ const barY = (e) => e.T.h ?? 2;
 const fadingBars = [];
 let focusE = null, focusT = 0;
 const BOSS_TAG = { open: ' · 破绽', down: ' · 倒地' };
-const enemyName = (e) => (e.boss ? `${e.T.name}${e.phase === 2 ? ' · 狂暴' : ''}${BOSS_TAG[e.state] || ''}` : `${e.T.name}${e.blood ? '（血月）' : ''}`);
+const enemyName = (e) => (e.boss ? `${e.T.name}${e.phase === 2 ? ' · 狂暴' : ''}${BOSS_TAG[e.state] || ''}` : `${e.title || e.T.name}${e.blood ? '（血月）' : ''}`);
 function focusOn(e, hp) { focusE = e; targetBar.dead = false; targetBar.snap(hp, e.maxHp, enemyName(e)); }
 g.onEnemyHit = (e, amt, crit) => {
   if (!e.boss) {
@@ -693,6 +696,7 @@ function tick(dt) {
   farm.update();
   alchemy.update(dt);
   quests.update(dt);
+  jobs.update(dt);
   village.update(dt);
   enemies.update(dt);
   combat.updateEffects(dt);

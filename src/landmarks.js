@@ -119,6 +119,9 @@ export class Landmarks {
         c.fillText(L.found ? K.icon : '?', X(L.x), Y(L.z));
         if (L.found && L.kind !== 'mine') { c.font = `${Math.round(size / 52)}px sans-serif`; c.fillText(L.name, X(L.x), Y(L.z) + size / 40); }
       }
+      // 委托 / 主线的目的地
+      c.font = `${Math.round(size / 30)}px sans-serif`;
+      for (const q of g.quests?.active || []) for (const go of q.def.goals) if ((go.type === 'job' || go.type === 'reach') && go.x != null) c.fillText('📍', X(go.x), Y(go.z) - 6);
       // 玩家
       c.save(); c.translate(X(P.pos.x), Y(P.pos.z)); c.rotate(-P.yaw + Math.PI);
       c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(0, -8); c.lineTo(5, 6); c.lineTo(-5, 6); c.closePath(); c.fill(); c.restore();

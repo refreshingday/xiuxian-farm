@@ -8,7 +8,7 @@ import { near } from './life.js';
 import { btn, el } from './ui.js';
 import { screenOf } from './hpbar.js';
 
-const BOARD_MAX = 3, BOARD_DAYS = 4;
+const BOARD_MAX = 4, BOARD_DAYS = 4;
 const rint = ([a, b]) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const ENEMY = (t) => (t === 'wolfking' ? '赤枫狼王' : TYPES[t]?.name || t);
@@ -95,6 +95,7 @@ export class Quests {
     if (def.startReward) this.give(def.startReward);
     for (const [type, dx, dz] of def.spawn || []) { const e = g.enemies.spawn(type, P.pos.x + dx, P.pos.z + dz, 0); e.state = 'chase'; }
     g.toast(`新任务：${def.title}`, 2);
+    if (def.job) g.jobs?.start(q);
     this.dirty = true;
     return q;
   }
@@ -135,13 +136,16 @@ export class Quests {
     });
   }
 
-  // ---------- 委托板（GDD 任务模板：讨伐令 / 收购 / 求购，按模板 × 敌人 × 奖励表批量生成）----------
+  // ---------- 委托板（GDD 任务模板：讨伐令 / 收购 / 求购，按模板 × 敌人 × 奖励表批量生成；
+  // 护送 / 守护 / 寻踪 / 异象 / 切磋 / 精英讨伐 带词缀，在 jobs.js）----------
   genBoard() {
-    const B = this.data.board, g = this.g, kind = pick(['kill', 'kill', 'fetch', 'crop']);
+    const B = this.data.board, g = this.g, kind = pick(['kill', 'kill', 'fetch', 'crop', 'escort', 'guard', 'track', 'omen', 'duel', 'hunt']);
     const who = pick(g.village.list.filter((v) => !['mentor', 'wanderer'].includes(v.d.id)));
+    const job = !['kill', 'fetch', 'crop'].includes(kind) && g.jobs?.gen(kind, who);
+    if (job) return { id: 'b' + ++this.seq, ...job };
     const season = Math.floor((g.day - 1) / 14) % 4, crops = Object.values(CROPS).filter((c) => c.kind === 'crop' && c.seasons.includes(season));
     let goal, pay, title, name;
-    if (kind === 'kill') {
+    if (kind === 'kill' || !['fetch', 'crop'].includes(kind)) {
       const t = pick(B.kill), n = rint(t.n); name = t.name;
       goal = { type: 'kill', target: t.target, n }; pay = t.pay * n; title = `讨伐令 · ${t.name}×${n}${t.where ? `（${t.where}）` : ''}`;
     } else if (kind === 'crop' && crops.length) {
@@ -151,7 +155,7 @@ export class Quests {
       const t = pick(B.fetch), n = rint(t.n); name = itemName(t.item);
       goal = { type: 'have', item: t.item, n }; pay = Math.round(item(t.item).sell * n * 1.8); title = `收购 · ${name}×${n}`;
     }
-    const k = kind === 'crop' && !crops.length ? 'fetch' : kind;
+    const k = goal.type === 'kill' ? 'kill' : kind === 'crop' && crops.length ? 'crop' : 'fetch';
     const desc = pick(B.flavor[k]).replace('{who}', who.name).replace('{name}', name).replace('{item}', name);
     return { id: 'b' + ++this.seq, def: { title, desc, goals: [goal], reward: { money: pay, aff: { [who.d.id]: 15 } }, giver: 'board' }, exp: g.day + BOARD_DAYS };
   }
@@ -183,7 +187,8 @@ export class Quests {
       }
     });
   }
-  progText(q) { return q.def.goals.map((go, i) => `${this.goalText(go)} ${this.cur(q, i)}/${go.n}`).join('，'); }
+  count(q, i) { const go = q.def.goals[i]; return go.type === 'job' ? '' : ` ${this.cur(q, i)}/${go.n}`; }
+  progText(q) { return q.def.goals.map((go, i) => this.goalText(go) + this.count(q, i)).join('，'); }
   openLog() {
     const g = this.g;
     g.ui.panel('任务', (body) => {
@@ -206,7 +211,7 @@ export class Quests {
   }
   renderTrack() {
     const list = [...this.active].sort((a, b) => (a.from === 'story' ? -1 : 0) - (b.from === 'story' ? -1 : 0)).slice(0, 3);
-    this.track.innerHTML = list.map((q) => `<div class="qt${this.complete(q) ? ' ok' : ''}"><b>${q.from === 'story' ? '◆ ' : ''}${q.def.title}</b>${q.def.goals.map((go, i) => `<span>${this.goalText(go)} ${this.cur(q, i)}/${go.n}</span>`).join('')}${this.complete(q) && q.from !== 'story' ? `<span class="hint">${q.from === 'board' ? '回委托板交付' : q.from === 'sect' ? '回宗门找执事交付' : '回去找' + (this.g.village.byId[q.def.giver]?.name || '') + '交付'}</span>` : ''}</div>`).join('');
+    this.track.innerHTML = list.map((q) => `<div class="qt${this.complete(q) ? ' ok' : ''}"><b>${q.from === 'story' ? '◆ ' : ''}${q.def.title}</b>${q.def.goals.map((go, i) => `<span>${this.goalText(go)}${this.count(q, i)}</span>`).join('')}${this.complete(q) && q.from !== 'story' ? `<span class="hint">${q.from === 'board' ? '回委托板交付' : q.from === 'sect' ? '回宗门找执事交付' : '回去找' + (this.g.village.byId[q.def.giver]?.name || '') + '交付'}</span>` : ''}</div>`).join('');
     this.track.hidden = !list.length;
   }
   // 村民头上：❗ 有委托可接，❓ 有委托可交；委托板同理；主线 reach 目标 📍
@@ -220,7 +225,7 @@ export class Quests {
     }
     const bd = g.world.board, boardDone = this.active.some((q) => q.from === 'board' && this.complete(q));
     if (boardDone || this.board.length) want.set('board', [boardDone ? '❓' : '❗', bd.x, 3, bd.z - 1.2]);
-    for (const q of this.active) q.def.goals.forEach((go, i) => { if (go.type === 'reach' && !q.prog[i]) want.set('r' + q.id, ['📍', go.x, 3, go.z]); });
+    for (const q of this.active) q.def.goals.forEach((go, i) => { if ((go.type === 'reach' || go.type === 'job') && !q.prog[i] && go.x != null) want.set('r' + q.id, ['📍', go.x, 3, go.z]); });
     for (const [k, m] of this.marks) if (!want.has(k)) { m.remove(); this.marks.delete(k); }
     for (const [k, [ic, x, y, z]] of want) {
       let m = this.marks.get(k);
