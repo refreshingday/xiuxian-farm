@@ -251,7 +251,7 @@ export class Enemies {
     // GDD 第 4 节：技能能打断普通妖兽的前摇；妖王只能在破绽时被技能打断，打断后倒地，倒地时挨打 ×1.5
     if (e.boss && e.state === 'down') { amt *= 1.5; tag ||= '倒'; }
     if (h?.skill && e.boss && e.state === 'open') this.knockDown(e);
-    else if (h?.skill && !e.boss && e.state === 'windup') { e.state = 'recover'; e.st = 0.8; e.cd = Math.max(e.cd, 1.5); e.parts.body.rotation.z = 0; this.game.fx.num(e.pos, '打断', 'crit'); }
+    else if (h?.skill && !e.boss && e.state === 'windup') { this.stagger(e, 0.8); this.game.fx.num(e.pos, '打断', 'crit'); }
     e.hp -= amt;
     e.flash = 0.12;
     this.game.onEnemyHit?.(e, amt, crit);
@@ -278,12 +278,24 @@ export class Enemies {
     if (e.hp <= 0) this.kill(e);
   }
 
+  // 拼刀用：正在出手、马上要打到人（冲锋中、扑击中、砸下来的前一刻）
+  clashable(e) {
+    if (e.fake || e.hitOnce && (e.state === 'charge' || e.dashing)) return false;
+    return e.state === 'charge' || !!e.dashing || (e.kind === 'brute' && !e.boss && e.state === 'windup' && e.st < 0.4);
+  }
+  weight(e) { return (e.boss ? 1.6 : e.kind === 'brute' ? 1.5 : e.T.look === 'zombie' ? 1.15 : 1) * (1 + e.lvl * 0.04); }
+  // 硬直：这一下作废；妖王改成露出破绽
+  stagger(e, sec) {
+    e.hitOnce = true; e.dashing = false; e.gen++; e.parts.body.rotation.z = 0;
+    if (e.boss) { e.tick = null; e.hop = 0; this.openUp(e, sec); return; }
+    e.state = 'recover'; e.st = sec; e.cd = Math.max(e.cd, sec + 0.8);
+  }
   // 分身被打中：散成一团狐火
   poof(e) { this.game.fx.burst(e.pos, '#ff6aff', 30, { speed: 5, up: 3, y: 1.5 }); this.game.sfx?.impact({}); this.remove(e); }
   // 妖王破绽时被技能打中：倒地 3 秒，排好的后续招作废
   knockDown(e) {
     const g = this.game;
-    e.state = 'down'; e.st = 3; e.gen++; e.tick = null; e.hop = 0; e.open = 0;
+    e.state = 'down'; e.st = 3; e.gen++; e.tick = null; e.hop = 0; e.open = 0; e.dashing = false;
     g.fx.num(e.pos, '打断！', 'crit'); g.fx.nums.at(-1).p.y += e.T.h - 1;
     g.fx.shockRing(e.pos.x, e.pos.z, 4, '#ffe28a'); g.fx.burst(e.pos, '#ffe28a', 40, { speed: 6, up: 4 });
     g.shake(0.9); g.hitStop?.(0.12); g.toast(`${e.T.name} 被打倒了！趁现在！`, 1.8);
@@ -408,12 +420,12 @@ export class Enemies {
             mx = dx / dist; mz = dz / dist; spd = e.speed;
             if (dist < 3.0 && e.cd <= 0) {
               e.state = 'windup'; e.st = 0.85;
-              const cx = e.pos.x + Math.sin(toP) * 1.5, cz = e.pos.z + Math.cos(toP) * 1.5;
+              const cx = e.pos.x + Math.sin(toP) * 1.5, cz = e.pos.z + Math.cos(toP) * 1.5, gen = e.gen;
               fx.circle(cx, cz, 2.3, 0.85, () => {
-                if (!e.alive) return;
+                if (!e.alive || e.gen !== gen) return; // 被拼刀 / 技能打断了
                 fx.shockRing(cx, cz, 2.6, '#ffb070'); fx.burst({ x: cx, z: cz }, '#c9b8a0', 14, { speed: 5, y: 0.2 });
                 g.shake(0.35);
-                if (Math.hypot(P.pos.x - cx, P.pos.z - cz) < 2.3 + P.r) P.hurt(e.dmg, cx, cz);
+                if (Math.hypot(P.pos.x - cx, P.pos.z - cz) < 2.3 + P.r && !g.tryClash?.(e)) P.hurt(e.dmg, cx, cz);
               });
             }
           }
@@ -430,7 +442,7 @@ export class Enemies {
         } else if (e.state === 'charge') {
           face = e.chargeDir; mx = Math.sin(e.chargeDir); mz = Math.cos(e.chargeDir); spd = 15;
           if (Math.random() < 0.5) fx.mote(e.pos.x, 0.2, e.pos.z, '#c8a070', { life: 0.4, size: 1.2, bright: 0.8 });
-          if (!e.hitOnce && dist < e.r + P.r + 0.2) { e.hitOnce = true; P.hurt(e.dmg * 1.3, e.pos.x, e.pos.z, 10); }
+          if (!e.hitOnce && dist < e.r + P.r + 0.2 && !g.tryClash?.(e)) { e.hitOnce = true; P.hurt(e.dmg * 1.3, e.pos.x, e.pos.z, 10); }
           if (e.st <= 0) { e.state = 'recover'; e.st = 0.8; e.cd = 2.6; }
         } else if (e.state === 'recover') {
           if (e.st <= 0) e.state = 'chase';
@@ -542,7 +554,7 @@ export class Enemies {
       case 'act':
         e.tick?.(dt, mv, dist, toP);
         if (e.st <= 0) {
-          e.tick = null; e.hop = 0;
+          e.tick = null; e.hop = 0; e.dashing = false;
           if (e.hidden) { e.hidden = false; e.root.visible = true; }
           if (e.open > 0) this.openUp(e, e.open); else { e.state = 'walk'; e.st = p2 ? 0.7 : 1.2; }
         }
@@ -566,7 +578,7 @@ export class Enemies {
       case 'charge':
         mv.face = e.chargeDir; mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = 17;
         g.fx.mote(e.pos.x + (Math.random() - 0.5) * 2, 0.3, e.pos.z + (Math.random() - 0.5) * 2, e.T.c[2], { life: 0.5, size: 1.5 });
-        if (!e.hitOnce && dist < e.r + P.r + 0.3) { e.hitOnce = true; P.hurt(e.dmg * 1.2, e.pos.x, e.pos.z, 14); }
+        if (!e.hitOnce && dist < e.r + P.r + 0.3 && !g.tryClash?.(e)) { e.hitOnce = true; P.hurt(e.dmg * 1.2, e.pos.x, e.pos.z, 14); }
         if (e.st <= 0) this.openUp(e, p2 ? 0.7 : 1.0); // 冲过头了，收不住脚
         break;
     }

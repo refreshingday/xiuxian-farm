@@ -357,8 +357,38 @@ const aimYaw = () => Math.atan2(aim.x - P.pos.x, aim.z - P.pos.z);
 // 五行：己克对方 ×1.5，被克 ×0.75
 const elemMul = (e) => (KE[P.elem] === e.elem ? 1.5 : KE[e.elem] === P.elem ? 0.75 : 1);
 // 宗门功法（P.mods）：分武器加伤、暴击、对鬼物加伤、减速、吸血
+// 拼刀（GDD 第 4 节）：对方正冲过来 / 正砸下来时被普攻迎面打中＝两边同时命中，比重量。
+// 重量 = 武器重量 × 招式加成（连招越往后越重）× 炼器；妖兽按体型和等级。重的赢，轻的被弹开硬直；差不多就两边都弹开
+const KIT_W = { sword: 1, fist: 1.15, talisman: 0.7 };
+function clash(e) {
+  const pw = (KIT_W[combat.kit.id] ?? 1) * (1 + 0.2 * (combat.depth || 0)) * (1 + 0.06 * (P.forge?.atk || 0)), ew = enemies.weight(e);
+  const mx = (P.pos.x + e.pos.x) / 2, mz = (P.pos.z + e.pos.z) / 2, ax = P.pos.x - e.pos.x, az = P.pos.z - e.pos.z, al = Math.hypot(ax, az) || 1;
+  const res = pw > ew * 1.1 ? 'win' : pw * 1.1 < ew ? 'lose' : 'tie';
+  fx.burst({ x: mx, z: mz }, '#fff3c0', 26, { speed: 8, up: 3, life: 0.35, y: 1.1 }); fx.shockRing(mx, mz, 1.6, '#fff3c0', 0.25);
+  fx.num({ x: mx, z: mz }, res === 'win' ? '拼刀 · 胜' : res === 'lose' ? '拼刀 · 败' : '拼刀', 'crit');
+  hitStop = Math.max(hitStop, 0.1); g.shake(0.45);
+  if (sfx.ok) { sfx.ring({ f: 2400 + Math.random() * 600, dur: 0.6, gain: 0.18 }); sfx.impact({ heavy: 1 }); }
+  if (res !== 'lose') enemies.stagger(e, res === 'win' ? 1.2 : 0.5);
+  if (res !== 'win') { // 被弹开：这一下没打进去，人往后退、硬直一下
+    const k = res === 'lose' ? 12 : 8;
+    combat.cancel(); e.hitOnce = true; P.stunT = res === 'lose' ? 0.6 : 0.25;
+    P.kx += ax / al * k; P.kz += az / al * k;
+    if (!e.boss) { e.kx -= ax / al * 6; e.kz -= az / al * 6; }
+  }
+  if (!g.clashTipped) { g.clashTipped = true; g.toast('拼刀！两边同时出手比重量：\n连招越往后越重，拳比剑重，炼器也会加重', 4); }
+  g.emit('clash', res);
+  return res;
+}
+// 对方先碰到人的那一刻，如果自己这一招正好砍出去（判定前后 0.14 秒内）、又面朝着它，也算同时命中
+g.tryClash = (e) => {
+  const m = runner.move;
+  if (!m || P.dead || !enemies.clashable(e) || !m.hits?.some((h) => (h.shape === 'arc' || h.shape === 'circle') && Math.abs(runner.t - h.t) < 0.14)) return null;
+  if (Math.abs(angDiff(Math.atan2(e.pos.x - P.pos.x, e.pos.z - P.pos.z), P.yaw)) > 1.1) return null;
+  return clash(e);
+};
 function hitEnemy(e, dmg, fromX, fromZ, knock, color, h) {
   if (!e.alive) return;
+  if (h?.melee && enemies.clashable(e) && Math.hypot(e.pos.x - P.pos.x, e.pos.z - P.pos.z) < e.r + P.r + 2.4 && clash(e) !== 'win') return;
   const M = P.mods, crit = Math.random() < 0.12 + (M.crit || 0), mul = elemMul(e);
   const k = 1 + (M.dmg_all || 0) + (M['dmg_' + combat.kit.id] || 0) + ((e.T.look === 'ghost' || e.T.look === 'zombie') ? M.vsUndead || 0 : 0);
   const amt = dmg * atkMul() * mul * k * (crit ? 1.8 : 1);
@@ -394,12 +424,12 @@ g.onSlam = (e) => combat.slamAround(e);
 g.hitStop = (sec) => { hitStop = Math.max(hitStop, sec); };
 
 function attackClick() {
-  if (P.dead || gui.blocking || g.paused || P.dashT > 0 || P.work > 0 || realm.fly) return;
+  if (P.dead || gui.blocking || g.paused || P.dashT > 0 || P.work > 0 || realm.fly || P.stunT > 0) return;
   if (g.noFight) { g.toast('鬼市里禁止动手', 1); return; }
   combat.click();
 }
 function useSkill(i) {
-  if (P.dead || gui.blocking || g.paused || P.work > 0 || realm.fly || g.noFight) return;
+  if (P.dead || gui.blocking || g.paused || P.work > 0 || realm.fly || g.noFight || P.stunT > 0) return;
   combat.useSkill(i);
 }
 function cycleWeapon() { combat.cycle(); }
@@ -678,7 +708,7 @@ function tick(dt) {
 
 const NOMOVE = new THREE.Vector2();
 function updatePlayer(dt) {
-  P.iframe -= dt; P.dashCd -= dt; P.pillCd -= dt; P.slowT = (P.slowT || 0) - dt;
+  P.iframe -= dt; P.dashCd -= dt; P.pillCd -= dt; P.slowT = (P.slowT || 0) - dt; P.stunT = (P.stunT || 0) - dt;
   if (P.slowT > 0 && Math.random() < 0.3) fx.mote(P.pos.x + (Math.random() - 0.5) * 0.8, 0.1, P.pos.z + (Math.random() - 0.5) * 0.8, '#bfe8ff', { life: 0.5, size: 0.6, vy: 0.4 }); // 被冻慢 / 缠住
   if (P.dead) combat.cancel(); else combat.update(dt);
   updateAim();

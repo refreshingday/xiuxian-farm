@@ -49,13 +49,14 @@ function dashes(en, e, n, o) {
   const g = en.game, P = g.player; let i = 0, t = 0.05, ph = 'aim', trail = 0;
   act(e, 99, o.open ?? 1.2, (dt, mv, dist, toP) => {
     t -= dt;
+    e.dashing = ph === 'dash' && !e.hitOnce; // 拼刀判定
     if (ph === 'aim') { if (t <= 0) { e.chargeDir = toP; g.fx.line(e.pos.x, e.pos.z, toP, o.spd * o.dur + 2, o.w ?? 2.6, o.wind); ph = 'wind'; t = o.wind; } return; }
     mv.face = e.chargeDir;
     if (ph === 'wind') { if (t <= 0) { ph = 'dash'; t = o.dur; e.hitOnce = false; g.shake(0.25); } return; }
     mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = o.spd;
     g.fx.mote(e.pos.x + rnd(-1, 1), 0.3, e.pos.z + rnd(-1, 1), o.color || e.T.c[2], { life: 0.5, size: 1.4 });
     if (o.trail && (trail -= dt) <= 0) { trail = 0.1; en.zone({ x: e.pos.x, z: e.pos.z, r: 1.4, life: o.trail.life ?? 4, dmg: o.trail.dmg ?? 0, slow: o.trail.slow, color: o.trail.color }); }
-    if (!e.hitOnce && dist < e.r + P.r + 0.3) { e.hitOnce = true; P.hurt(e.dmg * (o.mul ?? 1), e.pos.x, e.pos.z, 12); }
+    if (!e.hitOnce && dist < e.r + P.r + 0.3 && !g.tryClash?.(e)) { e.hitOnce = true; P.hurt(e.dmg * (o.mul ?? 1), e.pos.x, e.pos.z, 12); }
     if (t <= 0) { if (++i >= n) e.st = 0; else { ph = 'aim'; t = o.gap ?? 0.15; } }
   });
 }

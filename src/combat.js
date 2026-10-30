@@ -138,6 +138,7 @@ export class Combat {
     P.yaw = this.aimYaw();
     P.iframe = Math.max(P.iframe, m.iframe || 0);
     this.sweepHit.clear();
+    this.depth = path.length; // 连招第几招：拼刀时越往后越重
     if (path !== '') { P.qi -= m.qi || 0; this.qiPause = QI_PAUSE; }
     this.motion = (m.motion || []).map((s) => ({ ...s, d: this.motionDist(s) }));
     this.leapOn = false;
@@ -151,13 +152,14 @@ export class Combat {
 
   onHit(m, h, idx) {
     const P = this.P, f = this.fwd(), color = m.color || '#9ef0ff', vr = h.vr ?? 1.5, inReach = (d) => Math.abs(d.pos.y - P.pos.y) <= vr;
+    const hm = { ...h, melee: true }; // 近身判定（能和对方拼刀）
     let hitAny = false;
     if (h.shape === 'arc') {
       const inArc = (x, z, r) => Math.hypot(x - P.pos.x, z - P.pos.z) - r <= h.range && Math.abs(angDiff(Math.atan2(x - P.pos.x, z - P.pos.z), P.yaw)) <= h.arc;
       for (const d of this.live()) {
         if (!d.alive || !inReach(d) || !inArc(d.pos.x, d.pos.z, d.r)) continue;
         MOVE_FX[m.id]?.contact?.(this.fxCtx(m), d, h, idx);
-        this.hit(d, h.dmg, P.pos.x, P.pos.z, h.knock, color, h); hitAny = true;
+        this.hit(d, h.dmg, P.pos.x, P.pos.z, h.knock, color, hm); hitAny = true;
       }
       if (P.pos.y < 0.5 && this.hitWorld?.(inArc)) hitAny = true;
     } else if (h.shape === 'circle') {
@@ -166,7 +168,7 @@ export class Combat {
       for (const d of this.live()) {
         if (!d.alive || !inReach(d) || !inC(d.pos.x, d.pos.z, d.r)) continue;
         MOVE_FX[m.id]?.contact?.(this.fxCtx(m, cx, cz), d, h, idx);
-        this.hit(d, h.dmg, cx, cz, h.knock, color, h); hitAny = true;
+        this.hit(d, h.dmg, cx, cz, h.knock, color, hm); hitAny = true;
       }
       if (P.pos.y < 0.5) this.hitWorld?.(inC);
     } else if (h.shape === 'wave') {
