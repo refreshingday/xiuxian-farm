@@ -69,6 +69,7 @@ export class Quests {
     if (r.hp) out.push(`气血上限 +${r.hp}`);
     if (r.recipe) out.push(`丹方·${itemName(r.recipe)}`);
     if (r.contrib) out.push(`宗门贡献 ${r.contrib}`);
+    if (r.sect) out.push(`${r.sect[0]}好感 ${r.sect[1]}`);
     for (const id of Object.keys(r.aff || {})) out.push(`${this.g.village.byId[id]?.name || id} 好感`);
     return out.join(' · ') || '——';
   }
@@ -84,6 +85,7 @@ export class Quests {
     if (r.recipe) g.alchemy.learn(r.recipe, true);
     if (r.flag) this.flags.add(r.flag);
     if (r.contrib) g.sects?.addContrib(r.contrib);
+    if (r.sect) g.sects?.commission(...r.sect);
   }
 
   // ---------- 接 / 交 ----------
@@ -108,7 +110,7 @@ export class Quests {
     if (next) this.accept(next.id, 'story');
     const v = g.village.byId[d.giver], far = q.from === 'story' && v && v.pos.distanceTo(g.player.pos) > 6;
     g.ui.dialog({
-      name: q.from === 'board' ? '委托板' : (v?.name || '') + (far ? '（传音）' : ''), narrate: q.from === 'board',
+      name: q.from === 'board' ? '委托板' : (v?.name || d.giverName || '') + (far ? '（传音）' : ''), narrate: q.from === 'board',
       lines: q.from === 'board' ? [`委托完成：${d.title}`] : [...(d.done || ['多谢！']), ...(next?.start || [])],
       info: `完成「${d.title}」· 获得 ${this.describe(d.reward)}`, hint: next ? `新任务：${next.title} —— ${next.desc}` : '',
     });
