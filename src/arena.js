@@ -313,7 +313,7 @@ function wallDummy(d) {
 const P = {
   c: createChibi({ skin: '#f8d8bc', hair: '#4a2e22', hairStyle: 2, robe: '#f2f4f6', robe2: '#4f7fb0', belt: '#3a5a78', pants: '#3a4250', sword: true }),
   r: 0.4, yaw: -Math.PI / 2, iframe: 0, dashT: 0, dashCd: 0, dashDir: 0, vy: 0,
-  qi: 100, qiMax: 100, qiPause: 0, skillCd: [0, 0, 0, 0], elem: opt.elem,
+  qi: 100, qiMax: 100, qiPause: 0, atkCd: 0, skillCd: [0, 0, 0, 0], elem: opt.elem,
   leapFrom: new THREE.Vector2(), leapTo: new THREE.Vector2(), leapY0: 0, leapY1: 0, leapOn: false, motion: [], sweepHit: new Set(),
 };
 P.pos = P.c.root.position;
@@ -330,7 +330,8 @@ handPaper.g.position.set(0, -0.14, 0.03); P.c.arms[0].hand.add(handPaper.g);
 // 当前武器（拳 / 剑 / 符）：决定连招树和技能槽，切换见 setKit
 let kit = KITS[0];
 const runner = new ComboRunner(TUNE, kit.moves, kit.tree);
-runner.afford = (m) => P.qi >= (m.qi || 0); // 灵力不够就断回第一击
+runner.afford = (m) => { if (P.qi >= (m.qi || 0)) return true; P.atkCd = 0.7; return false; }; // 灵力不够就断回第一击，普攻冷却 0.7 秒
+const click = () => { if (P.atkCd <= 0) runner.click(); };
 const fwd = () => new THREE.Vector2(Math.sin(P.yaw), Math.cos(P.yaw));
 // 向前 dist 米的地面点（最远 8 米）
 const groundAt = (dist) => { const f = fwd(), k = Math.min(dist, 8); return { x: P.pos.x + f.x * k, z: P.pos.z + f.y * k }; };
@@ -749,16 +750,17 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') resetStats();
   if (e.code === 'Space') e.preventDefault();
 });
-addEventListener('keyup', (e) => { keys.delete(e.code); if (e.code === 'KeyJ') runner.click(); });
+addEventListener('keyup', (e) => { keys.delete(e.code); if (e.code === 'KeyJ') click(); });
 addEventListener('blur', () => keys.clear());
 renderer.domElement.addEventListener('pointermove', (e) => mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1));
 // 松开鼠标才出招（按下只"上膛"，拖出画布再松开也算）
 let armed = false;
 renderer.domElement.addEventListener('pointerdown', (e) => { if (e.button === 0 && !touch.on) armed = true; });
 addEventListener('pointerdown', () => sfx.unlock());
-addEventListener('pointerup', (e) => { if (e.button === 0 && armed) { armed = false; runner.click(); } });
+addEventListener('pointerup', (e) => { if (e.button === 0 && armed) { armed = false; click(); } });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 document.getElementById('bReset').addEventListener('click', resetStats);
+document.getElementById('weapon').addEventListener('click', () => cycleWeapon());
 let layoutN = 3;
 for (const b of document.querySelectorAll('#layoutBtns button')) b.addEventListener('click', () => layout(+b.dataset.n));
 
@@ -767,7 +769,7 @@ let foldAll = () => {};
 const touch = new TouchControls();
 touch.onChange = (on) => { armed = false; if (on) foldAll(); };
 const tap = (fn) => ({ down: () => { sfx.unlock(); fn(); } });
-touch.bind(document.getElementById('mAtk'), { down: () => sfx.unlock(), up: (c) => { if (!c) runner.click(); } });
+touch.bind(document.getElementById('mAtk'), { down: () => sfx.unlock(), up: (c) => { if (!c) click(); } });
 touch.bind(document.getElementById('mDash'), tap(dash));
 touch.bind(document.getElementById('mSwap'), tap(() => layout(layoutN % 4 + 1)));
 touch.bind(document.getElementById('mWeap'), tap(() => cycleWeapon()));
@@ -890,7 +892,7 @@ function dash() {
 // ---------- 玩家更新 ----------
 const _v2 = new THREE.Vector2();
 function updatePlayer(dt) {
-  P.iframe -= dt; P.dashCd -= dt; P.paperT -= dt;
+  P.iframe -= dt; P.dashCd -= dt; P.atkCd -= dt; P.paperT -= dt;
   handPaper.g.visible = kit.id === 'talisman' && !(P.paperT > 0);
   for (const m of fistGlow) { m.visible = kit.id === 'fist'; m.material.opacity = 0.3 + 0.12 * Math.sin(realTime * 7); }
   P.qiPause -= dt; if (P.qiPause <= 0) P.qi = Math.min(P.qiMax, P.qi + 22 * dt);
@@ -1182,7 +1184,7 @@ requestAnimationFrame(frame);
 // 控制台调试：arena.click(); arena.step(0.3) 按固定步长推进，便于脚本化测试招式
 window.arena = { sfx, cfx, touch, aim, mouse, setKit, useSkill, blasts, bolts, KITS, guard: () => guard, placeBlast,
   runner, stats, dummies, P,
-  click: () => runner.click(),
+  click,
   step(sec, h = 1 / 60) {
     for (let t = 0; t < sec; t += h) {
       realTime += h; gameTime += h; hitStop = 0;
