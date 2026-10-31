@@ -1167,6 +1167,197 @@ function ladder(v, seed) {
 }
 
 // ======================================================================
+// 羽叶：沿叶轴的一条带子，两边是朝叶尖方向的锯齿，两半向下折成 V 形
+function frondGeo(spine, W, fold) {
+  const P = spine.map((p) => new THREE.Vector3(...p)), N = P.length - 1, pos = [], up = new THREE.Vector3(0, 1, 0);
+  const side = [], down = [];
+  for (let i = 0; i <= N; i++) {
+    const tg = P[Math.min(i + 1, N)].clone().sub(P[Math.max(i - 1, 0)]).normalize(), sd = new THREE.Vector3().crossVectors(tg, up).normalize();
+    side.push(sd); down.push(new THREE.Vector3().crossVectors(sd, tg).normalize());
+  }
+  const edge = (i, f, sgn, k) => {
+    // 叶宽：中段最宽，基部和叶尖收窄
+    const t = (i + f) / N, w = W * (Math.sin(Math.min(1, t * 1.15) * Math.PI) * 0.85 + 0.15) * k, j = Math.min(N, Math.floor(i + f)), fr = i + f - j;
+    const c = j < N ? P[j].clone().lerp(P[j + 1], fr) : P[N].clone();
+    return c.addScaledVector(side[Math.min(j, N)], sgn * w * Math.cos(fold)).addScaledVector(down[Math.min(j, N)], -w * Math.sin(fold));
+  };
+  const tri = (a, b, c) => pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  for (let i = 0; i < N; i++) for (const sg of [-1, 1]) {
+    const V0 = edge(i, 0, sg, 0.4), T = edge(i, 0.85, sg, 1), V1 = edge(i + 1, 0, sg, 0.4);
+    tri(P[i], V0, T); tri(P[i], T, P[i + 1]); tri(P[i + 1], T, V1); // 双面材质，绕序无所谓
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  return g;
+}
+// 茂密椰树（参考图风格）：粗环纹树干 + 十来片宽大的锯齿羽叶
+function palmLush(v, seed) {
+  const k = new Kit(), r = rnd(seed + v), H = [4.2, 3.4, 4.8][v], bend = [0.9, 0.4, 1.4][v], a0 = r() * TAU;
+  const top = [Math.cos(a0) * bend, H, Math.sin(a0) * bend];
+  const pts = [[0, 0, 0], [top[0] * 0.1, H * 0.35, top[2] * 0.1], [top[0] * 0.45, H * 0.72, top[2] * 0.45], top];
+  k.add(G.tube(pts, 0.26, 0.17, 8), (g) => paint(g, (p, n, out) => { const f = (p.y * 3.4) % 1; out.set('#b08458').multiplyScalar((f < 0.22 ? 0.66 : 0.92 + f * 0.1) * (0.82 + Math.max(0, n.x * 0.5 + n.z * 0.3) * 0.25)); }));
+  const NF = 11;
+  for (let i = 0; i < NF; i++) {
+    const a = i / NF * TAU + r() * 0.25, len = 2.0 + r() * 0.6, up = i % 3 === 0 ? 0.35 : 0;
+    const spine = [];
+    for (let s = 0; s <= 14; s++) { const t = s / 14; spine.push([Math.cos(a) * t * len, Math.sin(t * 2) * (0.45 + up) - t * t * 1.15, Math.sin(a) * t * len]); }
+    k.add(G.tube(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'leaf' });
+    k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'plant' });
+  }
+  for (let i = 0; i < 4; i++) k.add(G.sph(0.15, 7, 6), grad('#7a5a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 1.6) * 0.2, top[1] - 0.18, top[2] + Math.sin(i * 1.6) * 0.2] });
+  return k.build();
+}
+// 冷杉（参考图风格）：一层层叶簇卡片堆成的蓬松塔形
+function fir(v, seed) {
+  const k = new Kit(), H = [4.2, 3.2, 5.2][v % 3];
+  k.add(G.tube([[0, 0, 0], [0, H * 0.5, 0], [0, H, 0]], 0.2, 0.06, 7), grad('#6a4a34', 0.6, 1.05));
+  const parts = [], tiers = 6;
+  for (let i = 0; i < tiers; i++) { const t = i / (tiers - 1), R = 1.25 * (1 - t * 0.8); parts.push([0, H * (0.25 + t * 0.7), 0, R]); }
+  foliage(k, parts, ['#2f7a44', '#3a8a4a', '#2a6e40'][v % 3], '#5aa058', seed + v, { accentAmt: 0.06, dens: 1.3 });
+  return k.build();
+}
+// 珊瑚湾（风格试验）：珊瑚 / 海草 / 小船 / 长栈桥 / 断吊桥 / 渔屋
+// ======================================================================
+// 珊瑚 4 形：枝状 / 脑珊瑚团 / 蓝色尖刺丛 / 礁石上长满一圈
+const CORAL = ['#b06ad8', '#ff7aa8', '#ffc84a', '#4a7aff', '#ff8a5a', '#8ad0ff'];
+function coralBranch(k, r, at, color, H = 0.7) {
+  const grow = (p, a, tilt, len, rr, depth) => {
+    const e = [p[0] + Math.cos(a) * Math.sin(tilt) * len, p[1] + Math.cos(tilt) * len, p[2] + Math.sin(a) * Math.sin(tilt) * len];
+    k.add(G.tube([p, [(p[0] + e[0]) / 2, (p[1] + e[1]) / 2, (p[2] + e[2]) / 2], e], rr, rr * 0.75, 5), grad(color, 0.75, 1.2, 0.08));
+    k.add(G.sph(rr * 0.9, 6, 5), grad(color, 1.0, 1.3), { at: e });
+    if (depth > 0) for (let i = 0; i < 2; i++) grow(e, a + (r() - 0.5) * 2.2, 0.35 + r() * 0.5, len * 0.72, rr * 0.72, depth - 1);
+  };
+  for (let i = 0; i < 3; i++) grow(at, r() * TAU, 0.2 + r() * 0.4, H * (0.35 + r() * 0.15), 0.06, 2);
+}
+function coralBrain(k, r, at, color, s = 1) {
+  const g = lumpy(G.sph(0.32 * s, 12, 9).scale(1, 0.7, 1), 0.05, 6, 3);
+  // 脑纹：沿经度的深浅条纹
+  k.add(g, (geo) => paint(geo, (p, n, out) => out.set(color).multiplyScalar((0.82 + 0.25 * Math.abs(Math.sin(Math.atan2(p.z, p.x) * 9 + p.y * 14))) * (0.75 + n.y * 0.3))), { at: [at[0], at[1] + 0.12 * s, at[2]] });
+}
+function coralSpikes(k, r, at, color, n = 9) {
+  for (let i = 0; i < n; i++) {
+    const a = r() * TAU, d = r() * 0.25, t = 0.2 + r() * 0.5;
+    k.add(G.cone(0.07, 0.35 + r() * 0.3, 5), grad(color, 0.7, 1.3), { at: [at[0] + Math.cos(a) * d, at[1], at[2] + Math.sin(a) * d], rot: [Math.sin(a) * t, 0, -Math.cos(a) * t] });
+  }
+}
+function coral(v, seed) {
+  const k = new Kit(), r = rnd(seed + v * 17);
+  if (v === 0) { coralBranch(k, r, [0, 0, 0], CORAL[0], 0.9); coralBranch(k, r, [0.35, 0, 0.2], CORAL[1], 0.6); }
+  else if (v === 1) { coralBrain(k, r, [0, 0, 0], CORAL[2], 1.2); coralBrain(k, r, [0.42, 0, 0.18], CORAL[4], 0.8); coralSpikes(k, r, [-0.3, 0, 0.25], CORAL[0], 5); }
+  else if (v === 2) { coralSpikes(k, r, [0, 0, 0], CORAL[3], 14); coralSpikes(k, r, [0.35, 0, -0.2], CORAL[5], 7); }
+  else {
+    // 礁石上长一圈：扁礁石 + 各色珊瑚
+    k.add(faceted(lumpy(G.ico(0.8, 1).scale(1.3, 0.45, 1), 0.15, 2.2, seed)), mossCap('#9aa8a8', '#6ab0a0', 0.6, 0.5), { at: [0, 0.2, 0] });
+    coralBranch(k, r, [-0.3, 0.45, 0.1], CORAL[0], 0.55);
+    coralBrain(k, r, [0.35, 0.4, -0.15], CORAL[2], 0.8);
+    coralSpikes(k, r, [0.1, 0.42, 0.45], CORAL[3], 6);
+    coralBrain(k, r, [-0.5, 0.3, -0.4], CORAL[1], 0.6);
+  }
+  return k.build();
+}
+function seaweed(v, seed) {
+  const k = new Kit(), r = rnd(seed + v);
+  const col = ['#3a9a4a', '#5ab05a'][v % 2];
+  for (let i = 0; i < 6 + v * 2; i++) {
+    const a = r() * TAU, d = r() * 0.2;
+    k.add(G.blade(0.06 + r() * 0.04, 0.22 + r() * 0.22, 0.12), grad(col, 0.55, 1.2), { at: [Math.cos(a) * d, 0, Math.sin(a) * d], rot: [(r() - 0.5) * 0.4, r() * TAU, (r() - 0.5) * 0.4], kind: 'plant' });
+  }
+  return k.build();
+}
+// 小木船：外壳 = 下半球压扁拉长；内壳镜像翻面（面朝里）当船舱
+function boat(v) {
+  const k = new Kit(), hull = new THREE.SphereGeometry(1, 16, 8, 0, TAU, Math.PI / 2, Math.PI / 2).scale(0.62, 0.42, 1.55);
+  const plankPaint = (base) => (g) => paint(g, (p, n, out) => out.set(base).multiplyScalar((Math.floor((p.y + 1) * 14) % 2 ? 0.86 : 1) * (0.8 + n.y * 0.15 + 0.1)));
+  k.add(hull, plankPaint(v ? '#b88a5a' : WOOD), { at: [0, 0.32, 0] });
+  const inner = hull.clone().scale(-0.9, 0.86, 0.94), nn = inner.attributes.normal;
+  for (let i = 0; i < nn.count; i++) nn.setXYZ(i, -nn.getX(i), -nn.getY(i), -nn.getZ(i));
+  k.add(inner, plankPaint('#7a5236'), { at: [0, 0.33, 0] });
+  // 船沿
+  const rim = []; for (let i = 0; i <= 24; i++) { const a = i / 24 * TAU; rim.push([Math.cos(a) * 0.6, 0.33, Math.sin(a) * 1.52]); }
+  k.add(G.tube(rim, 0.045, 0.045, 5), grad(DWOOD));
+  for (const z of [-0.6, 0.15, 0.85]) k.add(...plank(1.0 - Math.abs(z) * 0.35, 0.05, 0.22, '#c09060', z * 9), { at: [0, 0.22, z] });
+  // 两支桨
+  for (const s of [-1, 1]) {
+    k.add(G.cyl(0.025, 0.025, 1.5, 5), grad('#c8a070'), { at: [s * 0.35, 0.3, 0.1], rot: [Math.PI / 2 - 0.15, 0, s * 0.25] });
+    k.add(G.box(0.14, 0.02, 0.36), grad('#c8a070'), { at: [s * 0.52, 0.26, 0.85], rot: [0, s * 0.25, 0] });
+  }
+  return k.build();
+}
+// 长栈桥：沿 +z 伸出，桥面在 y=0；桩子插到水下；尽头一块平台 + 梯子 + 木箱
+function pier(v) {
+  const k = new Kit(), L = 7, W = 1.3, PW = 3, PL = 2.6, r = rnd(91);
+  for (let i = 0; i < Math.round(L / 0.28); i++) {
+    if (i === 9 || (i === 17 && v)) continue; // 少两块板
+    k.add(...plank(W + (r() - 0.5) * 0.12, 0.07, 0.25, ['#a8743f', '#9a6a3a', '#b88048'][i % 3], i), { at: [(r() - 0.5) * 0.06, -0.035, 0.14 + i * 0.28], rot: [0, (r() - 0.5) * 0.04, 0] });
+  }
+  for (let i = 0; i < Math.round(PL / 0.28); i++) k.add(...plank(PW, 0.07, 0.25, ['#a8743f', '#9a6a3a', '#b88048'][(i + 1) % 3], 40 + i), { at: [0, -0.035, L + 0.14 + i * 0.28] });
+  const post = (x, z, top = 0.25) => k.add(G.cyl(0.09, 0.11, 1.9 + top, 7), grad(DWOOD, 0.45, 1), { at: [x, -1.9, z] });
+  for (let z = 0.6; z < L; z += 1.6) for (const s of [-1, 1]) post(s * (W / 2 + 0.05), z);
+  for (const [x, z] of [[-PW / 2, L], [PW / 2, L], [-PW / 2, L + PL], [PW / 2, L + PL], [0, L + PL]]) post(x, z, 0.45);
+  // 两侧横梁
+  for (const s of [-1, 1]) k.add(...plank(0.08, 0.14, L, DWOOD), { at: [s * (W / 2 + 0.05), -0.12, L / 2] });
+  // 梯子（平台尽头往下）
+  for (const s of [-1, 1]) k.add(G.cyl(0.035, 0.035, 1.3, 5), grad(DWOOD), { at: [0.6 + s * 0.22, -1.2, L + PL + 0.08] });
+  for (let i = 0; i < 4; i++) k.add(G.cyl(0.025, 0.025, 0.44, 5), grad(WOOD), { at: [0.6, -0.2 - i * 0.28, L + PL + 0.08], rot: [0, 0, Math.PI / 2] });
+  // 平台上的木箱 / 鱼篓 / 绳圈
+  k.add(...plank(0.5, 0.42, 0.5, '#c8a070', 5), { at: [-0.9, 0.21, L + 1.8], rot: [0, 0.3, 0] });
+  k.add(...plank(0.38, 0.32, 0.38, '#b88a5a', 6), { at: [-0.8, 0.58, L + 1.8], rot: [0, -0.2, 0] });
+  k.add(G.cyl(0.22, 0.17, 0.4, 10), grad('#c8a868'), { at: [0.9, 0, L + 0.7] });
+  k.add(G.tor(0.18, 0.05, 5, 12), grad('#d8c08a'), { at: [-0.4, 0.05, L + 0.5], rot: [Math.PI / 2, 0, 0] });
+  for (let i = 0; i < 5; i++) k.add(...plank(0.7, 0.04, 0.12, '#d8b888', 60 + i), { at: [0.2, 0.02 + i * 0.04, L + 2.0], rot: [0, i * 0.12, 0] });
+  return k.build();
+}
+// 绳吊桥（沿 x 跨，跨度 L）：v0 完整下垂；v1 中间断开，两头的板子垂进河里
+function ropeBridge(v) {
+  const k = new Kit(), L = 5.4, W = 1.1, sag = 0.35, r = rnd(77 + v);
+  const yAt = (x) => -sag * (1 - (2 * x / L) ** 2);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.add(G.cyl(0.08, 0.1, 1.5, 7), grad(DWOOD, 0.5, 1), { at: [sx * L / 2, -0.4, sz * W / 2] });
+  const gap = v ? 1.0 : 0; // 断口半宽
+  const N = 18;
+  for (let i = 0; i <= N; i++) {
+    const x = -L / 2 + 0.15 + i / N * (L - 0.3);
+    if (Math.abs(x) < gap) continue;
+    let y = yAt(x), rz = Math.atan(-sag * -8 * x / (L * L)), dx = 0;
+    // 断口附近的板往下垂
+    if (v && Math.abs(x) < gap + 0.9) { const t = 1 - (Math.abs(x) - gap) / 0.9; y -= t * t * 0.6; rz += Math.sign(x) * t * 1.0; dx = -Math.sign(x) * t * 0.1; }
+    k.add(...plank(0.22, 0.05, W - 0.05 + (r() - 0.5) * 0.1, i % 2 ? WOOD : '#b88048', i), { at: [x + dx, y, (r() - 0.5) * 0.06], rot: [0, (r() - 0.5) * 0.1, rz] });
+  }
+  for (const sz of [-1, 1]) for (const yo of [0, 0.75]) {
+    // 下绳（承板）+ 上绳（扶手）；断开时两段各自垂下
+    const seg = (x0, x1, droop) => { const pts = []; for (let i = 0; i <= 8; i++) { const x = x0 + (x1 - x0) * i / 8, t = Math.max(0, (Math.abs(x) - gap) < 0.9 && v ? 1 - (Math.abs(x) - gap) / 0.9 : 0); pts.push([x, yAt(x) * (yo ? 0.7 : 1) + yo - droop * t * t, sz * W / 2]); } k.add(G.tube(pts, 0.025, 0.025, 4), grad('#c8b080')); };
+    if (v) { seg(-L / 2, -gap, 0.7); seg(gap, L / 2, 0.7); } else seg(-L / 2, L / 2, 0);
+  }
+  return k.build();
+}
+// 渔屋：木板墙 + 人字形木板屋顶 + 门窗 + 侧面晒网架
+function fishHut(v) {
+  const k = new Kit(), Wd = 3.2, D = 2.6, H = 1.7;
+  const wall = (base) => (g) => paint(g, (p, n, out) => out.set(base).multiplyScalar((Math.floor(p.y * 5.5) % 2 ? 0.86 : 1) * (0.92 + (vnoise(p.x * 3, p.y * 5.5 + p.z * 3, 4) - 0.5) * 0.2) * (0.85 + Math.abs(n.x) * 0.1 + n.y * 0.1)));
+  k.add(G.box(Wd, H, D), wall('#b8784a'), { at: [0, H / 2, 0] });
+  // 山墙三角
+  const gable = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([-Wd / 2, 0, 0, Wd / 2, 0, 0, 0, 1.1, 0], 3));
+  gable.computeVertexNormals();
+  for (const s of [-1, 1]) k.add(gable.clone(), wall('#a86a40'), { at: [0, H, s * D / 2], rot: [0, s > 0 ? 0 : Math.PI, 0] });
+  // 屋顶两坡（木板条纹）+ 屋脊
+  const roofLen = Math.hypot(Wd / 2 + 0.35, 1.25);
+  for (const s of [-1, 1]) k.add(G.box(roofLen, 0.1, D + 0.6), (g) => paint(g, (p, n, out) => out.set('#c8925a').multiplyScalar((Math.floor((p.z + 2) * 3.4) % 2 ? 0.82 : 1) * (0.8 + n.y * 0.25))), { at: [s * (Wd / 4 + 0.1), H + 0.55, 0], rot: [0, 0, -s * Math.atan2(1.15, Wd / 2 + 0.2)] });
+  k.add(G.box(0.18, 0.16, D + 0.7), grad('#7a5236'), { at: [0, H + 1.12, 0] });
+  // 竖向压条
+  for (const x of [-Wd / 2 + 0.05, -0.5, 0.5, Wd / 2 - 0.05]) k.add(G.box(0.1, H, 0.06), grad('#8a5a36'), { at: [x, H / 2, D / 2 + 0.03] });
+  k.add(G.box(0.7, 1.15, 0.06), grad('#5a3a26'), { at: [0, 0.58, D / 2 + 0.05] });
+  k.add(G.box(0.6, 0.45, 0.06), grad('#2a3a48'), { at: [Wd / 2 + 0.03, 1.05, 0], rot: [0, Math.PI / 2, 0] });
+  k.add(G.box(0.7, 0.08, 0.1), grad('#8a5a36'), { at: [Wd / 2 + 0.05, 0.8, 0], rot: [0, Math.PI / 2, 0] });
+  // 门口台阶 + 晒网架
+  k.add(...plank(1.2, 0.12, 0.5, '#9a6a3a'), { at: [0, 0.06, D / 2 + 0.3] });
+  if (!v) {
+    for (const z of [-0.9, 0.9]) k.add(G.cyl(0.05, 0.05, 1.3, 5), grad(DWOOD), { at: [-Wd / 2 - 0.9, 0, z] });
+    k.add(G.cyl(0.03, 0.03, 2, 5), grad(DWOOD), { at: [-Wd / 2 - 0.9, 1.25, -1], rot: [Math.PI / 2, 0, 0] });
+    const net = new THREE.PlaneGeometry(1.7, 0.9, 6, 3);
+    k.add(net, grad('#d8cfa8', 0.8, 1.05), { at: [-Wd / 2 - 0.9, 0.8, 0], rot: [0, Math.PI / 2, 0], kind: 'plant' });
+  }
+  return k.build();
+}
+
+// ======================================================================
 // 素材登记：按区域分组（同一素材可出现在多个区域）
 // ======================================================================
 export const ASSETS = {
@@ -1288,6 +1479,15 @@ export const ASSETS = {
   fireFlower:{ name: '火焰花', n: 3, make: (v) => fireFlower(v, 551) },
   vent:      { name: '地火/硫磺口', n: 2, make: (v) => vent(v, 561) },
   ashGrass:  { name: '焦草', n: 4, make: (v) => grassTuft(v, '#8a7a4a', 571) },
+  // ---- 珊瑚湾 ----
+  palmLush:  { name: '茂密椰树', n: 3, make: (v) => palmLush(v, 621) },
+  fir:       { name: '冷杉', n: 3, make: (v) => fir(v, 631) },
+  coral:     { name: '珊瑚', n: 4, make: (v) => coral(v, 601) },
+  seaweed:   { name: '海草', n: 2, make: (v) => seaweed(v, 611) },
+  boat:      { name: '小木船', n: 2, make: (v) => boat(v) },
+  pier:      { name: '长栈桥', n: 2, make: (v) => pier(v) },
+  ropeBridge:{ name: '绳吊桥', n: 2, make: (v) => ropeBridge(v) },
+  fishHut:   { name: '渔屋', n: 2, make: (v) => fishHut(v) },
 };
 
 // 缓存：同一素材变体只建一次
