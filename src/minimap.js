@@ -1,13 +1,13 @@
 // 小地图 + 任务指针。
 // 小地图：右上角圆形雷达，跟着镜头转（屏幕上方 = 镜头朝向）；底色是扇区，再叠境界圈、地标、村民、近处妖兽、任务目的地。
-//   点它开舆图；右下角 ⊕ 或按 N 切换范围（60 / 120 / 240 米）。
+//   点它开舆图；右下角 ⊕ 或按 N 切换范围（30 / 60 / 120 / 240 米）。
 // 任务指针：目的地在小地图范围外就贴在圆边；不在屏幕里就在屏幕边缘出一个箭头 + 距离。主线优先，否则指最近的。
 import * as THREE from 'three';
 import { SECTORS, RINGS } from './worldmap.js';
 import { KIND, SECTOR_COLOR } from './landmarks.js';
 import { screenOf } from './hpbar.js';
 
-const RANGES = [60, 120, 240];
+const RANGES = [30, 60, 120, 240];
 const $ = (id) => document.getElementById(id);
 const _d = new THREE.Vector3();
 
@@ -18,7 +18,7 @@ export class Minimap {
     this.ptr = $('qptr'); this.ptrI = this.ptr.querySelector('i'); this.ptrB = this.ptr.querySelector('b');
     this.size = 0; this.fx = 0; this.fz = -1;
     this.zoom = 1;
-    try { this.zoom = Math.max(0, Math.min(RANGES.length - 1, +localStorage.getItem('miniZoom') || 1)); } catch (e) { /* 存不了就算了 */ }
+    try { this.zoom = Math.max(0, Math.min(RANGES.length - 1, +localStorage.getItem('miniZoom2') || 1)); } catch (e) { /* 存不了就算了 */ }
     this.cv.addEventListener('click', () => g.landmarks.open());
     $('miniZ').addEventListener('click', (e) => { e.stopPropagation(); this.cycle(); });
     // 对话 / 暂停时主循环不走，自己补画，免得空着
@@ -29,7 +29,7 @@ export class Minimap {
   }
   cycle() {
     this.zoom = (this.zoom + 1) % RANGES.length;
-    try { localStorage.setItem('miniZoom', this.zoom); } catch (e) { /* 同上 */ }
+    try { localStorage.setItem('miniZoom2', this.zoom); } catch (e) { /* 同上 */ }
     this.g.toast?.(`小地图范围 ${RANGES[this.zoom]} 米`, 1);
   }
   // 当前主要的任务目的地：主线优先，其余取最近的
@@ -141,7 +141,7 @@ export class Minimap {
     const g = this.g, ptr = this.ptr, t = g.ui.blocking ? null : this.primary(P);
     if (!t || t.d < 5) { ptr.hidden = true; return; }
     const cam = g.camera, mob = document.body.classList.contains('mobile');
-    const W = innerWidth, H = innerHeight, ml = 50, mr = mob ? 50 : 180, mt = mob ? 70 : 170, mb = mob ? 100 : 150;
+    const W = innerWidth, H = innerHeight, ml = 50, mr = mob ? 50 : 250, mt = mob ? 70 : 190, mb = mob ? 100 : 150;
     const [sx, sy, front] = screenOf(cam, t.x, 1.5, t.z);
     if (front && sx > ml && sx < W - mr && sy > mt && sy < H - mb) { ptr.hidden = true; return; }
     const [ox, oy] = screenOf(cam, P.pos.x, 1, P.pos.z);

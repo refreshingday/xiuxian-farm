@@ -371,7 +371,13 @@ function clash(e) {
   fx.burst({ x: mx, z: mz }, '#fff3c0', 26, { speed: 8, up: 3, life: 0.35, y: 1.1 }); fx.shockRing(mx, mz, 1.6, '#fff3c0', 0.25);
   fx.num({ x: mx, z: mz }, res === 'win' ? '拼刀 · 胜' : res === 'lose' ? '拼刀 · 败' : '拼刀', 'crit');
   hitStop = Math.max(hitStop, 0.1); g.shake(0.45);
-  if (sfx.ok) { sfx.ring({ f: 2400 + Math.random() * 600, dur: 0.6, gain: 0.18 }); sfx.impact({ heavy: 1 }); }
+  if (sfx.ok) { // 低沉的"铛"：不带高频的叮声
+    const r = 0.9 + Math.random() * 0.2;
+    sfx.tone({ f0: 300 * r, f1: 220 * r, dur: 0.32, type: 'triangle', gain: 0.4, send: 0.15 });
+    sfx.tone({ f0: 470 * r, f1: 380 * r, dur: 0.2, type: 'square', gain: 0.05, send: 0.1 });
+    sfx.noise({ f0: 900, f1: 320, q: 1.2, dur: 0.12, gain: 0.45, send: 0.1 });
+    sfx.impact({ heavy: 1 });
+  }
   if (res !== 'lose') enemies.stagger(e, res === 'win' ? 1.2 : 0.5);
   if (res !== 'win') { // 被弹开：这一下没打进去，人往后退、硬直一下
     const k = res === 'lose' ? 12 : 8;
@@ -398,7 +404,7 @@ function hitEnemy(e, dmg, fromX, fromZ, knock, color, h) {
   const amt = dmg * atkMul() * mul * k * (crit ? 1.8 : 1);
   if (M.slow) e.slowT = 2;
   if (M.lifesteal) P.hp = Math.min(P.maxHp, P.hp + amt * M.lifesteal);
-  enemies.damage(e, amt, fromX, fromZ, knock * 1.4, crit, h, mul > 1 ? '克' : mul < 1 ? '弱' : '');
+  enemies.damage(e, amt, fromX, fromZ, knock * 1.4, crit, h, '');
 }
 // 普攻也能挖矿：判定范围里的矿石扣一下
 function hitOres(test) {
