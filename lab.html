@@ -103,13 +103,14 @@
 { "imports": {
   "three": "./vendor/three@0.160.0/build/three.module.min.js",
   "three/addons/": "./vendor/three@0.160.0/jsm/",
-  "./src/util.js": "./src/util.js?v=20261031e",
-  "./src/chibi.js": "./src/chibi.js?v=20261031e",
-  "./src/touch.js": "./src/touch.js?v=20261031e",
-  "./src/lab/kit.js": "./src/lab/kit.js?v=20261031e",
-  "./src/lab/assets.js": "./src/lab/assets.js?v=20261031e",
-  "./src/lab/biomes.js": "./src/lab/biomes.js?v=20261031e",
-  "./src/lab/ref/index.js": "./src/lab/ref/index.js?v=20261031e"
+  "./src/util.js": "./src/util.js?v=20261031f",
+  "./src/chibi.js": "./src/chibi.js?v=20261031f",
+  "./src/touch.js": "./src/touch.js?v=20261031f",
+  "./src/lab/kit.js": "./src/lab/kit.js?v=20261031f",
+  "./src/lab/assets.js": "./src/lab/assets.js?v=20261031f",
+  "./src/lab/biomes.js": "./src/lab/biomes.js?v=20261031f",
+  "./src/lab/ref/index.js": "./src/lab/ref/index.js?v=20261031f",
+  "./src/lab/swim.js": "./src/lab/swim.js?v=20261031f"
 } }
 </script>
 </head>
@@ -140,7 +141,7 @@
     <div class="row">
       <button data-t="outline">描边</button><button data-t="shadows">阴影</button><button data-t="bloom">泛光</button>
       <button data-t="grade">调色</button><button data-t="particles">粒子</button>
-      <button data-t="chibi">角色</button><button data-t="labels">标签</button><button data-t="spin">自转</button>
+      <button data-t="chibi">角色</button><button data-t="labels">标签</button><button data-t="spin">自转</button><button data-t="sound">声音</button>
     </div>
     <label>时间 <b id="timeV"></b></label>
     <input id="time" type="range" min="0" max="24" step="0.05">
@@ -170,7 +171,7 @@
 <button id="gear">⚙ 设置</button>
 
 <!-- 改了实验场代码就改 v，避免浏览器拿旧缓存（上面 importmap 里的版本号一起改） -->
-<script type="module" src="src/lab/lab.js?v=20261031e"></script>
+<script type="module" src="src/lab/lab.js?v=20261031f"></script>
 <script type="module" src="src/version.js"></script>
 </body>
 </html>
