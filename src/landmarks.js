@@ -5,13 +5,13 @@ import { toon, mesh, at, canvasTex, addOutline, outlineMat } from './util.js';
 import { SECTORS, RINGS, polar, sectorAt, edgeR } from './worldmap.js';
 import { el, btn } from './ui.js';
 
-const KIND = {
+export const KIND = {
   sect: { icon: '⛩', color: '#ffd27a', name: '宗门' }, hub: { icon: '🏮', color: '#7dffb0', name: '坊市' },
   secret: { icon: '🌀', color: '#c8a8ff', name: '秘境' }, boss: { icon: '☠', color: '#ff6a5a', name: '妖王' },
   unique: { icon: '✦', color: '#9ef0ff', name: '奇地' }, mine: { icon: '⛏', color: '#c8c0b0', name: '矿点' },
 };
 const FOUND_R = 50;
-const SECTOR_COLOR = { snow: '#c8d8e0', bamboo: '#6aa858', swamp: '#4a7a58', volcano: '#a85a40', desert: '#d8c088', battle: '#8a8274' };
+export const SECTOR_COLOR = { snow: '#c8d8e0', bamboo: '#6aa858', swamp: '#4a7a58', volcano: '#a85a40', desert: '#d8c088', battle: '#8a8274' };
 
 export class Landmarks {
   constructor(g, data) {

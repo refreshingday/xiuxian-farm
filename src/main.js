@@ -27,6 +27,7 @@ import { Alchemy } from './alchemy.js';
 import { Quests, loadQuestData } from './quests.js';
 import { Jobs } from './jobs.js';
 import { Landmarks } from './landmarks.js';
+import { Minimap } from './minimap.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { KE } from './comboKit.js';
@@ -506,6 +507,8 @@ for (const L of landmarks.list) if (L.kind === 'boss' && BOSS_BY_NAME[L.name]) e
 const events = new Events(g); g.events = events;
 // 委托板的进阶委托：护送、守护、寻踪、异象、切磋、精英讨伐 + 词缀（jobs.js）
 const jobs = new Jobs(g); g.jobs = jobs;
+// 小地图 + 任务指针（右上角圆形雷达，N 切换范围）
+const minimap = new Minimap(g); g.minimap = minimap;
 g.itemName = itemName;
 function interact() {
   if (gui.blocking || P.dead || g.paused) return;
@@ -687,6 +690,7 @@ function tick(dt) {
   life.update(dt);
   realm.update(dt);
   landmarks.update(dt);
+  minimap.update();
   events.update(dt);
   hubs.update(dt);
   sects.update(dt);

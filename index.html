@@ -95,6 +95,16 @@
   .qt span { display: block; padding-left: 10px; opacity: .9; } .qt.ok b { color: #7dffb0; } .qt .hint { color: #ffcf9a; }
   #markLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
   .qmark { position: absolute; left: 0; top: 0; font-size: 26px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.8)); }
+  /* 小地图 + 任务指针（minimap.js） */
+  #miniWrap { position: fixed; right: 16px; top: 172px; width: 148px; height: 148px; z-index: 2; }
+  #mini { display: block; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; background: rgba(14, 22, 24, .6); box-shadow: 0 3px 12px rgba(0, 0, 0, .55); }
+  #miniZ { position: absolute; right: -3px; bottom: -3px; width: 26px; height: 26px; padding: 0; font: inherit; font-size: 14px; line-height: 1; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+  #qptr { position: fixed; left: 0; top: 0; z-index: 3; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(14, 22, 24, .72); border: 2px solid #ffd23a; color: #ffd23a; pointer-events: none; animation: qptr 1.2s ease-in-out infinite; }
+  #qptr[hidden] { display: none; }
+  #qptr i { font-style: normal; font-size: 20px; line-height: 1; }
+  #qptr b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; font-size: 12px; font-weight: normal; white-space: nowrap; color: #fff; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+  #qptr.ret { border-color: #7dffb0; color: #7dffb0; }
+  @keyframes qptr { 50% { box-shadow: 0 0 14px currentColor; } }
   /* 连招节奏条（设置里开）：绿 = 快，黄 = 慢，灰 = 断 */
   #rhythm { position: fixed; left: 50%; bottom: 176px; transform: translateX(-50%); width: 220px; height: 8px; border-radius: 4px; background: rgba(138,143,150,.5); overflow: hidden; pointer-events: none; transition: opacity .2s; }
   #rhythm i { position: absolute; top: 0; bottom: 0; left: 0; } #rhythm i:nth-child(1) { background: rgba(125,255,176,.35); } #rhythm i:nth-child(2) { background: rgba(125,255,176,.85); } #rhythm i:nth-child(3) { background: rgba(255,200,90,.8); }
@@ -164,7 +174,9 @@
   body.mobile #hotbar { bottom: auto; top: calc(8px + env(safe-area-inset-top)); z-index: 4; }
   body.mobile .hs { width: 38px; height: 38px; } body.mobile .hs kbd { display: none; } body.mobile .hs .hi { font-size: 19px; }
   body.mobile #hotName { display: none; }
-  body.mobile #qtrack { top: 132px; left: calc(10px + env(safe-area-inset-left)); width: 210px; font-size: 11px; } body.mobile .qt b { font-size: 13px; }
+  body.mobile #miniWrap { width: 88px; height: 88px; left: calc(10px + env(safe-area-inset-left)); right: auto; top: 160px; }
+  body.mobile #miniZ { width: 22px; height: 22px; font-size: 12px; }
+  body.mobile #qtrack { top: 256px; left: calc(10px + env(safe-area-inset-left)); width: 210px; font-size: 11px; } body.mobile .qt b { font-size: 13px; }
   body.mobile .hb.big { top: 54px; }
   body.mobile #stickZone { display: block; position: fixed; left: 0; bottom: 0; width: 45vw; height: 65vh; z-index: 3; touch-action: none; }
   body.mobile #stick { display: block; position: fixed; left: calc(100px + env(safe-area-inset-left)); top: calc(100% - 110px); width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(14, 22, 24, .35); border: 2px solid rgba(214, 182, 112, .4); pointer-events: none; z-index: 3; opacity: .55; transition: opacity .15s; }
@@ -201,6 +213,7 @@
     body.mobile .hb.big { top: 200px; }
     body.mobile #hotbar { top: 150px; left: calc(10px + env(safe-area-inset-left)); transform: none; }
     body.mobile #qtrack { top: 196px; }
+    body.mobile #miniWrap { left: auto; right: calc(56px + env(safe-area-inset-right)); top: 236px; width: 92px; height: 92px; }
     body.mobile #menuBtns { flex-direction: column; top: 102px; }
   }
 </style>
@@ -228,6 +241,8 @@
 <div id="money" class="panel"></div>
 <div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
 <div id="qtrack" hidden></div><div id="markLayer"></div>
+<div id="miniWrap"><canvas id="mini"></canvas><button id="miniZ" title="小地图范围（N）">⊕</button></div>
+<div id="qptr" hidden><i>➤</i><b></b></div>
 <div id="hotbar"></div><div id="hotName"></div>
 <div id="hpLayer"></div>
 

@@ -214,6 +214,30 @@ export class Quests {
     this.track.innerHTML = list.map((q) => `<div class="qt${this.complete(q) ? ' ok' : ''}"><b>${q.from === 'story' ? '◆ ' : ''}${q.def.title}</b>${q.def.goals.map((go, i) => `<span>${this.goalText(go)}${this.count(q, i)}</span>`).join('')}${this.complete(q) && q.from !== 'story' ? `<span class="hint">${q.from === 'board' ? '回委托板交付' : q.from === 'sect' ? '回宗门找执事交付' : '回去找' + (this.g.village.byId[q.def.giver]?.name || '') + '交付'}</span>` : ''}</div>`).join('');
     this.track.hidden = !list.length;
   }
+  // 任务指向（头顶 📍、小地图、屏幕边缘箭头共用）：没做完的目的地（reach / 委托坐标、要交谈的人、要打的妖王巢穴）
+  // + 做完了该回去交付的人 / 委托板。主线排前面。
+  targets() {
+    const g = this.g, out = [];
+    const list = [...this.active].sort((a, b) => (a.from === 'story' ? -1 : 0) - (b.from === 'story' ? -1 : 0));
+    for (const q of list) {
+      const story = q.from === 'story', title = q.def.title;
+      if (this.complete(q)) {
+        if (story) continue;
+        const v = q.from === 'personal' ? g.village.byId[q.def.giver] : null;
+        const p = q.from === 'board' ? g.world.board : v && !v.away ? v.pos : null;
+        if (p) out.push({ x: p.x, z: p.z, ic: '❓', story, title });
+        continue;
+      }
+      q.def.goals.forEach((go, i) => {
+        if (this.cur(q, i) >= go.n) return;
+        let p = go.x != null ? go : null;
+        if (!p && go.type === 'talk') { const v = g.village.byId[go.who]; if (v && !v.away) p = v.pos; }
+        if (!p && go.type === 'kill') p = g.enemies.lairs.find((l) => l.type === go.target);
+        if (p) out.push({ x: p.x, z: p.z, ic: '📍', story, title });
+      });
+    }
+    return out;
+  }
   // 村民头上：❗ 有委托可接，❓ 有委托可交；委托板同理；主线 reach 目标 📍
   placeMarks() {
     const g = this.g, want = new Map();
@@ -225,7 +249,9 @@ export class Quests {
     }
     const bd = g.world.board, boardDone = this.active.some((q) => q.from === 'board' && this.complete(q));
     if (boardDone || this.board.length) want.set('board', [boardDone ? '❓' : '❗', bd.x, 3, bd.z - 1.2]);
-    for (const q of this.active) q.def.goals.forEach((go, i) => { if ((go.type === 'reach' || go.type === 'job') && !q.prog[i] && go.x != null) want.set('r' + q.id, ['📍', go.x, 3, go.z]); });
+    this.tgt = this.targets();
+    this.tgt.forEach((t, i) => { if (t.ic === '📍') want.set('t' + i, ['📍', t.x, 3, t.z]); });
+    this.pins = [...want.values()].filter((m) => m[0] !== '📍').map(([ic, x, , z]) => ({ ic, x, z }));
     for (const [k, m] of this.marks) if (!want.has(k)) { m.remove(); this.marks.delete(k); }
     for (const [k, [ic, x, y, z]] of want) {
       let m = this.marks.get(k);
