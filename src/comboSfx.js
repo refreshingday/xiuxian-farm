@@ -220,16 +220,17 @@ export class SFX {
     this.noise({ f0: 900, f1: 2400, q: 1.5, dur: lead + 0.05, gain: 0.2, attack: lead, send: 0.03 });
     for (let i = 0; i < 3; i++) this.noise({ t: lead + 0.02 + i * 0.035, f0: rnd(2500, 4000), q: 4, dur: 0.02, gain: 0.08 });
   }
-  // 禁令：符的音效（掐诀 / 符炸）永远不要用 ring()、高频纯音——那种"叮"的金属声已被否决，别再做类似的
-  chant(lead = 0.15) { // 掐诀：低沉的气息上扬 + 一声闷闷的"嗡"，没有高频尖音
-    this.noise({ f0: 300, f1: 1100, q: 1.2, dur: lead + 0.14, gain: 0.14, attack: lead, send: 0.15 });
-    this.tone({ t: lead * 0.5, type: 'triangle', f0: 130, f1: 190, dur: 0.3, gain: 0.12, attack: 0.06, send: 0.2 });
+  // 禁令（永久）：符的音效（掐诀 / 符炸）不准用 ring()、sine / triangle 高音、2kHz 以上的滤波噪声——
+  // 那种"叮 / tin"的金属声已被否决两次，任何类似的声音都不要再做。只用低频闷响 + 低通噪声。
+  chant(lead = 0.15) { // 掐诀：低沉的气息上扬 + 一声闷闷的低"嗡"
+    this.noise({ type: 'lowpass', f0: 250, f1: 900, q: 0.7, dur: lead + 0.14, gain: 0.2, attack: lead, send: 0.1 });
+    this.tone({ t: lead * 0.5, f0: 90, f1: 140, dur: 0.3, gain: 0.18, attack: 0.07, send: 0.1 });
   }
-  talisBoom(big = 0) { // 符炸开：火光"嘭" + 纸张烧起来的噼啪，余韵是低频隆隆
-    this.noise({ type: 'lowpass', f0: 3000, f1: 250, dur: 0.18 + big * 0.2, gain: 0.55 + big * 0.2, send: 0.2 });
-    this.tone({ f0: 150, f1: 42, dur: 0.25 + big * 0.4, gain: 0.5 + big * 0.35, send: 0.2 });
-    this.noise({ type: 'lowpass', f0: 500, f1: 90, dur: 0.4 + big * 0.5, gain: 0.25 + big * 0.1, attack: 0.02, send: 0.35 });
-    for (let k = 0; k < 4 + big * 4; k++) this.noise({ t: rnd(0.04, 0.3 + big * 0.2), type: 'bandpass', f0: rnd(1200, 2600), q: 1, dur: 0.03, gain: rnd(0.05, 0.1) });
+  talisBoom(big = 0) { // 符炸开：低频"嘭" + 低通噪声的火焰呼啸 + 纸张烧起来的闷噼啪
+    this.noise({ type: 'lowpass', f0: 1800, f1: 200, q: 0.7, dur: 0.18 + big * 0.2, gain: 0.55 + big * 0.2, send: 0.15 });
+    this.tone({ f0: 140, f1: 40, dur: 0.25 + big * 0.4, gain: 0.5 + big * 0.35, send: 0.15 });
+    this.noise({ type: 'lowpass', f0: 450, f1: 80, q: 0.7, dur: 0.4 + big * 0.5, gain: 0.25 + big * 0.1, attack: 0.02, send: 0.25 });
+    for (let k = 0; k < 4 + big * 4; k++) this.noise({ t: rnd(0.04, 0.3 + big * 0.2), type: 'lowpass', f0: rnd(500, 1100), f1: 200, q: 0.7, dur: 0.04, gain: rnd(0.08, 0.14) });
   }
   zap() { // 雷符：电流噼啪
     for (let i = 0; i < 6; i++) this.noise({ t: i * rnd(0.012, 0.03), type: 'highpass', f0: rnd(3000, 7000), dur: 0.02, gain: rnd(0.1, 0.2), send: 0.1 });

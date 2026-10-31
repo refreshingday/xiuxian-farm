@@ -737,7 +737,7 @@ function updatePlayer(dt) {
   let vx = st.vx, vz = st.vz;
   if (P.dashT > 0) {
     P.dashT -= dt;
-    vx = Math.sin(P.dashDir) * 17; vz = Math.cos(P.dashDir) * 17;
+    vx = Math.sin(P.dashDir) * 22.1; vz = Math.cos(P.dashDir) * 22.1;
     fx.mote(P.pos.x, 0.8 + Math.random() * 0.6, P.pos.z, '#9ef0ff', { life: 0.3, size: 1.2 });
   }
   P.vel.set(vx, 0, vz);
