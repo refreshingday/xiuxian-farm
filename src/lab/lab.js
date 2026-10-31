@@ -112,7 +112,7 @@ try {
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
 
 let root = new THREE.Group(); scene.add(root);
-let emitters = [], bobbers = [], labels = [], waterMats = [], particleSys = [];
+let fish = null, emitters = [], bobbers = [], labels = [], waterMats = [], particleSys = [];
 
 // ======================================================================
 // 地面：圆形小岛（像素贴图顶面 + 分层土壁）
@@ -269,14 +269,14 @@ function makeWater(W, hAt, area, masked = false) {
     uniforms: fogU({
       tDepth: { value: dt }, uTime: U.time, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: sz }, uMask: { value: masked ? 1 : 0 }, uMode: { value: mode },
       cShallow: { value: new THREE.Color(W.shallow) }, cDeep: { value: new THREE.Color(W.deep) }, cFoam: { value: new THREE.Color(W.foam) },
-      uSky: { value: new THREE.Color() }, uGlow: { value: W.glow || 0 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
+      uSky: { value: new THREE.Color() }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
     }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
+    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -303,7 +303,7 @@ function makeWater(W, hAt, area, masked = false) {
           // 流动方向：静水用 uFlow 慢漂，溪流里按流向快速顺流
           vec2 drift = uFlow * uTime * 0.35 + fd * fs * uTime * 1.6;
           // 2) 卡通焦散线（风之杖式）：扰动后的 Voronoi 边，两层叠加
-          vec2 v1 = cell(q * 0.75 - drift), v2 = cell(q * 1.3 + drift.yx * 0.7 + 3.1);
+          vec2 v1 = cell(q * 0.75 * uCaus - drift), v2 = cell(q * 1.3 * uCaus + drift.yx * 0.7 + 3.1);
           float caus = max(smoothstep(0.09, 0.0, v1.y - v1.x), smoothstep(0.06, 0.0, v2.y - v2.x) * 0.6);
           c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * mix(0.42, 0.22, smoothstep(0.2, 0.9, d)));
           // 波光点点
@@ -324,7 +324,7 @@ function makeWater(W, hAt, area, masked = false) {
           float rings = smoothstep(0.1, 0.0, abs(wave - 0.5)) * (1.0 - smoothstep(0.08, 0.38, d));
           c = mix(c, cFoam, max(foam, rings * 0.7));
           c += cShallow * uGlow * (1.0 - d);
-          a = mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
+          a = uClear > 0.5 ? mix(0.55, 0.86, smoothstep(0.0, 0.8, d)) : mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
         } else if (uMode < 1.5) {
           vec2 v = cell(p * 0.6);
           c = mix(cShallow, cDeep, smoothstep(0.1, 0.9, d) * 0.6);
@@ -439,6 +439,7 @@ function placeAll(b, hAt) {
         // 台阶类：以下坡那一头（下一级平台）的地面高度为底，避免悬空
         if (rule.base === 'bottom') { const e = 1.5 * (sz || 1) + 0.35; y = hAt(x + Math.sin(rot) * e, z + Math.cos(rot) * e); }
         const o = { x, z, y, rot, s: 1, sz };
+        if (rule.float) o.bob = i * 2.3;
         add(rule.id, v, o); taken.push([x, z, 1.4, rule.id]);
       });
       continue;
@@ -474,14 +475,15 @@ function placeAll(b, hAt) {
       }
       if (Math.hypot(x, z) > R - 1 || Math.hypot(x, z - 2) < 1.6) continue;
       const t = b.terrain(x, z), h = hAt(x, z);
-      if (rule.water) { if (h > level - 0.12) continue; }
+      // water: 'bed' = 长在水底（珊瑚 / 海草），只放在够深、且地面种类对的地方
+      if (rule.water) { if (h > level - (rule.water === 'bed' ? 0.22 : 0.12) || (rule.water === 'bed' && rule.k && !rule.k.includes(t.k))) continue; }
       else if (h < level + 0.02 || (rule.k && !rule.k.includes(t.k))) continue;
       // 不放在断崖坡面上（高处水潭里也不放陆地物件）
       if (!rule.water && Math.max(Math.abs(hAt(x + 0.35, z) - hAt(x - 0.35, z)), Math.abs(hAt(x, z + 0.35) - hAt(x, z - 0.35))) > 0.3) continue;
       if (!rule.water && (b.terrace?.pools || []).some((p) => h < p.level + 0.05 && h > p.level - 1.2 && Math.hypot(x - p.x, z - p.z) < p.r)) continue;
       const s = lerp(rule.s[0], rule.s[1], rng());
       if (!free(x, z, gap * s * 0.5)) continue;
-      const o = { x, z, y: rule.water ? level + 0.01 : h - 0.03, rot: rng() * Math.PI * 2, s, sy: s * (0.9 + rng() * 0.2) };
+      const o = { x, z, y: rule.water === 'bed' ? h - 0.04 : rule.water ? level + 0.01 : h - 0.03, rot: rng() * Math.PI * 2, s, sy: s * (0.9 + rng() * 0.2) };
       if (rule.float) o.bob = rng() * 6;
       add(rule.id, variant(), o);
       taken.push([x, z, gap * s * 0.5, rule.id]);
@@ -501,6 +503,43 @@ function placeAll(b, hAt) {
     if (light) for (const o of list) emitters.push({ p: new THREE.Vector3(o.x, o.y + light.y * (o.sy ?? o.s), o.z), color: light.color, i: light.i, d: light.d * o.s, flicker: light.flicker, smoke: light.smoke, k: Math.random() * 9 });
   }
   contactShadows(taken);
+}
+
+// 水下鱼群：一群扁平的深色小鱼影，各自绕小圈游（圈上每一点都得是水），每帧更新实例矩阵
+function fishSchool(b, hAt) {
+  const W = b.water, rng = mulberry32(S.seed * 31 + 5), deep = (x, z, d) => W.level - hAt(x, z) > d;
+  const shape = new THREE.Shape();
+  shape.moveTo(0.2, 0); shape.quadraticCurveTo(0.08, 0.075, -0.1, 0.02); shape.lineTo(-0.2, 0.07); shape.lineTo(-0.17, 0); shape.lineTo(-0.2, -0.07); shape.lineTo(-0.1, -0.02); shape.quadraticCurveTo(0.08, -0.075, 0.2, 0);
+  const geo = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).scale(1.6, 1, 1.6);
+  const mat = new THREE.MeshBasicMaterial({ color: b.fish.color || '#124a58', transparent: true, opacity: 0.42, depthWrite: false });
+  const list = [];
+  for (let t = 0; t < b.fish.n * 30 && list.length < b.fish.n; t++) {
+    const a = rng() * Math.PI * 2, rr = Math.sqrt(rng()) * (R - 2), cx = Math.cos(a) * rr, cz = Math.sin(a) * rr, r = 0.6 + rng() * 2.2;
+    let ok = deep(cx, cz, 0.3);
+    for (let i = 0; ok && i < 8; i++) ok = deep(cx + Math.cos(i * 0.785) * r, cz + Math.sin(i * 0.785) * r, 0.18);
+    if (!ok) continue;
+    const s = 0.7 + rng() * 0.8, n = rng() < 0.35 ? 3 : 1; // 偶尔三条一起游
+    for (let j = 0; j < n && list.length < b.fish.n; j++) list.push({ cx, cz, r: r + j * 0.25, w: (0.25 + rng() * 0.35) * (rng() < 0.5 ? 1 : -1), ph: rng() * 6.3 + j * 0.25, s: s * (1 - j * 0.12), y: W.level + 0.004 + rng() * 0.004 });
+  }
+  if (!list.length) return;
+  const im = new THREE.InstancedMesh(geo, mat, list.length);
+  // 水面会写深度，鱼放在水面下会被挡住：改成贴着水面、在水之后画的半透明深色剪影，看起来就是水下的鱼影
+  im.renderOrder = 2; im.frustumCulled = false;
+  fish = { im, list, m: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler(), p: new THREE.Vector3(), sc: new THREE.Vector3() };
+  root.add(im);
+}
+function updateFish(t) {
+  if (!fish) return;
+  const { im, list, m, q, e, p, sc } = fish;
+  list.forEach((f, i) => {
+    // 速度时快时慢；朝向 = 圆周切线，加一点摆尾
+    const a = f.ph + t * f.w + Math.sin(t * 0.7 + f.ph) * 0.3;
+    p.set(f.cx + Math.cos(a) * f.r, f.y, f.cz + Math.sin(a) * f.r);
+    e.set(0, -a - Math.sign(f.w) * Math.PI / 2 + Math.sin(t * 9 + f.ph * 5) * 0.12, 0);
+    q.setFromEuler(e); sc.setScalar(f.s);
+    im.setMatrixAt(i, m.compose(p, q, sc));
+  });
+  im.instanceMatrix.needsUpdate = true;
 }
 
 // 物件脚下的柔和接触阴影：直接画进地面贴图（正片叠底），比实时阴影更"贴地"
@@ -689,7 +728,7 @@ function clear() {
   scene.remove(root);
   root.traverse((o) => { if (o.material && o.material.map && o.material.map.isCanvasTexture && o.material.userData.own) o.material.map.dispose(); });
   root = new THREE.Group(); scene.add(root);
-  emitters = []; bobbers = []; particleSys = []; waterMats = []; groundTex = null;
+  emitters = []; bobbers = []; fish = null; particleSys = []; waterMats = []; groundTex = null;
   labels = []; $('#labels').innerHTML = '';
 }
 function build() {
@@ -699,6 +738,7 @@ function build() {
     const hAt = buildIsland(b); hAtCur = hAt;
     buildWater(b, hAt);
     placeAll(b, hAt);
+    if (b.fish) fishSchool(b, hAt);
     span = R;
     for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
@@ -972,6 +1012,7 @@ renderer.setAnimationLoop(() => {
   }
   walk(dt);
   storm(dt);
+  updateFish(t);
   updateLights(t);
   composer.render();
   updateStats(dt);
