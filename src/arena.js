@@ -947,7 +947,7 @@ function updatePlayer(dt) {
   if (ghosting) { P.ghostT = (P.ghostT || 0) - dt; if (P.ghostT <= 0) { P.ghostT = 0.035; cfx.ghost(P.c.root, m?.leap ? m.color : '#9ef0ff', 0.28); } }
   if (P.dashT > 0) {
     P.dashT -= dt;
-    vx = Math.sin(P.dashDir) * 17; vz = Math.cos(P.dashDir) * 17;
+    vx = Math.sin(P.dashDir) * 22.1; vz = Math.cos(P.dashDir) * 22.1;
     fx.mote(P.pos.x, 0.8 + Math.random() * 0.6, P.pos.z, '#9ef0ff', { life: 0.3, size: 1.2 });
   }
   P.pos.x += vx * dt; P.pos.z += vz * dt;
