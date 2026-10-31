@@ -541,7 +541,7 @@ function openMenu() {
 // 设置（存在本机）：音量、震屏、连招节奏提示（GDD 第 12 节：F/S 提示可以在设置里开关）
 const settings = { vol: 0.7, shake: true, rhythm: false, outline: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
-const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; outlineK.value = settings.outline ? 1 : 0; try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
+const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; outlineK.value = settings.outline ? 1 : 0; world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
 function openSettings() {
   gui.panel('设置', (body) => {

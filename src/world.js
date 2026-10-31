@@ -6,6 +6,7 @@ import {
 } from './util.js';
 import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
 import { buildWall } from './wall.js';
+import { makeLabWater, makeLabFall } from './water.js';
 import { getRefAsset } from './lab/ref/index.js';
 
 // 村子里的东西用参考画风（lab 里的 ref：三阶色阶 + 冷暗暖亮 + 叶簇树冠）：建村期间打开，toon() 自动带上 ref
@@ -591,6 +592,8 @@ export class World {
       }
   }
   addCircle(x, z, r) { const c = { x, z, r, off: false }; this._cells(x - r, z - r, x + r, z + r, (b) => b.c.push(c)); return c; }
+  // 参考画风素材的墨线（树、竹、石）：跟设置里的「描边」走，默认关
+  setInk(on) { this.inkOn = on; for (const c of this.refInk || []) c.visible = on; }
   // 冬天池塘、小潭结冰：能走上去，荷叶、白沫收起
   setIce(on) {
     this.iced = on;
@@ -668,7 +671,7 @@ export class World {
       if (e.glowMesh) e.glowMesh.material.color.copy(e.glowMesh.material.userData.base).multiplyScalar(0.25 + k * 0.75);
     }
     for (const w of this.windowMats) w.color.copy(w.userData.day).lerp(w.userData.base, nightK);
-    if (this.water) { this.water.uniforms.uTime.value = this.time; this.water.uniforms.uLight.value = 1 - nightK * 0.72; }
+    for (const wm of [this.water, this.wellWater]) if (wm) { wm.uniforms.uTime.value = this.time; wm.uniforms.uLight.value = 1 - nightK * 0.72; }
     if (this.fall) { this.fall.uniforms.uTime.value = this.time; this.fall.uniforms.uLight.value = 1 - nightK * 0.72; }
     if (this.wheel && !this.iced) this.wheel.rotation.z -= dt * 0.9; // 冬天水冻住，水车也停了
     this.updateSky(dt, p, nightK);
@@ -825,7 +828,8 @@ export class World {
     const wuv = wellG.attributes.uv; for (let i = 0; i < wuv.count; i++) wuv.setXY(i, wuv.getX(i) * 7, wuv.getY(i) * 0.85);
     well.add(mesh(wellG, toon('#b4aea8', { occ: true, map: T.stone }), { recv: true }));
     well.add(mesh(new THREE.TorusGeometry(1.12, 0.1, 6, 18).rotateX(Math.PI / 2).translate(0, 0.86, 0), toon('#9a948e', { occ: true })));
-    well.add(mesh(new THREE.CircleGeometry(1.05, 16).rotateX(-Math.PI / 2).translate(0, 0.55, 0), glow('#2a5a90', 0.8)));
+    this.wellWater = makeLabWater({ x0: -1.3, z0: -1.3, size: 2.6, N: 48, depthAt: (x, z) => Math.max(0, 1.05 - Math.hypot(x, z)) * 0.55 }); // 井水也用 lab 的水面
+    well.add(mesh(new THREE.CircleGeometry(1.05, 24).rotateX(-Math.PI / 2).translate(0, 0.55, 0), this.wellWater, { cast: false }));
     for (const s of [-1, 1]) well.add(at(mesh(new THREE.BoxGeometry(0.15, 2.0, 0.15).translate(0, 1, 0), toon('#7a5236', { occ: true })), s * 0.95, 0, 0));
     well.add(at(mesh(new THREE.BoxGeometry(2.1, 0.12, 0.12), toon('#7a5236', { occ: true })), 0, 1.8, 0));
     const wr = this.gableRoof(2.6, 1.8, 0.7, toon('#5a6070', { occ: true, map: T.tile }), toon('#3a3e48', { occ: true }));
@@ -840,7 +844,8 @@ export class World {
     // 村里的树、竹、灌木、花、石：lab 里参考画风的素材（叶簇树冠），再补上季节着色
     const ref = (id, v, x, z, s = 1, r = 0) => {
       const o = getRefAsset(id, v)?.clone(); if (!o) return null;
-      seasonRef(o); o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = r; this.scene.add(o); return o;
+      seasonRef(o); o.traverse((c) => { if (c.userData.isLine) { (this.refInk ||= []).push(c); c.visible = !!this.inkOn; } });
+      o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = r; this.scene.add(o); return o;
     };
     const prng = mulberry32(21);
     const trees = [[-26, 3], [-15, -23], [4, 22], [24, 2], [22, 24], [-24, 24], [-26, -16], [0, -24], [7, -15], [-2, -14], [31, -12], [-32, 12], [32, 14], [-12, 33], [12, 33], [-33, -14]];
@@ -1113,44 +1118,15 @@ export class World {
   buildPond() {
     const P = POND;
     const g = this.waterGeo(P.x, P.z, pondR);
-    this.water = new THREE.ShaderMaterial({
-      side: THREE.DoubleSide,
-      uniforms: { uTime: { value: 0 }, uLight: { value: 1 }, uIce: weatherU.ice },
-      vertexShader: `attribute float edge; varying float vEdge; varying vec2 vW;
-        void main() { vEdge = edge; vW = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform float uTime; uniform float uLight; uniform float uIce; varying float vEdge; varying vec2 vW;
-        float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        void main() {
-          vec2 px = floor(vW * 8.0);
-          vec3 deep = vec3(0.10, 0.36, 0.72), mid = vec3(0.20, 0.58, 0.88), rim = vec3(0.50, 0.84, 0.95);
-          float e = vEdge + (h(px) - 0.5) * 0.06;
-          vec3 c = mix(deep, mid, smoothstep(0.2, 0.75, e));
-          c = mix(c, rim, smoothstep(0.86, 0.97, e));
-          float w = sin(vW.x * 1.7 + uTime * 1.3) + sin(vW.y * 2.3 - uTime * 1.1) + sin((vW.x + vW.y) * 1.1 + uTime * 0.7);
-          float band = step(2.55, w) * step(0.55, h(floor(vW * vec2(3.0, 8.0))));
-          c = mix(c, vec3(0.80, 0.94, 1.0), band * 0.55);
-          float sp = step(0.985, h(px + floor(uTime * 2.0)));
-          c += sp * 0.5;
-          if (e > 0.985) c = vec3(0.92, 0.98, 1.0);
-          // 冬天结冰：浅青白的冰面，岸边更白，带裂纹和几道反光，偶尔闪一下
-          if (uIce > 0.0) {
-            vec2 q = floor(vW * 8.0) / 8.0 * 0.8, qi = floor(q), qf = fract(q);
-            float d1 = 8.0, d2 = 8.0;
-            for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-              vec2 o = vec2(float(i), float(j)), r = o + vec2(h(qi + o), h(qi + o + 17.0)) - qf;
-              float d = dot(r, r);
-              if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
-            }
-            vec3 ice = mix(vec3(0.56, 0.76, 0.88), vec3(0.84, 0.93, 0.98), smoothstep(0.35, 0.95, e));
-            ice = mix(ice, vec3(0.95, 0.99, 1.0), (1.0 - step(0.07, sqrt(d2) - sqrt(d1))) * 0.75);
-            ice += step(0.9, fract((vW.x + vW.y) * 0.35)) * step(0.5, h(floor(vW * vec2(1.0, 6.0)))) * 0.08;
-            ice += step(0.996, h(px + floor(uTime * 0.7))) * 0.35;
-            if (e > 0.97) ice = vec3(0.97, 1.0, 1.0);
-            c = mix(c, ice, uIce);
-          }
-          gl_FragColor = vec4(pow(c, vec3(2.2)) * uLight, 1.0);
-          #include <colorspace_fragment>
-        }`,
+    // 水面：lab 里 Claude 版的水面着色器。池塘 + 小潭 + 溪流共用一张深度图（越往里越深；溪流里带流向）
+    const Bz = BASIN, [sx0, sz0, sx1, sz1] = STREAM, sl = Math.hypot(sx1 - sx0, sz1 - sz0);
+    this.water = makeLabWater({
+      x0: -15.5, z0: -30.5, size: 18, N: 144,
+      depthAt: (x, z) => {
+        const pond = -pondDist(x, z), basin = Bz.r * (1 + 0.1 * Math.sin(Math.atan2(z - Bz.z, x - Bz.x) * 3 + 0.5)) - Math.hypot(x - Bz.x, z - Bz.z), stream = 0.85 - segDist(x, z, sx0, sz0, sx1, sz1);
+        return Math.max(0, pond, basin, stream) * 0.32;
+      },
+      flowAt: (x, z) => { const k = smooth(0.95, 0.3, segDist(x, z, sx0, sz0, sx1, sz1)); return [(sx1 - sx0) / sl * k, (sz1 - sz0) / sl * k]; },
     });
     const w = new THREE.Mesh(g, this.water); w.receiveShadow = false; this.scene.add(w);
     // 碰撞：池子内部不可走（冬天结冰后可以走上去，见 setIce）
@@ -1258,33 +1234,7 @@ export class World {
     const fp = fg.attributes.position;
     for (let k = 0; k < fp.count; k++) { const t = (fp.getY(k) + top / 2) / top; fp.setZ(k, 0.5 * t * t); }
     fg.translate(0, top / 2, 0);
-    this.fall = new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uTime: { value: 0 }, uLight: { value: 1 }, uIce: weatherU.ice },
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform float uTime; uniform float uLight; uniform float uIce; varying vec2 vUv;
-        float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        void main() {
-          vec2 px = floor(vUv * vec2(10.0, 40.0));
-          float sp = 0.9 + h(vec2(px.x, 3.0)) * 0.8;
-          float v = fract((px.y / 40.0) * 3.0 + uTime * sp + h(vec2(px.x, 7.0)));
-          vec3 c = mix(vec3(0.42, 0.74, 0.92), vec3(0.75, 0.92, 1.0), step(0.55, v));
-          c = mix(c, vec3(1.0), step(0.86, v));
-          float ex = min(vUv.x, 1.0 - vUv.x);
-          if (ex < 0.1) c = mix(c, vec3(1.0), 0.6);
-          if (vUv.y < 0.08 || vUv.y > 0.96) c = vec3(1.0);
-          float a = ex < 0.05 && h(px + floor(uTime * 6.0)) > 0.5 ? 0.0 : 0.95;
-          // 冰瀑：不再流动，一道道竖直的冰棱，底下参差的冰柱
-          if (uIce > 0.0) {
-            float col = h(vec2(px.x, 11.0)), tip = 0.1 + col * 0.25;
-            vec3 ice = mix(vec3(0.6, 0.8, 0.92), vec3(0.88, 0.96, 1.0), step(0.5, col));
-            ice = mix(ice, vec3(1.0), step(0.93, h(vec2(px.x, floor(px.y / 6.0)))) * 0.5);
-            c = mix(c, ice, uIce);
-            a = mix(a, vUv.y < tip ? 0.0 : 0.97, uIce);
-          }
-          gl_FragColor = vec4(pow(c, vec3(2.2)) * uLight, a);
-        }`,
-    });
+    this.fall = makeLabFall(weatherU.ice);
     const fall = new THREE.Mesh(fg, this.fall);
     fall.position.set(B.x, 0, B.z - B.r + 0.05 - 0.3); fall.rotation.y = 0;
     this.scene.add(fall);

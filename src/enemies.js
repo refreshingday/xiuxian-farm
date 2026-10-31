@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { flat, toon, glow, mesh, at, angDiff, lerpAngle, setFlash, clamp } from './util.js';
-import { ARENA } from './world.js';
+import { ARENA, GATES, WALL_R } from './world.js';
 import { SIG } from './bossmoves.js';
 
 const G = {};
@@ -215,6 +215,12 @@ export class Enemies {
 
   spawn(type, x, z, lvl = 0) {
     const T = TYPES[type];
+    // 村墙以内不刷妖兽：教学野猪、事件、委托这些脚本刷的怪，改到最近的村门外面，再让它们穿墙冲向目标
+    let passWall = false;
+    if (Math.hypot(x, z) < WALL_R + 3) {
+      const gt = GATES.reduce((a, b) => (Math.hypot(x - a.x, z - a.z) < Math.hypot(x - b.x, z - b.z) ? a : b)), side = (Math.random() - 0.5) * 6;
+      x = Math.sin(gt.a) * (WALL_R + 6) + Math.cos(gt.a) * side; z = -Math.cos(gt.a) * (WALL_R + 6) + Math.sin(gt.a) * side; passWall = true;
+    }
     const { root, parts, mats } = build(T);
     const g = this.game, night = g.nightK > NIGHT && !T.boss, blood = night && g.bloodMoon;
     const k = (night ? 1.3 : 1) * (blood ? 1.5 : 1), hpMul = (1 + lvl * 0.35) * k;
@@ -224,7 +230,7 @@ export class Enemies {
       state: 'idle', st: 0, cd: 1 + Math.random(), flash: 0, home: new THREE.Vector2(x, z),
       tx: x, tz: z, walk: Math.random() * 6, touchCd: 0, alive: true, phase: 1, queue: [], hitOnce: false, chargeDir: 0,
       elem: T.elem, boss: !!T.boss, kind: T.kind, vy: 0, airSpin: 0, airRot: 0, spiked: false, rootT: 0, stuck: [],
-      gen: 0, hop: 0, hasteT: 0, open: 0, tick: null,
+      gen: 0, hop: 0, hasteT: 0, open: 0, tick: null, passWall,
     };
     root.position.set(x, 0, z);
     g.scene.add(root);
@@ -404,7 +410,7 @@ export class Enemies {
           const wx = e.tx - e.pos.x, wz = e.tz - e.pos.z, wd = Math.hypot(wx, wz);
           if (wd > 0.4) { mx = wx / wd; mz = wz / wd; spd = e.speed * 0.4; }
         } else if (e.state === 'chase') {
-          if (dist > 26 || P.dead) { e.state = 'idle'; }
+          if ((dist > 26 && !e.passWall) || P.dead) { e.state = 'idle'; } // passWall：从村门外面刷出来追人的，不受距离限制
           face = toP;
           if (e.kind === 'charger') {
             mx = dx / dist; mz = dz / dist; spd = e.speed;
@@ -460,7 +466,7 @@ export class Enemies {
       e.pos.x += (mx * spd + e.kx) * dt;
       e.pos.z += (mz * spd + e.kz) * dt;
       const kd = Math.exp(-(air ? (e.pos.y > 1 ? 0.8 : 3) : 9) * dt); e.kx *= kd; e.kz *= kd;
-      g.world.resolve(e.pos, e.r, !!e.tide);
+      g.world.resolve(e.pos, e.r, !!(e.tide || e.passWall));
       if (!e.boss) for (const o of this.list) {
         if (o === e) continue;
         const ox = e.pos.x - o.pos.x, oz = e.pos.z - o.pos.z, rr = e.r + o.r, d2 = ox * ox + oz * oz;
