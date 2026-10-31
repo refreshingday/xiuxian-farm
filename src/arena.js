@@ -758,6 +758,7 @@ let armed = false;
 renderer.domElement.addEventListener('pointerdown', (e) => { if (e.button === 0 && !touch.on) armed = true; });
 addEventListener('pointerdown', () => sfx.unlock());
 addEventListener('pointerup', (e) => { if (e.button === 0 && armed) { armed = false; click(); } });
+renderer.domElement.addEventListener('pointerdown', (e) => { if (e.button === 2 && !touch.on) dash(); });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 document.getElementById('bReset').addEventListener('click', resetStats);
 document.getElementById('weapon').addEventListener('click', () => cycleWeapon());
