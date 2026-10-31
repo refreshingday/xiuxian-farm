@@ -106,6 +106,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-10-31 — 滚轮缩放镜头（0.6–3 倍，拉远能看到整个村子），转镜头改成按住右键拖
 - 2026-10-31 — 水面换成 lab 的着色器（含井水、瀑布）；村里不刷妖兽；树的墨线默认关
 - 2026-10-31 — 村子围起来：村墙、三个门、望楼，村里用参考画风
 - 2026-10-31 — 每个页面右下角加版本号（`src/version.js`，每次提交要改）；小地图对话时也重画

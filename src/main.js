@@ -246,11 +246,11 @@ world.onSpawn = (cx, cz, rng) => {
 let spawnT = 4, golemT = 0;
 function ambientSpawns(dt) {
   spawnT -= dt; golemT -= dt;
-  const near = enemies.list.filter((e) => e.type !== 'golem' && !e.boss && !e.raid && e.pos.distanceTo(P.pos) < 35 * camZoom).length;
+  const near = enemies.list.filter((e) => e.type !== 'golem' && !e.boss && !e.raid && e.pos.distanceTo(P.pos) < 35 * Math.min(camZoom, 1.6)).length;
   if (spawnT <= 0) {
     spawnT = (2.5 - g.nightK * 1.2) * (g.bloodMoon ? 0.6 : 1);
     if (near < 11 + g.nightK * 7 && !P.dead) {
-      const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * camZoom;
+      const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * Math.min(camZoom, 1.6);
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
       if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)));
     }
@@ -274,7 +274,7 @@ const keys = new Set();
 const SKILL_KEYS = ['KeyQ', 'KeyE', 'KeyR', 'KeyC']; // 四个技能槽（F 留给交互）
 const mouse = new THREE.Vector2(), mouseDown = [false, false, false];
 const aim = new THREE.Vector3();
-let camYaw = 0, camYawT = 0, camZoom = 1;
+let camYaw = 0, camYawT = 0, camZoom = 1, camZoomU = 1; // camZoomU：玩家自己滚出来的缩放（0.6 近 … 3 远）
 addEventListener('keydown', (e) => {
   sfx.unlock();
   if (e.repeat) { keys.add(e.code); return; }
@@ -310,7 +310,10 @@ renderer.domElement.addEventListener('pointerdown', (e) => { sfx.unlock(); if (g
 addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; mouseDown[e.button] = false; if (e.button === 0 && armed) { armed = false; attackClick(); } });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 // 滚轮转镜头
-renderer.domElement.addEventListener('wheel', (e) => { camYawT -= e.deltaY * 0.0012; }, { passive: true });
+// 滚轮缩放（往下滚拉远，往上滚拉近）；转镜头改成按住右键拖
+renderer.domElement.addEventListener('wheel', (e) => { camZoomU = clamp(camZoomU * Math.exp(e.deltaY * 0.0012), 0.6, 3); }, { passive: true });
+renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+renderer.domElement.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch' && (e.buttons & 2)) camYawT -= e.movementX * 0.006; });
 
 // 手机模式：摇杆 + 按钮（与电脑操作并存，按最近使用的输入自动切换）
 const touch = new TouchControls();
@@ -776,7 +779,8 @@ function updateCamera(dt) {
   camYaw = lerp(camYaw, camYawT, 1 - Math.exp(-8 * dt));
   focus.lerp(P.pos, 1 - Math.exp(-8 * dt));
   // 手机屏幕小，镜头拉远 1.4 倍看得更远
-  camZoom = lerp(camZoom, touch.on ? 1.4 : 1, 1 - Math.exp(-6 * dt));
+  camZoom = lerp(camZoom, (touch.on ? 1.4 : 1) * camZoomU, 1 - Math.exp(-6 * dt));
+  const farK = 140 * Math.max(1, camZoom); if (Math.abs(camera.far - farK) > 1) { camera.far = farK; camera.updateProjectionMatrix(); }
   const dist = 21 * camZoom, pitch = 0.9;
   camera.position.set(focus.x + Math.sin(camYaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, focus.z + Math.cos(camYaw) * Math.cos(pitch) * dist);
   if (g.shakeV > 0) {
