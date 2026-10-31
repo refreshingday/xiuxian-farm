@@ -4,7 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { loadTextures, weatherU, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
+import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
 import { createChibi, animChibi } from './chibi.js';
 import { Weather } from './weather.js';
 import { World, configureVillage, configureClearings, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
@@ -539,9 +539,9 @@ function openMenu() {
   });
 }
 // 设置（存在本机）：音量、震屏、连招节奏提示（GDD 第 12 节：F/S 提示可以在设置里开关）
-const settings = { vol: 0.7, shake: true, rhythm: false };
+const settings = { vol: 0.7, shake: true, rhythm: false, outline: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
-const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
+const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; outlineK.value = settings.outline ? 1 : 0; try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
 function openSettings() {
   gui.panel('设置', (body) => {
@@ -549,8 +549,8 @@ function openSettings() {
     const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings.vol; r.style.flex = '1';
     r.addEventListener('input', () => { settings.vol = +r.value; applySettings(); });
     row.append(el('span', 'pic', '🔊'), el('div', 'ptxt', '<b>音量</b>'), r); body.append(row);
-    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条']]) {
-      body.append(gui.row(k === 'shake' ? '📳' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
+    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）']]) {
+      body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
     }
     body.append(el('div', 'pempty', '手柄：左摇杆移动 · 右摇杆瞄准 · A 普攻 · B 闪避 · X / Y / LB / RB 技能 · LT 换武 · RT 交互 · 十字键换快捷栏 / 用 / 背包 · Start 菜单 · Back 地图 · 按右摇杆 神识 · 按左摇杆 御剑'));
   });
