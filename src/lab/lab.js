@@ -8,6 +8,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, PNG, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
 import { createChibi, animChibi } from '../chibi.js';
 import { TouchControls } from '../touch.js';
+import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './swim.js';
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
 import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
@@ -103,7 +104,7 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, ink: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {}, bloomT: {},
+  outline: false, ink: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, v: 2, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
@@ -733,6 +734,7 @@ function clear() {
   root = new THREE.Group(); scene.add(root);
   emitters = []; bobbers = []; fish = null; particleSys = []; waterMats = []; groundTex = null;
   labels = []; $('#labels').innerHTML = '';
+  waterFx.clear(); resetSwim();
 }
 function build() {
   clear();
@@ -743,6 +745,7 @@ function build() {
     placeAll(b, hAt);
     if (b.fish) fishSchool(b, hAt);
     span = R;
+    if (b.water) waterFx.setColor(b.water.foam);
     for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
     const ids = S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : b.catalog;
@@ -931,39 +934,167 @@ const keys = new Set();
 addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT') keys.add(e.code); });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
-const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3();
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3(), _wv = new THREE.Vector3();
 let walkYaw = 0, moveK = 0;
-function walk(dt) {
+// ---------- 下水：能走进水里，水深了就游 ----------
+const waterFx = createWaterFx(scene);
+const sfx = (k, v) => { if (S.sound) waterSound(k, v); };
+// 这一点的水面高度（没有水 = -99）。台地上的高处水潭单独一层水面；岩浆不算水
+function waterLvl(b, x, z, h) {
+  const W = b.water; if (!W || W.mode !== 'water') return -99;
+  for (const p of b.terrace?.pools || []) if (h < p.level && p.level - h < 0.85 && Math.hypot(x - p.x, z - p.z) < p.r) return p.level;
+  return h < W.level ? W.level : -99;
+}
+let swimming = false, swimK = 0, strokePh = 0, wasDepth = 0, stepSign = 0, ringT = 0, foamT = 0, kickT = 0, dripT = 0, dripMax = 1, wet = 0, wetLow = 0;
+function resetSwim() { swimming = false; swimK = 0; wasDepth = 0; dripT = 0; wet = wetLow = 0; if (chibi) { swimPose(chibi, 0, 0, 0, 0); applyWet(); } }
+// 湿衣服：颜色变深，慢慢晾干（下半身涉水只湿裙摆和裤子）
+const WET_ALL = [1, 2, 3, 4, 5, 7], WET_LOW = [2, 5];
+function applyWet() {
+  chibi.mats.forEach((m, i) => {
+    if (!WET_ALL.includes(i)) return;
+    m.userData.dry ??= m.color.clone();
+    const w = WET_LOW.includes(i) ? Math.max(wet, wetLow) : wet;
+    m.color.copy(m.userData.dry).multiplyScalar(1 - 0.32 * w);
+  });
+}
+const footW = (i) => chibi.legs[i].localToWorld(_wv.set(0, -0.48, 0.06));
+// 调试用（控制台 / 自动截图）：labDebug.chibi、labDebug.depthAt(x, z)
+window.labDebug = { get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
+function walk(dt, t) {
   if (!chibi || !chibi.root.visible) return;
   let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
   let iy = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   if (touch.on && (touch.stick.x || touch.stick.y)) { ix = touch.stick.x; iy = touch.stick.y; }
   const mag = Math.min(1, Math.hypot(ix, iy));
   moveK = lerp(moveK, mag, 1 - Math.exp(-10 * dt));
-  const P = chibi.root.position;
+  const P = chibi.root.position, b = BIOMES[S.biome], W = b.water;
+  const ice = W && W.mode === 'ice';
+  // 有效地面：水里按"游泳时身体的高度"算坡度，否则从深水游到岸边会被当成断崖
+  const eff = (x, z) => {
+    const h = hAtCur(x, z); if (ice) return Math.max(h, W.level);
+    const wl = waterLvl(b, x, z, h); return wl > -90 ? Math.max(h, wl - SWIM_IN) : h;
+  };
+  let h = hAtCur(P.x, P.z), wl = waterLvl(b, P.x, P.z, h), depth = wl > -90 ? wl - h : 0;
+  const slow = swimming ? 0.62 : lerp(1, WADE_SLOW, clamp(depth / SWIM_IN, 0, 1));
   if (mag > 0.01) {
     // 相对镜头方向：前 = 镜头看向的水平方向
     _f.subVectors(controls.target, camera.position).setY(0).normalize();
     _r.set(-_f.z, 0, _f.x);
     _d.copy(_r).multiplyScalar(ix).addScaledVector(_f, iy).normalize();
-    const sp = 5 * mag * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
-    const b = BIOMES[S.biome], deep = b.water ? b.water.level - 0.3 : -99;
-    // 不走出小岛、不走进深水
-    // 断崖：坡度太陡（>~50°）走不上去也跳不下去，台阶坡道可以走
-    const slope = Math.abs(hAtCur(nx + _d.x * 0.25, nz + _d.z * 0.25) - hAtCur(P.x, P.z)) / (sp + 0.25);
-    const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r); // 梯子处可以爬崖
-    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > deep && (slope < 1.2 || onLadder)) {
+    const surge = swimming ? 0.8 + 0.4 * Math.max(0, Math.sin(strokePh * 2)) : 1; // 每划一下往前冲一点
+    const sp = 5 * mag * slow * surge * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
+    // 不走出小岛；岩浆只能踩到边上；断崖（坡度 >~50°）走不上去也跳不下去，梯子处可以爬
+    const lavaEdge = W && W.mode === 'lava' ? W.level - 0.3 : -99;
+    const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25);
+    const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r);
+    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder)) {
       const dx = nx - P.x, dz = nz - P.z;
       P.x = nx; P.z = nz;
       camera.position.x += dx; camera.position.z += dz;
       controls.target.x += dx; controls.target.z += dz;
     }
     walkYaw = Math.atan2(_d.x, _d.z);
+    h = hAtCur(P.x, P.z); wl = waterLvl(b, P.x, P.z, h); depth = wl > -90 ? wl - h : 0;
   }
-  const y = hAtCur(P.x, P.z), dy = y - P.y;
-  P.y = y; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
+  // 涉水 ↔ 游泳（有回差）
+  const wasSwim = swimming;
+  if (!swimming && depth > SWIM_IN) swimming = true; else if (swimming && depth < SWIM_OUT) swimming = false;
+  swimK = lerp(swimK, swimming ? 1 : 0, 1 - Math.exp(-7 * dt));
+  if (swimming) strokePh += dt * (1.5 + 4.2 * moveK);
+  let y = ice ? Math.max(h, W.level) : h;
+  if (swimming) y = Math.max(h - 0.6, wl - 0.55 - lerp(0.45, 0.12, moveK) + Math.sin(t * 2.2) * 0.035); // 踩水时身子直、低一点；游起来身子平（浅水里脚陷进湖底也看不见）
+  const dy0 = P.y;
+  P.y = depth > 0.02 || swimK > 0.02 ? lerp(P.y, y, 1 - Math.exp(-10 * dt)) : y;
+  const dy = P.y - dy0; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
   chibi.root.rotation.y += Math.atan2(Math.sin(walkYaw - chibi.root.rotation.y), Math.cos(walkYaw - chibi.root.rotation.y)) * (1 - Math.exp(-12 * dt));
-  animChibi(chibi, dt, { move: moveK, attack: -1, cast: 0, work: 0 });
+  const prevStroke = strokePh - dt * (1.5 + 4.2 * moveK);
+  animChibi(chibi, dt, { move: moveK * (1 - swimK) * lerp(1, 0.8, clamp(depth / SWIM_IN, 0, 1)), attack: -1, cast: 0, work: 0 });
+  swimPose(chibi, swimK, moveK, strokePh, t);
+  chibi.root.updateMatrixWorld(true);
+
+  // ---------- 特效 ----------
+  const fwd = _f.set(Math.sin(chibi.root.rotation.y), 0, Math.cos(chibi.root.rotation.y)), side = _r.set(fwd.z, 0, -fwd.x);
+  const inWater = depth > 0.03;
+  if (inWater) {
+    // 刚踩进水：一小簇水花；从涉水变成游泳：大水花 + 两圈大波纹 + 一圈白沫
+    if (wasDepth <= 0.03 && moveK > 0.2) { waterFx.splash(P.x + fwd.x * 0.2, wl, P.z + fwd.z * 0.2, 10, 2.2, 0.9, 0.04, fwd); waterFx.ring(P.x, wl, P.z, 0.15, 1.0, 0.9); sfx('enter', 0.6); }
+    if (swimming && !wasSwim) {
+      waterFx.splash(P.x, wl, P.z, 26, 3.4, 1.4, 0.05, fwd);
+      waterFx.ring(P.x, wl, P.z, 0.3, 1.8, 1.3); waterFx.ring(P.x, wl, P.z, 0.2, 1.1, 1.0, 0.7);
+      for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; waterFx.foam(P.x + Math.cos(a) * 0.4, wl, P.z + Math.sin(a) * 0.4, Math.cos(a) * 1.2, Math.sin(a) * 1.2, 0.13, 0.9); }
+      sfx('plunge', 0.8);
+    }
+    if (!swimming && wasSwim) { waterFx.splash(P.x, wl, P.z, 10, 2, 0.7, 0.04); sfx('exit', 0.5); }
+    // 身边的波纹圈：走 / 游时密，停着时疏
+    ringT -= dt;
+    if (ringT < 0) {
+      ringT = swimming ? (moveK > 0.3 ? 0.5 : 0.8) : moveK > 0.3 ? 0.4 : 1.1;
+      const o = swimming ? 0.35 * moveK : 0, r0 = swimming ? 0.35 : 0.22 + clamp(depth, 0, 0.6) * 0.25;
+      waterFx.ring(P.x + fwd.x * o, wl, P.z + fwd.z * o, r0, r0 + (swimming ? 1.3 : 1.0), swimming ? 1.3 : 1.2, swimming ? 0.65 : 0.55);
+    }
+    if (!swimming) {
+      // 涉水脚步：落脚那一下溅水、起小圈（水越深溅得越多）
+      const sg = Math.sign(Math.sin(chibi.phase));
+      if (moveK > 0.3 && sg !== stepSign && stepSign !== 0) {
+        const f = footW(sg > 0 ? 0 : 1), dk = clamp(depth / 0.6, 0, 1);
+        waterFx.splash(f.x, wl, f.z, 3 + Math.round(dk * 7), 1.4 + dk * 1.6, 0.55, 0.03 + dk * 0.012, fwd);
+        waterFx.ring(f.x, wl, f.z, 0.08, 0.55 + dk * 0.5, 0.8, 0.75);
+        sfx('step', 0.35 + dk * 0.5);
+      }
+      stepSign = sg;
+      // 腿前面推开的水：小白沫
+      foamT -= dt;
+      if (moveK > 0.3 && depth > 0.12 && foamT < 0) {
+        foamT = 0.07;
+        const s = Math.random() - 0.5;
+        waterFx.foam(P.x + fwd.x * 0.25 + side.x * s * 0.4, wl, P.z + fwd.z * 0.25 + side.z * s * 0.4, side.x * s * 1.6 + fwd.x * 0.3, side.z * s * 1.6 + fwd.z * 0.3, 0.07 + depth * 0.06, 0.7);
+      }
+    } else {
+      stepSign = 0;
+      // 尾迹：头前推起白沫，身后左右两道往外散（V 字），脚后打水
+      foamT -= dt;
+      if (moveK > 0.25 && foamT < 0) {
+        foamT = 0.045;
+        waterFx.foam(P.x + fwd.x * 0.75, wl, P.z + fwd.z * 0.75, fwd.x * 0.6 + side.x * (Math.random() - 0.5), fwd.z * 0.6 + side.z * (Math.random() - 0.5), 0.12, 0.6);
+        for (const sd of [-1, 1]) waterFx.foam(P.x + side.x * sd * 0.32 - fwd.x * 0.1, wl, P.z + side.z * sd * 0.32 - fwd.z * 0.1, side.x * sd * 1.1 * moveK - fwd.x * 0.3, side.z * sd * 1.1 * moveK - fwd.z * 0.3, 0.1, 1.4);
+      }
+      kickT -= dt;
+      if (moveK > 0.25 && kickT < 0) {
+        kickT = 0.11;
+        const f = footW(Math.random() < 0.5 ? 0 : 1);
+        waterFx.drop(f.x, wl, f.z, (Math.random() - 0.5) * 0.6 - fwd.x * 0.6, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 0.6 - fwd.z * 0.6, 0.032, wl);
+        waterFx.foam(f.x, wl, f.z, -fwd.x * 0.4, -fwd.z * 0.4, 0.09, 0.8);
+      }
+      // 划水：手入水那一下（转到正前方）溅水花
+      if (moveK > 0.25) for (let i = 0; i < 2; i++) {
+        const a0 = (prevStroke + i * Math.PI) % (Math.PI * 2), a1 = (strokePh + i * Math.PI) % (Math.PI * 2);
+        if (a0 < Math.PI && a1 >= Math.PI) {
+          const hw = chibi.arms[i].hand.getWorldPosition(_wv);
+          waterFx.splash(hw.x, wl, hw.z, 7, 2.2, 0.6, 0.04, fwd);
+          waterFx.ring(hw.x, wl, hw.z, 0.1, 0.7, 0.8, 0.8);
+          sfx('stroke', 0.6);
+        }
+      }
+    }
+    // 衣服湿了
+    if (swimming) wet = 1; else wetLow = Math.max(wetLow, clamp(depth / 0.5, 0, 1));
+    if (depth > 0.25 || swimming) { dripMax = swimming ? 2.6 : 1.4; dripT = dripMax; }
+  } else {
+    stepSign = 0;
+    if (wasDepth > 0.03 && moveK > 0.2) { waterFx.splash(P.x, wl > -90 ? wl : P.y, P.z, 5, 1.4, 0.5, 0.03); }
+    // 出水后身上往下滴水
+    if (dripT > 0) {
+      dripT -= dt;
+      if (Math.random() < dt * 28 * (dripT / dripMax)) {
+        const a = Math.random() * Math.PI * 2, r = 0.15 + Math.random() * 0.2, hy = 0.2 + Math.random() * (wet > 0.5 ? 1.0 : 0.35);
+        const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;
+        waterFx.drop(x, P.y + hy, z, 0, -0.2, 0, 0.022, hAtCur(x, z), false, 1.5);
+      }
+    }
+    if (wet > 0 || wetLow > 0) { wet = Math.max(0, wet - dt / 12); wetLow = Math.max(0, wetLow - dt / 8); }
+  }
+  wasDepth = depth;
+  applyWet();
 }
 
 // ======================================================================
@@ -1015,7 +1146,8 @@ renderer.setAnimationLoop(() => {
     if (p.material.uniforms.uPR) p.material.uniforms.uPR.value = pixelRatio * innerHeight / 900;
     if (p.userData.night) p.material.uniforms.uAlpha.value = nightK;
   }
-  walk(dt);
+  walk(dt, t);
+  waterFx.update(dt);
   storm(dt);
   updateFish(t);
   updateLights(t);
