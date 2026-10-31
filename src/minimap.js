@@ -21,6 +21,10 @@ export class Minimap {
     try { this.zoom = Math.max(0, Math.min(RANGES.length - 1, +localStorage.getItem('miniZoom') || 1)); } catch (e) { /* 存不了就算了 */ }
     this.cv.addEventListener('click', () => g.landmarks.open());
     $('miniZ').addEventListener('click', (e) => { e.stopPropagation(); this.cycle(); });
+    // 对话 / 暂停时主循环不走，自己补画，免得空着
+    this.last = 0;
+    const idle = () => { requestAnimationFrame(idle); if (performance.now() - this.last > 150) this.update(); };
+    requestAnimationFrame(idle);
     addEventListener('keydown', (e) => { if (e.code === 'KeyN' && !g.ui.blocking && !e.repeat) this.cycle(); });
   }
   cycle() {
@@ -38,6 +42,7 @@ export class Minimap {
 
   update() {
     const g = this.g, P = g.player, cam = g.camera;
+    this.last = performance.now();
     cam.getWorldDirection(_d);
     const l = Math.hypot(_d.x, _d.z);
     if (l > 0.05) { this.fx = _d.x / l; this.fz = _d.z / l; }

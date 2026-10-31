@@ -104,6 +104,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-10-31 — 每个页面右下角加版本号（`src/version.js`，每次提交要改）；小地图对话时也重画
 - 2026-10-31 — 小地图和任务指针
 - 2026-10-30 — 落叶、花瓣、结冰的池塘和瀑布；修为表按 GDD 时长重排
 - 2026-10-30 — 委托板进阶：护送 / 守护 / 寻踪 / 异象 / 切磋 / 精英讨伐，七种词缀
