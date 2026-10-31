@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage, foliageLeaves } from './kit.js';
+import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage as foliageBase, foliageLeaves } from './kit.js';
 import { vnoise, smooth, clamp } from '../util.js';
 import { LH } from './biomes.js';
 
@@ -7,6 +7,9 @@ import { LH } from './biomes.js';
 // 统一比例：1 单位 ≈ 角色半身高（Q 版角色约 1.6 高）。
 
 const TAU = Math.PI * 2;
+// 画风钩子：平时全空 = 原版素材；「参考画风」（./ref/index.js）建素材时临时填上，换掉树冠 / 岩石 / 椰叶的做法
+export const STYLE = {};
+const foliage = (...a) => (STYLE.crown || foliageBase)(...a);
 const rnd = (seed) => mulberry32(seed * 7919 + 13);
 const C = (hex) => new THREE.Color(hex);
 
@@ -28,8 +31,8 @@ const ROCK_SHAPES = [
 function rock(v, paintFn, seed = 1, o = {}) {
   const r = rnd(seed + v * 31), k = new Kit();
   for (const [geo, at, s] of ROCK_SHAPES[v % 5](r)) {
-    const g = faceted(lumpy(geo.scale(...s), 0.18, 2.4, seed + v * 3));
-    k.add(g, paintFn, { at, rot: [0, r() * TAU, 0] });
+    const g = STYLE.rock ? STYLE.rock(geo.scale(...s), seed + v * 3) : faceted(lumpy(geo.scale(...s), 0.18, 2.4, seed + v * 3));
+    k.add(g, paintFn, { at, rot: [0, r() * TAU, 0], kind: STYLE.rock ? 'rock' : 'solid' });
   }
   if (o.extra) o.extra(k, r);
   return k.build(o);
@@ -1169,7 +1172,7 @@ function ladder(v, seed) {
 
 // ======================================================================
 // 羽叶：沿叶轴的一条带子，两边是朝叶尖方向的锯齿，两半向下折成 V 形
-function frondGeo(spine, W, fold) {
+export function frondGeo(spine, W, fold) {
   const P = spine.map((p) => new THREE.Vector3(...p)), N = P.length - 1, pos = [], up = new THREE.Vector3(0, 1, 0);
   const side = [], down = [];
   for (let i = 0; i <= N; i++) {
@@ -1203,6 +1206,8 @@ function palmLush(v, seed) {
     for (let s = 0; s <= 14; s++) { const t = s / 14; spine.push([Math.cos(a) * t * len, Math.sin(t * 2) * (0.45 + up) - t * t * 1.15, Math.sin(a) * t * len]); }
     k.add(G.tube(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'leaf' });
     k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'plant' });
+    // 参考画风：叶子下面垫一片稍宽的深色叶，露出来的一圈就是描边
+    if (STYLE.frondInk) k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y - 0.03, top[2] + z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'plant' });
   }
   for (let i = 0; i < 4; i++) k.add(G.sph(0.15, 7, 6), grad('#7a5a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 1.6) * 0.2, top[1] - 0.18, top[2] + Math.sin(i * 1.6) * 0.2] });
   return k.build();

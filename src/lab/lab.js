@@ -11,6 +11,7 @@ import { TouchControls } from '../touch.js';
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
 import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
+import { REF, getRefAsset } from './ref/index.js';
 import { BIOMES, R } from './biomes.js';
 
 // ======================================================================
@@ -569,10 +570,12 @@ const ALL_IDS = () => [...new Set([...BIOMES.flatMap((x) => x.catalog), ...Objec
 const SRC = {
   claude: { tag: 'Claude', strip: '#f0d9a6', get: (id) => ASSETS[id], build: getAsset },
   codex: { tag: 'Codex', strip: '#a9dcd6', get: (id) => CODEX[id], build: getCodexAsset },
+  // 参考画风（./ref/index.js）：同一套 Claude 素材按参考图画风重建（墨线 + 硬色阶 + 叶簇树冠 + 圆石）
+  ref: { tag: '参考画风', strip: '#cfe3b0', get: (id) => REF[id], build: getRefAsset },
 };
-const assetOf = (id, v) => (S.src === 'codex' && CODEX[id] ? getCodexAsset(id, v) : getAsset(id, v));
+const assetOf = (id, v) => (S.src === 'codex' && CODEX[id] ? getCodexAsset(id, v) : S.src === 'ref' && REF[id] ? getRefAsset(id, v) : getAsset(id, v));
 function buildCatalog(ids, mode = 'catalog') {
-  const srcs = mode === 'codex' ? ['codex'] : mode === 'compare' || mode === 'allcmp' ? ['claude', 'codex'] : ['claude'];
+  const srcs = mode === 'codex' ? ['codex'] : mode === 'ref' ? ['ref'] : mode === 'refcmp' ? ['claude', 'ref'] : mode === 'compare' || mode === 'allcmp' ? ['claude', 'codex'] : ['claude'];
   const rows = [];
   for (const id of ids) for (const sk of srcs) {
     const A = SRC[sk].get(id); if (!A) continue;
@@ -769,9 +772,9 @@ function build() {
 }
 function countAssets() {
   const ids = S.mode === 'scene' ? [...new Set(BIOMES[S.biome].scatter.map((r) => r.id))] : S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : BIOMES[S.biome].catalog;
-  const src = S.mode === 'codex' || (S.mode === 'scene' && S.src === 'codex') ? CODEX : null;
+  const src = S.mode === 'codex' || (S.mode === 'scene' && S.src === 'codex') ? CODEX : S.mode === 'ref' || (S.mode === 'scene' && S.src === 'ref') ? REF : null;
   const have = src ? ids.filter((id) => src[id]) : ids;
-  return { types: have.length, variants: have.reduce((s, id) => s + (src || ASSETS)[id].n, 0) };
+  return { types: have.length, variants: have.reduce((s, id) => s + ((src && src[id]) || ASSETS[id]).n, 0) };
 }
 function frame(reset = true) {
   if (!reset) return;
@@ -838,7 +841,7 @@ function updateLights(time) {
 // ---------- 开关 ----------
 function applyToggles() {
   document.body.classList.toggle('noWalk', S.mode !== 'scene' || !S.chibi);
-  root.traverse((o) => { if (o.userData.isLine) o.visible = S.outline; });
+  root.traverse((o) => { if (o.userData.isLine) o.visible = S.outline || !!o.userData.ink; }); // 参考画风的墨线一直显示
   sun.castShadow = S.shadows;
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
@@ -856,7 +859,7 @@ function ui() {
   document.querySelectorAll('[data-src]').forEach((b) => b.classList.toggle('on', b.dataset.src === S.src));
   document.querySelectorAll('[data-t]').forEach((b) => b.classList.toggle('on', !!S[b.dataset.t]));
   const b = BIOMES[S.biome];
-  const who = S.mode === 'codex' ? ' · <span class="tag codex">Codex</span>' : S.mode === 'compare' || S.mode === 'allcmp' ? ' · <span class="tag claude">Claude</span> vs <span class="tag codex">Codex</span>' : S.mode === 'scene' ? ` · <span class="tag ${S.src}">${SRC[S.src].tag} 素材</span>` : S.mode === 'catalog' ? ' · <span class="tag claude">Claude</span>' : '';
+  const who = S.mode === 'codex' ? ' · <span class="tag codex">Codex</span>' : S.mode === 'ref' ? ' · <span class="tag ref">参考画风</span>' : S.mode === 'refcmp' ? ' · <span class="tag claude">Claude</span> vs <span class="tag ref">参考画风</span>' : S.mode === 'compare' || S.mode === 'allcmp' ? ' · <span class="tag claude">Claude</span> vs <span class="tag codex">Codex</span>' : S.mode === 'scene' ? ` · <span class="tag ${S.src}">${SRC[S.src].tag} 素材</span>` : S.mode === 'catalog' ? ' · <span class="tag claude">Claude</span>' : '';
   $('#title').innerHTML = (S.mode === 'all' ? '全部素材 <small>所有区域的图鉴</small>' : S.mode === 'allcmp' ? '全部对比 <small>所有区域 · 每种素材两行</small>' : `${b.name} <small>${b.sub}</small>`) + who;
   $('#time').value = S.time;
 }
@@ -886,7 +889,7 @@ function setupUI() {
     if (e.target.tagName === 'INPUT') return;
     const n = e.key === '0' ? 10 : +e.key; if (n >= 1 && n <= BIOMES.length) { S.biome = n - 1; if (S.mode === 'all') S.mode = 'catalog'; else if (S.mode === 'allcmp') S.mode = 'compare'; save(); rebuild(true); }
     if (e.key === 'c' || e.key === 'C') { S.mode = S.mode === 'scene' ? 'catalog' : 'scene'; save(); rebuild(true); }
-    if (e.key === 'x' || e.key === 'X') { S.mode = { scene: 'scene', catalog: 'codex', codex: 'compare', compare: 'catalog', all: 'codex', allcmp: 'catalog' }[S.mode]; if (S.mode === 'scene') S.src = S.src === 'codex' ? 'claude' : 'codex'; save(); rebuild(S.mode !== 'scene'); }
+    if (e.key === 'x' || e.key === 'X') { S.mode = { scene: 'scene', catalog: 'codex', codex: 'compare', compare: 'catalog', all: 'codex', allcmp: 'catalog', ref: 'refcmp', refcmp: 'ref' }[S.mode]; if (S.mode === 'scene') S.src = S.src === 'codex' ? 'claude' : 'codex'; save(); rebuild(S.mode !== 'scene'); }
     if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
     if (e.key === 'r' || e.key === 'R') { S.seed++; save(); rebuild(false); }
     if (e.key === 'o' || e.key === 'O') { S.outline = !S.outline; save(); applyToggles(); ui(); }

@@ -36,6 +36,7 @@
   .tag { display: inline-block; font: bold 10px/1.5 "Microsoft YaHei", sans-serif; letter-spacing: .5px; border-radius: 3px; padding: 0 5px; vertical-align: 1px; font-style: normal; }
   .tag.claude { background: #e8c25a; color: #3a2a08; }
   .tag.codex { background: #46b8aa; color: #06302b; }
+  .tag.ref { background: #8cc56a; color: #16300a; }
   .lbl.var { font: 11px monospace; color: #fff; background: rgba(20, 24, 30, .6); border-radius: 8px; padding: 0 5px; margin: -8px 0 0 -8px; }
   body.clean #top, body.clean #side, body.clean #help, body.clean #labels { display: none; }
   #loading { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; background: #0d1224; z-index: 20; padding: 24px; text-align: center; }
@@ -102,12 +103,13 @@
 { "imports": {
   "three": "./vendor/three@0.160.0/build/three.module.min.js",
   "three/addons/": "./vendor/three@0.160.0/jsm/",
-  "./src/util.js": "./src/util.js?v=20261031a",
-  "./src/chibi.js": "./src/chibi.js?v=20261031a",
-  "./src/touch.js": "./src/touch.js?v=20261031a",
-  "./src/lab/kit.js": "./src/lab/kit.js?v=20261031a",
-  "./src/lab/assets.js": "./src/lab/assets.js?v=20261031a",
-  "./src/lab/biomes.js": "./src/lab/biomes.js?v=20261031a"
+  "./src/util.js": "./src/util.js?v=20261031d",
+  "./src/chibi.js": "./src/chibi.js?v=20261031d",
+  "./src/touch.js": "./src/touch.js?v=20261031d",
+  "./src/lab/kit.js": "./src/lab/kit.js?v=20261031d",
+  "./src/lab/assets.js": "./src/lab/assets.js?v=20261031d",
+  "./src/lab/biomes.js": "./src/lab/biomes.js?v=20261031d",
+  "./src/lab/ref/index.js": "./src/lab/ref/index.js?v=20261031d"
 } }
 </script>
 </head>
@@ -124,13 +126,13 @@
   <div class="panel">
     <h4>模式</h4>
     <div class="row" id="modes">
-      <button data-m="scene">场景</button><button data-m="catalog">图鉴 <span class="tag claude">Claude</span></button><button data-m="codex">图鉴 <span class="tag codex">Codex</span></button><button data-m="compare">对比 <kbd>X</kbd></button><button data-m="all">全部素材</button><button data-m="allcmp">全部对比</button>
+      <button data-m="scene">场景</button><button data-m="catalog">图鉴 <span class="tag claude">Claude</span></button><button data-m="codex">图鉴 <span class="tag codex">Codex</span></button><button data-m="compare">对比 <kbd>X</kbd></button><button data-m="ref">图鉴 <span class="tag ref">参考画风</span></button><button data-m="refcmp">对比 原版 vs <span class="tag ref">参考画风</span></button><button data-m="all">全部素材</button><button data-m="allcmp">全部对比</button>
     </div>
   </div>
   <div class="panel">
     <h4>场景用的素材</h4>
     <div class="row">
-      <button data-src="claude"><span class="tag claude">Claude</span> 版</button><button data-src="codex"><span class="tag codex">Codex</span> 版</button>
+      <button data-src="claude"><span class="tag claude">Claude</span> 版</button><button data-src="codex"><span class="tag codex">Codex</span> 版</button><button data-src="ref"><span class="tag ref">参考画风</span> 版</button>
     </div>
   </div>
   <div class="panel">
@@ -168,6 +170,6 @@
 <button id="gear">⚙ 设置</button>
 
 <!-- 改了实验场代码就改 v，避免浏览器拿旧缓存（上面 importmap 里的版本号一起改） -->
-<script type="module" src="src/lab/lab.js?v=20261031a"></script>
+<script type="module" src="src/lab/lab.js?v=20261031d"></script>
 </body>
 </html>
