@@ -103,7 +103,7 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {}, bloomT: {},
+  outline: false, ink: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
@@ -841,7 +841,7 @@ function updateLights(time) {
 // ---------- 开关 ----------
 function applyToggles() {
   document.body.classList.toggle('noWalk', S.mode !== 'scene' || !S.chibi);
-  root.traverse((o) => { if (o.userData.isLine) o.visible = S.outline || !!o.userData.ink; }); // 参考画风的墨线一直显示
+  root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认开）
   sun.castShadow = S.shadows;
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
@@ -853,11 +853,13 @@ function applyToggles() {
 // ======================================================================
 // UI
 // ======================================================================
+// 「描边」按钮：看参考画风素材时管它的墨线（默认开），否则管原版描边（默认关）
+const lineKey = () => (S.mode === 'ref' || S.mode === 'refcmp' || (S.mode === 'scene' && S.src === 'ref') ? 'ink' : 'outline');
 function ui() {
   document.querySelectorAll('#biomes button').forEach((b, i) => b.classList.toggle('on', i === S.biome));
   document.querySelectorAll('#modes button').forEach((b) => b.classList.toggle('on', b.dataset.m === S.mode));
   document.querySelectorAll('[data-src]').forEach((b) => b.classList.toggle('on', b.dataset.src === S.src));
-  document.querySelectorAll('[data-t]').forEach((b) => b.classList.toggle('on', !!S[b.dataset.t]));
+  document.querySelectorAll('[data-t]').forEach((b) => b.classList.toggle('on', !!S[b.dataset.t === 'outline' ? lineKey() : b.dataset.t]));
   const b = BIOMES[S.biome];
   const who = S.mode === 'codex' ? ' · <span class="tag codex">Codex</span>' : S.mode === 'ref' ? ' · <span class="tag ref">参考画风</span>' : S.mode === 'refcmp' ? ' · <span class="tag claude">Claude</span> vs <span class="tag ref">参考画风</span>' : S.mode === 'compare' || S.mode === 'allcmp' ? ' · <span class="tag claude">Claude</span> vs <span class="tag codex">Codex</span>' : S.mode === 'scene' ? ` · <span class="tag ${S.src}">${SRC[S.src].tag} 素材</span>` : S.mode === 'catalog' ? ' · <span class="tag claude">Claude</span>' : '';
   $('#title').innerHTML = (S.mode === 'all' ? '全部素材 <small>所有区域的图鉴</small>' : S.mode === 'allcmp' ? '全部对比 <small>所有区域 · 每种素材两行</small>' : `${b.name} <small>${b.sub}</small>`) + who;
@@ -872,7 +874,7 @@ function setupUI() {
   });
   document.querySelectorAll('#modes button').forEach((el) => el.onclick = () => { S.mode = el.dataset.m; save(); rebuild(true); });
   document.querySelectorAll('[data-src]').forEach((el) => el.onclick = () => { S.src = el.dataset.src; save(); rebuild(false); });
-  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { S[el.dataset.t] = !S[el.dataset.t]; save(); applyToggles(); ui(); });
+  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { const k = el.dataset.t === 'outline' ? lineKey() : el.dataset.t; S[k] = !S[k]; save(); applyToggles(); ui(); });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
   $('#bloomS').oninput = (e) => { S.bloomK[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
@@ -892,7 +894,7 @@ function setupUI() {
     if (e.key === 'x' || e.key === 'X') { S.mode = { scene: 'scene', catalog: 'codex', codex: 'compare', compare: 'catalog', all: 'codex', allcmp: 'catalog', ref: 'refcmp', refcmp: 'ref' }[S.mode]; if (S.mode === 'scene') S.src = S.src === 'codex' ? 'claude' : 'codex'; save(); rebuild(S.mode !== 'scene'); }
     if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
     if (e.key === 'r' || e.key === 'R') { S.seed++; save(); rebuild(false); }
-    if (e.key === 'o' || e.key === 'O') { S.outline = !S.outline; save(); applyToggles(); ui(); }
+    if (e.key === 'o' || e.key === 'O') { const k = lineKey(); S[k] = !S[k]; save(); applyToggles(); ui(); }
   });
 }
 
