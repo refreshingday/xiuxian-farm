@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { SECTORS, RINGS } from './worldmap.js';
 import { KIND, SECTOR_COLOR } from './landmarks.js';
 import { screenOf } from './hpbar.js';
+import { WALL_R, GATES } from './world.js';
 
 const RANGES = [30, 60, 120, 240];
 const $ = (id) => document.getElementById(id);
@@ -75,8 +76,9 @@ export class Minimap {
     c.strokeStyle = 'rgba(255, 231, 168, .28)'; c.setLineDash([6 / k, 6 / k]);
     for (const r of RINGS.slice(0, 4)) { c.beginPath(); c.arc(0, 0, r.to, 0, Math.PI * 2); c.stroke(); }
     c.setLineDash([]);
-    c.fillStyle = 'rgba(255, 231, 168, .22)'; c.beginPath(); c.arc(0, 0, 34, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = 'rgba(255, 231, 168, .6)'; c.beginPath(); c.arc(0, 0, 34, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = 'rgba(255, 231, 168, .18)'; c.beginPath(); c.arc(0, 0, WALL_R, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = 'rgba(255, 244, 210, .9)'; c.lineWidth = 2.5 / k; c.beginPath(); c.arc(0, 0, WALL_R, 0, Math.PI * 2); c.stroke(); // 村墙
+    for (const gt of GATES) { c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(gt.x, gt.z, 3.5 / k, 0, Math.PI * 2); c.fill(); }
     c.restore();
 
     // 图标层：屏幕坐标，字不转

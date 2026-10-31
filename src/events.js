@@ -2,7 +2,7 @@
 // 血月：满月夜按概率出现，18:30 升起，妖兽更强（+50%）、掉落翻倍。
 // 妖虫夜袭：大约每 20–30 天一次，21:00 起妖虫分三波冲向灵田啃庄稼——家门口的轻度塔防。背包里有护田阵旗就能挡住。
 import { dateOf } from './calendar.js';
-import { FARM } from './world.js';
+import { FARM, GATES } from './world.js';
 
 export class Events {
   constructor(g) {
@@ -46,7 +46,7 @@ export class Events {
   // 守住全村感激，没守住会有村民重伤卧床几天 ----------
   startTide(kind) {
     const inv = kind === 'invade';
-    this.tide = { kind, waves: 3, next: 0, reached: 0, ang: inv ? Math.PI : 0.7, mobs: inv ? ['demoncult'] : ['wolf', 'boar', 'python', 'wolf'], end: inv ? 25.5 : 20 };
+    this.tide = { kind, waves: 3, next: 0, reached: 0, ang: GATES.find((g) => g.id === (inv ? 's' : 'ne')).a, mobs: inv ? ['demoncult'] : ['wolf', 'boar', 'python', 'wolf'], end: inv ? 25.5 : 20 };
     this.g.toast(inv ? '魔道入侵！\n血魔宫的魔修夜袭青竹村——村民都躲进屋里了' : '兽潮来了！\n妖兽从东北冲向青竹村——村民都躲进屋里了', 4); this.g.shake(0.5);
   }
   updateTide(dt) {
@@ -55,7 +55,7 @@ export class Events {
     if (T.next <= 0 && T.waves > 0) {
       const n = (T.kind === 'invade' ? 3 : 5) + (3 - T.waves) * (T.kind === 'invade' ? 2 : 3), lvl = 1 + Math.floor(g.player.layer / 2);
       for (let i = 0; i < n; i++) {
-        const a = T.ang + (Math.random() - 0.5) * 0.5, r = 46 + Math.random() * 6;
+        const a = T.ang + (Math.random() - 0.5) * 0.12, r = 46 + Math.random() * 6; // 对着村门冲
         const e = g.enemies.spawn(T.mobs[i % T.mobs.length], Math.sin(a) * r, -Math.cos(a) * r, lvl);
         e.raid = { x: 0, z: 0 }; e.tide = true; e.state = 'chase';
       }

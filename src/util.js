@@ -67,6 +67,25 @@ function gradient() {
   return grad;
 }
 
+// 参考画风的着色（lab/ref）：三阶硬色阶 + 阴影偏冷、受光偏暖。toon(color, { ref: true }) 打开；村子里的东西用它
+let grad3;
+function gradient3() {
+  if (grad3) return grad3;
+  grad3 = new THREE.DataTexture(new Uint8Array([95, 175, 255]), 3, 1, THREE.RedFormat);
+  grad3.minFilter = grad3.magFilter = THREE.NearestFilter;
+  grad3.generateMipmaps = false;
+  grad3.needsUpdate = true;
+  return grad3;
+}
+function refPatch(s) {
+  s.fragmentShader = s.fragmentShader.replace('#include <opaque_fragment>', `
+    {
+      float rl = dot(outgoingLight, vec3(0.3, 0.59, 0.11)) / max(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)), 0.001);
+      outgoingLight *= mix(vec3(0.84, 0.9, 1.12), vec3(1.02, 1.0, 0.97), smoothstep(0.5, 0.95, rl));
+    }
+    #include <opaque_fragment>`);
+}
+
 // 镜头与玩家之间的物体做抖动镂空（看得到被树/墙挡住的角色）
 export const occ = { uPlayer: { value: new THREE.Vector3() }, uCam: { value: new THREE.Vector3() } };
 function occPatch(s) {
@@ -191,9 +210,9 @@ function occlude(mat, pre) {
 
 const cache = new Map();
 export function toon(color, o = {}) {
-  const key = `${color}|${o.emissive || ''}|${o.ei || 0}|${o.occ ? 1 : 0}|${o.vc ? 1 : 0}|${o.map ? o.map.uuid : ''}|${o.leaf ? 1 : 0}|${o.grass ? 1 : 0}|${o.leafTex ? o.leafTex.uuid : ''}|${o.card ? 1 : 0}`;
+  const key = `${color}|${o.emissive || ''}|${o.ei || 0}|${o.occ ? 1 : 0}|${o.vc ? 1 : 0}|${o.map ? o.map.uuid : ''}|${o.leaf ? 1 : 0}|${o.grass ? 1 : 0}|${o.leafTex ? o.leafTex.uuid : ''}|${o.card ? 1 : 0}|${o.ref ? 1 : 0}`;
   if (!o.unique && cache.has(key)) return cache.get(key);
-  const m = new THREE.MeshToonMaterial({ color, gradientMap: gradient(), vertexColors: !!o.vc, map: o.map || null });
+  const m = new THREE.MeshToonMaterial({ color, gradientMap: o.ref ? gradient3() : gradient(), vertexColors: !!o.vc, map: o.map || null });
   if (o.emissive) { m.emissive.set(o.emissive); m.emissiveIntensity = o.ei ?? 1; }
   if (o.leafTex) m.userData.leafTex = o.leafTex;
   const patches = [];
@@ -201,7 +220,8 @@ export function toon(color, o = {}) {
   if (o.grass) patches.push(grassPatch);
   if (o.card) patches.push(cardPatch);
   if (o.occ) patches.push(occPatch);
-  if (patches.length) applyPatches(m, patches, `toon${o.leaf ? 'L' : ''}${o.grass ? 'G' : ''}${o.card ? 'C' : ''}${o.occ ? 'O' : ''}`);
+  if (o.ref) patches.push(refPatch);
+  if (patches.length) applyPatches(m, patches, `toon${o.leaf ? 'L' : ''}${o.grass ? 'G' : ''}${o.card ? 'C' : ''}${o.occ ? 'O' : ''}${o.ref ? 'R' : ''}`);
   m.userData.baseE = m.emissive.clone();
   m.userData.baseEI = m.emissiveIntensity;
   if (!o.unique) cache.set(key, m);

@@ -460,7 +460,7 @@ export class Enemies {
       e.pos.x += (mx * spd + e.kx) * dt;
       e.pos.z += (mz * spd + e.kz) * dt;
       const kd = Math.exp(-(air ? (e.pos.y > 1 ? 0.8 : 3) : 9) * dt); e.kx *= kd; e.kz *= kd;
-      g.world.resolve(e.pos, e.r);
+      g.world.resolve(e.pos, e.r, !!e.tide);
       if (!e.boss) for (const o of this.list) {
         if (o === e) continue;
         const ox = e.pos.x - o.pos.x, oz = e.pos.z - o.pos.z, rr = e.r + o.r, d2 = ox * ox + oz * oz;

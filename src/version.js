@@ -1,5 +1,5 @@
 // 版本号：每次提交都要改这一行（格式 年.月.日.当天第几次），右下角小字显示，用来确认线上页面是不是最新。
-export const VERSION = '2026.10.31.4';
+export const VERSION = '2026.10.31.5';
 
 const d = document.createElement('div');
 d.id = 'ver'; d.textContent = 'v' + VERSION;
