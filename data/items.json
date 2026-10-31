@@ -1,0 +1,1298 @@
+{
+ "_note": "物品数据（GDD 第 12 节：数据驱动，HTML 与引擎版共用）。价格单位：文（金钱）。crops 里的每种作物自动生成一种种子 seed_<id>。灵草熟了可以继续留在地里长药龄，收获时 ≥10 年记为「十年」、≥100 年记为「百年」（物品 id 后缀 @10 / @100，售价 ×2 / ×5）。",
+ "crops": {
+  "radish": {
+   "name": "胡萝卜",
+   "icon": "🥕",
+   "kind": "crop",
+   "days": 3,
+   "seasons": [
+    0
+   ],
+   "seed": 15,
+   "sell": 35,
+   "heal": 8
+  },
+  "cabbage": {
+   "name": "白菜",
+   "icon": "🥬",
+   "kind": "crop",
+   "days": 4,
+   "seasons": [
+    0,
+    2
+   ],
+   "seed": 20,
+   "sell": 50,
+   "heal": 10
+  },
+  "potato": {
+   "name": "土豆",
+   "icon": "🥔",
+   "kind": "crop",
+   "days": 6,
+   "seasons": [
+    0
+   ],
+   "seed": 30,
+   "sell": 80,
+   "heal": 15
+  },
+  "strawberry": {
+   "name": "草莓",
+   "icon": "🍓",
+   "kind": "crop",
+   "days": 8,
+   "seasons": [
+    0
+   ],
+   "seed": 60,
+   "sell": 160,
+   "heal": 12,
+   "regrow": 3
+  },
+  "corn": {
+   "name": "玉米",
+   "icon": "🌽",
+   "kind": "crop",
+   "days": 8,
+   "seasons": [
+    1,
+    2
+   ],
+   "seed": 50,
+   "sell": 120,
+   "heal": 15,
+   "regrow": 4
+  },
+  "pepper": {
+   "name": "辣椒",
+   "icon": "🌶️",
+   "kind": "crop",
+   "days": 5,
+   "seasons": [
+    1
+   ],
+   "seed": 35,
+   "sell": 70,
+   "heal": 6
+  },
+  "eggplant": {
+   "name": "茄子",
+   "icon": "🍆",
+   "kind": "crop",
+   "days": 5,
+   "seasons": [
+    1,
+    2
+   ],
+   "seed": 30,
+   "sell": 65,
+   "heal": 10
+  },
+  "melon": {
+   "name": "西瓜",
+   "icon": "🍉",
+   "kind": "crop",
+   "days": 10,
+   "seasons": [
+    1
+   ],
+   "seed": 90,
+   "sell": 300,
+   "heal": 30
+  },
+  "rice": {
+   "name": "稻谷",
+   "icon": "🌾",
+   "kind": "crop",
+   "days": 7,
+   "seasons": [
+    1,
+    2
+   ],
+   "seed": 40,
+   "sell": 100,
+   "heal": 12
+  },
+  "pumpkin": {
+   "name": "南瓜",
+   "icon": "🎃",
+   "kind": "crop",
+   "days": 10,
+   "seasons": [
+    2
+   ],
+   "seed": 100,
+   "sell": 320,
+   "heal": 30
+  },
+  "yam": {
+   "name": "红薯",
+   "icon": "🍠",
+   "kind": "crop",
+   "days": 6,
+   "seasons": [
+    2
+   ],
+   "seed": 35,
+   "sell": 90,
+   "heal": 18
+  },
+  "grape": {
+   "name": "葡萄",
+   "icon": "🍇",
+   "kind": "crop",
+   "days": 9,
+   "seasons": [
+    2
+   ],
+   "seed": 80,
+   "sell": 200,
+   "heal": 14,
+   "regrow": 3
+  },
+  "lingcao": {
+   "name": "灵草",
+   "icon": "🌿",
+   "kind": "herb",
+   "days": 3,
+   "seasons": [
+    0,
+    1,
+    2
+   ],
+   "seed": 40,
+   "sell": 60,
+   "qi": 1,
+   "heal": 30,
+   "qiHeal": 30,
+   "elem": "木"
+  },
+  "ninglu": {
+   "name": "凝露草",
+   "icon": "🍃",
+   "kind": "herb",
+   "days": 4,
+   "seasons": [
+    0,
+    1
+   ],
+   "seed": 70,
+   "sell": 110,
+   "qi": 1,
+   "qiHeal": 50,
+   "elem": "水"
+  },
+  "chiyang": {
+   "name": "赤阳花",
+   "icon": "🌺",
+   "kind": "herb",
+   "days": 5,
+   "seasons": [
+    1
+   ],
+   "seed": 120,
+   "sell": 200,
+   "qi": 2,
+   "elem": "火"
+  },
+  "yuehua": {
+   "name": "月华草",
+   "icon": "🌼",
+   "kind": "herb",
+   "days": 5,
+   "seasons": [
+    2
+   ],
+   "seed": 120,
+   "sell": 200,
+   "qi": 2,
+   "elem": "金"
+  },
+  "renshen": {
+   "name": "人参",
+   "icon": "🌱",
+   "kind": "herb",
+   "days": 7,
+   "seasons": [
+    0,
+    1,
+    2
+   ],
+   "seed": 200,
+   "sell": 320,
+   "qi": 2,
+   "heal": 60,
+   "elem": "土"
+  },
+  "xuanbing": {
+   "name": "玄冰莲",
+   "icon": "❄️",
+   "kind": "herb",
+   "days": 6,
+   "seasons": [
+    3
+   ],
+   "seed": 260,
+   "sell": 420,
+   "qi": 3,
+   "elem": "水"
+  }
+ },
+ "items": {
+  "can": {
+   "name": "水壶",
+   "icon": "🪣",
+   "cat": "tool",
+   "sell": 0,
+   "desc": "浇水用，能装 20 壶水。在井边或池塘边按 F 打水。选中水壶时，熟了的灵草也会浇水（留着长药龄）。"
+  },
+  "yaodan": {
+   "name": "妖丹",
+   "icon": "🔮",
+   "cat": "mat",
+   "sell": 80,
+   "soilQi": 6,
+   "desc": "妖兽体内凝结的丹核。炼丹主料，也能化开补充灵田灵气。"
+  },
+  "shard": {
+   "name": "灵石碎片",
+   "icon": "💠",
+   "cat": "mat",
+   "sell": 40,
+   "soilQi": 3,
+   "desc": "碎掉的灵石。埋进灵田能补一点灵气。"
+  },
+  "spring": {
+   "name": "灵泉水",
+   "icon": "💧",
+   "cat": "mat",
+   "sell": 30,
+   "soilQi": 2,
+   "desc": "带灵气的泉水，浇进灵田补灵气。"
+  },
+  "lingtu": {
+   "name": "灵土",
+   "icon": "🟫",
+   "cat": "mat",
+   "sell": 50,
+   "soilQi": 4,
+   "desc": "灵脉附近的土。翻进灵田补灵气。"
+  },
+  "iron": {
+   "name": "铁矿",
+   "icon": "🪨",
+   "cat": "mat",
+   "sell": 25,
+   "desc": "炼气圈的主矿。铁匠收，炼器用。"
+  },
+  "hide": {
+   "name": "野猪皮",
+   "icon": "🟤",
+   "cat": "mat",
+   "sell": 30,
+   "desc": "野猪妖的厚皮。"
+  },
+  "tusk": {
+   "name": "獠牙",
+   "icon": "🦷",
+   "cat": "mat",
+   "sell": 45,
+   "desc": "野猪妖的獠牙，铁匠喜欢拿来做刀柄。"
+  },
+  "silk": {
+   "name": "蛛丝",
+   "icon": "🕸️",
+   "cat": "mat",
+   "sell": 35,
+   "desc": "毒蛛吐的丝，坚韧，能做符纸。"
+  },
+  "venom": {
+   "name": "毒囊",
+   "icon": "🟢",
+   "cat": "mat",
+   "sell": 60,
+   "desc": "毒蛛的毒囊，药师用来以毒攻毒。"
+  },
+  "core_stone": {
+   "name": "傀儡核",
+   "icon": "🟠",
+   "cat": "mat",
+   "sell": 90,
+   "desc": "石傀胸口的发光核心。"
+  },
+  "heart": {
+   "name": "赤岩之心",
+   "icon": "❤️‍🔥",
+   "cat": "boss",
+   "sell": 1500,
+   "desc": "赤岩妖王的心核。妖王材料：可炼破境丹。"
+  },
+  "wolf_fang": {
+   "name": "狼王牙",
+   "icon": "🐺",
+   "cat": "boss",
+   "sell": 1500,
+   "desc": "赤枫狼王的獠牙。妖王材料：可炼破境丹。"
+  },
+  "talisman_paper": {
+   "name": "符纸",
+   "icon": "📜",
+   "cat": "mat",
+   "sell": 20,
+   "desc": "画符用的黄纸。"
+  },
+  "tea": {
+   "name": "灵茶",
+   "icon": "🍵",
+   "cat": "food",
+   "sell": 40,
+   "heal": 20,
+   "qiHeal": 20,
+   "desc": "村口茶摊的灵茶，回一点气血和灵力。"
+  },
+  "bun": {
+   "name": "肉包子",
+   "icon": "🥟",
+   "cat": "food",
+   "sell": 15,
+   "heal": 25,
+   "desc": "热乎乎的肉包子。"
+  },
+  "wine": {
+   "name": "桃花酿",
+   "icon": "🍶",
+   "cat": "food",
+   "sell": 90,
+   "heal": 15,
+   "desc": "村里自酿的桃花酒。"
+  },
+  "pill_heal": {
+   "name": "回春丹",
+   "icon": "💊",
+   "cat": "pill",
+   "sell": 120,
+   "heal": 80,
+   "desc": "回复 80 气血。"
+  },
+  "pill_qi": {
+   "name": "聚气丹",
+   "icon": "🔵",
+   "cat": "pill",
+   "sell": 120,
+   "qiHeal": 100,
+   "desc": "灵力回满。"
+  },
+  "pill_xp": {
+   "name": "培元丹",
+   "icon": "🟡",
+   "cat": "pill",
+   "sell": 200,
+   "xp": 90,
+   "desc": "服下增长修为。同种丹药吃多了效果递减（丹毒）。"
+  },
+  "pill_break": {
+   "name": "破境丹·筑基",
+   "icon": "🟣",
+   "cat": "pill",
+   "sell": 3000,
+   "desc": "用炼气圈妖王材料炼成。炼气圆满后服下，渡过天劫即可筑基。"
+  },
+  "pill_avert": {
+   "name": "避劫丹",
+   "icon": "⚪",
+   "cat": "pill",
+   "sell": 600,
+   "desc": "渡劫时服下，天劫伤害大幅降低。"
+  },
+  "b_frosthorn": {
+   "name": "霜角",
+   "icon": "🦌",
+   "cat": "boss",
+   "sell": 2000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_viper": {
+   "name": "竹叶青胆",
+   "icon": "🐍",
+   "cat": "boss",
+   "sell": 2000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_spiderqueen": {
+   "name": "蛛后毒心",
+   "icon": "🕷️",
+   "cat": "boss",
+   "sell": 2000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_flamehorn": {
+   "name": "炎兽王角",
+   "icon": "🔥",
+   "cat": "boss",
+   "sell": 2000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_bronze": {
+   "name": "铜甲核",
+   "icon": "⚙️",
+   "cat": "boss",
+   "sell": 2000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_ghostseal": {
+   "name": "游魂将印",
+   "icon": "👻",
+   "cat": "boss",
+   "sell": 2000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_snowwolf": {
+   "name": "雪狼王牙",
+   "icon": "🐺",
+   "cat": "boss",
+   "sell": 4000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_python": {
+   "name": "青鳞",
+   "icon": "🐉",
+   "cat": "boss",
+   "sell": 4000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_jiao": {
+   "name": "蛟珠",
+   "icon": "🔵",
+   "cat": "boss",
+   "sell": 4000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_crow": {
+   "name": "火鸦王羽",
+   "icon": "🪶",
+   "cat": "boss",
+   "sell": 4000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_scorpion": {
+   "name": "蝎王尾针",
+   "icon": "🦂",
+   "cat": "boss",
+   "sell": 4000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_zombie": {
+   "name": "尸王骨",
+   "icon": "🦴",
+   "cat": "boss",
+   "sell": 4000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_snowdemon": {
+   "name": "雪魄",
+   "icon": "❄️",
+   "cat": "boss",
+   "sell": 8000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_fox": {
+   "name": "狐尾",
+   "icon": "🦊",
+   "cat": "boss",
+   "sell": 8000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_jiaomu": {
+   "name": "蛟母鳞",
+   "icon": "🐲",
+   "cat": "boss",
+   "sell": 8000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_qilin": {
+   "name": "麒麟角",
+   "icon": "🦄",
+   "cat": "boss",
+   "sell": 8000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_swordpuppet": {
+   "name": "剑傀核",
+   "icon": "🗡️",
+   "cat": "boss",
+   "sell": 8000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_ghostking": {
+   "name": "鬼王令",
+   "icon": "💀",
+   "cat": "boss",
+   "sell": 8000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "b_roc": {
+   "name": "雷鹏翎",
+   "icon": "⚡",
+   "cat": "boss",
+   "sell": 20000,
+   "desc": "妖王材料：可以炼制破境丹。"
+  },
+  "pill_break2": {
+   "name": "破境丹·金丹",
+   "icon": "🟣",
+   "cat": "pill",
+   "sell": 6000,
+   "desc": "用筑基圈妖王材料炼成。筑基圆满后服下，渡过天劫即可突破。"
+  },
+  "pill_break3": {
+   "name": "破境丹·元婴",
+   "icon": "🟣",
+   "cat": "pill",
+   "sell": 12000,
+   "desc": "用金丹圈妖王材料炼成。金丹圆满后服下，渡过天劫即可突破。"
+  },
+  "pill_break4": {
+   "name": "破境丹·化神",
+   "icon": "🟣",
+   "cat": "pill",
+   "sell": 24000,
+   "desc": "用元婴圈妖王材料炼成。元婴圆满后服下，渡过天劫即可突破。"
+  },
+  "pill_break5": {
+   "name": "破境丹·渡劫",
+   "icon": "🟣",
+   "cat": "pill",
+   "sell": 50000,
+   "desc": "用化神圈妖王材料炼成。化神圆满后服下，渡过天劫即可突破。"
+  },
+  "zhenqi": {
+   "name": "护田阵旗",
+   "icon": "🚩",
+   "cat": "tool",
+   "sell": 300,
+   "desc": "插在灵田边，妖虫夜袭时护住庄稼（GDD：布下护田阵可以防住）。放进背包就生效。"
+  },
+  "root_金": {
+   "name": "金灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条金灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_金_1": {
+   "name": "一品·庚金之精",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把金灵根提升到良品。"
+  },
+  "tc_金_2": {
+   "name": "二品·庚金之精",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把金灵根提升到上品。"
+  },
+  "tc_金_3": {
+   "name": "三品·庚金之精",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把金灵根提升到极品。"
+  },
+  "root_木": {
+   "name": "木灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条木灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_木_1": {
+   "name": "一品·青木之心",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把木灵根提升到良品。"
+  },
+  "tc_木_2": {
+   "name": "二品·青木之心",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把木灵根提升到上品。"
+  },
+  "tc_木_3": {
+   "name": "三品·青木之心",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把木灵根提升到极品。"
+  },
+  "root_水": {
+   "name": "水灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条水灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_水_1": {
+   "name": "一品·玄水之魄",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把水灵根提升到良品。"
+  },
+  "tc_水_2": {
+   "name": "二品·玄水之魄",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把水灵根提升到上品。"
+  },
+  "tc_水_3": {
+   "name": "三品·玄水之魄",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把水灵根提升到极品。"
+  },
+  "root_火": {
+   "name": "火灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条火灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_火_1": {
+   "name": "一品·赤焰之核",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把火灵根提升到良品。"
+  },
+  "tc_火_2": {
+   "name": "二品·赤焰之核",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把火灵根提升到上品。"
+  },
+  "tc_火_3": {
+   "name": "三品·赤焰之核",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把火灵根提升到极品。"
+  },
+  "root_土": {
+   "name": "土灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条土灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_土_1": {
+   "name": "一品·戊土之元",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把土灵根提升到良品。"
+  },
+  "tc_土_2": {
+   "name": "二品·戊土之元",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把土灵根提升到上品。"
+  },
+  "tc_土_3": {
+   "name": "三品·戊土之元",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把土灵根提升到极品。"
+  },
+  "root_雷": {
+   "name": "雷灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条雷灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_雷_1": {
+   "name": "一品·紫雷晶",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把雷灵根提升到良品。"
+  },
+  "tc_雷_2": {
+   "name": "二品·紫雷晶",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把雷灵根提升到上品。"
+  },
+  "tc_雷_3": {
+   "name": "三品·紫雷晶",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把雷灵根提升到极品。"
+  },
+  "root_冰": {
+   "name": "冰灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条冰灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_冰_1": {
+   "name": "一品·万年玄冰",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把冰灵根提升到良品。"
+  },
+  "tc_冰_2": {
+   "name": "二品·万年玄冰",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把冰灵根提升到上品。"
+  },
+  "tc_冰_3": {
+   "name": "三品·万年玄冰",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把冰灵根提升到极品。"
+  },
+  "root_风": {
+   "name": "风灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条风灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_风_1": {
+   "name": "一品·罡风之羽",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把风灵根提升到良品。"
+  },
+  "tc_风_2": {
+   "name": "二品·罡风之羽",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把风灵根提升到上品。"
+  },
+  "tc_风_3": {
+   "name": "三品·罡风之羽",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把风灵根提升到极品。"
+  },
+  "root_暗": {
+   "name": "暗灵根机缘",
+   "icon": "🌟",
+   "cat": "rare",
+   "sell": 3000,
+   "desc": "服下后长出一条暗灵根（凡品）。异灵根要先有两条前置五行灵根才会激活。"
+  },
+  "tc_暗_1": {
+   "name": "一品·幽冥石",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 1500,
+   "desc": "筑基圈的天材地宝。配一颗淬灵丹，能把暗灵根提升到良品。"
+  },
+  "tc_暗_2": {
+   "name": "二品·幽冥石",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 4000,
+   "desc": "金丹圈的天材地宝。配一颗淬灵丹，能把暗灵根提升到上品。"
+  },
+  "tc_暗_3": {
+   "name": "三品·幽冥石",
+   "icon": "💎",
+   "cat": "rare",
+   "sell": 9000,
+   "desc": "元婴圈的天材地宝。配一颗淬灵丹，能把暗灵根提升到极品。"
+  },
+  "pill_root": {
+   "name": "淬灵丹",
+   "icon": "🔶",
+   "cat": "pill",
+   "sell": 2500,
+   "desc": "用高药龄灵草炼成，配合天材地宝提升灵根品级。"
+  },
+  "pill_purify": {
+   "name": "洗心丹",
+   "icon": "🤍",
+   "cat": "pill",
+   "sell": 2000,
+   "desc": "洗去心中戾气：业力 −50。入魔后想回头，非它不可。"
+  },
+  "lamp_oil": {
+   "name": "灯油",
+   "icon": "🛢️",
+   "cat": "mat",
+   "sell": 10,
+   "desc": "玄晶矿洞里点灯用。灯灭了，暗处的妖兽更凶。"
+  },
+  "meteor_iron": {
+   "name": "天外陨铁碎片",
+   "icon": "☄️",
+   "cat": "mat",
+   "sell": 600,
+   "desc": "流星雨夜从天火陨坑落下来的陨铁。炼器上好的料子。"
+  },
+  "tongxin": {
+   "name": "同心结",
+   "icon": "💞",
+   "cat": "rare",
+   "sell": 0,
+   "buy": 3000,
+   "desc": "红绳编的同心结。送给好感 8 颗心以上的人，就是求结道侣（筑基之后）。"
+  },
+  "chick": {
+   "name": "灵鸡苗",
+   "icon": "🐣",
+   "cat": "tool",
+   "sell": 0,
+   "buy": 400,
+   "desc": "带回家放进灵兽圈（灵田西边），每天喂一样庄稼，第二天下灵蛋。最多 4 只。"
+  },
+  "calf": {
+   "name": "灵牛犊",
+   "icon": "🐮",
+   "cat": "tool",
+   "sell": 0,
+   "buy": 1600,
+   "desc": "带回家放进灵兽圈，每天喂一样庄稼，第二天出灵乳。最多 2 头。"
+  },
+  "egg": {
+   "name": "灵蛋",
+   "icon": "🥚",
+   "cat": "food",
+   "sell": 80,
+   "heal": 25,
+   "desc": "灵鸡下的蛋，补气血。"
+  },
+  "milk": {
+   "name": "灵乳",
+   "icon": "🥛",
+   "cat": "food",
+   "sell": 160,
+   "qiHeal": 40,
+   "heal": 15,
+   "desc": "灵牛的乳，补灵力。"
+  },
+  "fu_fire": {
+   "name": "爆炎符",
+   "icon": "🧧",
+   "cat": "pill",
+   "sell": 120,
+   "desc": "制符台画的攻击符。用了就往前方甩出去，炸开一片火。"
+  },
+  "fu_ice": {
+   "name": "寒冰符",
+   "icon": "🧊",
+   "cat": "pill",
+   "sell": 120,
+   "desc": "制符台画的控制符。用了周围的妖兽冻住 3 秒。"
+  },
+  "fu_tp": {
+   "name": "传送符",
+   "icon": "📯",
+   "cat": "pill",
+   "sell": 200,
+   "desc": "捏碎就回到自家门口。"
+  },
+  "zhen_ju": {
+   "name": "聚灵阵盘",
+   "icon": "🔯",
+   "cat": "tool",
+   "sell": 0,
+   "desc": "阵法台布的阵：放在背包里，灵田每天自生 1 点灵气、药龄长得快一倍。"
+  },
+  "zhen_yu": {
+   "name": "灵雨阵盘",
+   "icon": "☔",
+   "cat": "tool",
+   "sell": 0,
+   "desc": "阵法台布的阵：放在背包里，每天早上自动浇遍灵田。"
+  },
+  "zhen_jie": {
+   "name": "渡劫阵旗",
+   "icon": "🎏",
+   "cat": "tool",
+   "sell": 0,
+   "desc": "阵法台布的阵：放在背包里，天劫伤害 −25%。"
+  }
+ },
+ "recipes": {
+  "_note": "丹方（GDD 第 8 节）。in = 主料（多套写成数组，任选一套）；控火小游戏得分定品质：下品 1 颗、中品 2 颗、上品 2 颗（药力 ×1.3）、极品 3 颗带丹纹（药力 ×1.6）。同一丹方炼过 10 次后可以一键炼制，固定出中品。",
+  "pill_heal": {
+   "in": {
+    "lingcao": 2,
+    "yaodan": 1
+   },
+   "speed": 1
+  },
+  "pill_qi": {
+   "in": {
+    "ninglu": 2,
+    "yaodan": 1
+   },
+   "speed": 1.1
+  },
+  "pill_xp": {
+   "in": [
+    {
+     "renshen@100": 1,
+     "yaodan": 2,
+     "lingcao": 2
+    },
+    {
+     "renshen@10": 2,
+     "yaodan": 3,
+     "chiyang": 1
+    }
+   ],
+   "speed": 1.3
+  },
+  "pill_avert": {
+   "in": {
+    "chiyang": 2,
+    "yuehua": 2,
+    "yaodan": 2
+   },
+   "speed": 1.4
+  },
+  "pill_break": {
+   "in": [
+    {
+     "wolf_fang": 1,
+     "yaodan": 3,
+     "renshen": 1
+    },
+    {
+     "heart": 1,
+     "yaodan": 3,
+     "renshen": 1
+    }
+   ],
+   "speed": 1.6
+  },
+  "pill_break2": {
+   "in": [
+    {
+     "b_frosthorn": 1,
+     "yaodan": 5,
+     "renshen@10": 1
+    },
+    {
+     "b_viper": 1,
+     "yaodan": 5,
+     "renshen@10": 1
+    },
+    {
+     "b_spiderqueen": 1,
+     "yaodan": 5,
+     "renshen@10": 1
+    },
+    {
+     "b_flamehorn": 1,
+     "yaodan": 5,
+     "renshen@10": 1
+    },
+    {
+     "b_bronze": 1,
+     "yaodan": 5,
+     "renshen@10": 1
+    },
+    {
+     "b_ghostseal": 1,
+     "yaodan": 5,
+     "renshen@10": 1
+    }
+   ],
+   "speed": 1.8
+  },
+  "pill_break3": {
+   "in": [
+    {
+     "b_snowwolf": 1,
+     "yaodan": 8,
+     "chiyang": 2,
+     "renshen@10": 1
+    },
+    {
+     "b_python": 1,
+     "yaodan": 8,
+     "chiyang": 2,
+     "renshen@10": 1
+    },
+    {
+     "b_jiao": 1,
+     "yaodan": 8,
+     "chiyang": 2,
+     "renshen@10": 1
+    },
+    {
+     "b_crow": 1,
+     "yaodan": 8,
+     "chiyang": 2,
+     "renshen@10": 1
+    },
+    {
+     "b_scorpion": 1,
+     "yaodan": 8,
+     "chiyang": 2,
+     "renshen@10": 1
+    },
+    {
+     "b_zombie": 1,
+     "yaodan": 8,
+     "chiyang": 2,
+     "renshen@10": 1
+    }
+   ],
+   "speed": 2.0
+  },
+  "pill_break4": {
+   "in": [
+    {
+     "b_snowdemon": 1,
+     "yaodan": 10,
+     "xuanbing": 2,
+     "renshen@100": 1
+    },
+    {
+     "b_fox": 1,
+     "yaodan": 10,
+     "xuanbing": 2,
+     "renshen@100": 1
+    },
+    {
+     "b_jiaomu": 1,
+     "yaodan": 10,
+     "xuanbing": 2,
+     "renshen@100": 1
+    },
+    {
+     "b_qilin": 1,
+     "yaodan": 10,
+     "xuanbing": 2,
+     "renshen@100": 1
+    },
+    {
+     "b_swordpuppet": 1,
+     "yaodan": 10,
+     "xuanbing": 2,
+     "renshen@100": 1
+    },
+    {
+     "b_ghostking": 1,
+     "yaodan": 10,
+     "xuanbing": 2,
+     "renshen@100": 1
+    }
+   ],
+   "speed": 2.2
+  },
+  "pill_break5": {
+   "in": {
+    "b_roc": 1,
+    "yaodan": 12,
+    "renshen@100": 2,
+    "xuanbing": 3
+   },
+   "speed": 2.5
+  },
+  "pill_root": {
+   "in": [
+    {
+     "renshen@100": 1,
+     "yaodan": 4
+    },
+    {
+     "xuanbing@10": 2,
+     "yaodan": 4
+    },
+    {
+     "chiyang@10": 2,
+     "yuehua@10": 2,
+     "yaodan": 4
+    }
+   ],
+   "speed": 1.7
+  },
+  "pill_purify": {
+   "in": {
+    "lingcao@10": 3,
+    "ninglu@10": 2,
+    "yaodan": 3
+   },
+   "speed": 1.5
+  }
+ },
+ "shops": {
+  "merchant": {
+   "name": "钱记杂货",
+   "sells": [
+    "seed_radish",
+    "seed_cabbage",
+    "seed_potato",
+    "seed_strawberry",
+    "seed_corn",
+    "seed_pepper",
+    "seed_eggplant",
+    "seed_melon",
+    "seed_rice",
+    "seed_pumpkin",
+    "seed_yam",
+    "seed_grape",
+    "bun",
+    "talisman_paper",
+    "spring",
+    "zhenqi",
+    "lamp_oil",
+    "tongxin",
+    "chick",
+    "calf"
+   ],
+   "buys": [
+    "crop",
+    "food",
+    "mat"
+   ]
+  },
+  "doctor": {
+   "name": "苏氏药铺",
+   "sells": [
+    "seed_lingcao",
+    "seed_ninglu",
+    "seed_chiyang",
+    "seed_yuehua",
+    "seed_renshen",
+    "seed_xuanbing",
+    "pill_heal",
+    "pill_qi",
+    "lingtu"
+   ],
+   "buys": [
+    "herb",
+    "pill",
+    "mat"
+   ]
+  },
+  "smith": {
+   "name": "赵家铁铺",
+   "sells": [],
+   "buys": [
+    "mat",
+    "boss"
+   ]
+  },
+  "tea": {
+   "name": "云来茶摊",
+   "sells": [
+    "tea",
+    "wine",
+    "bun"
+   ],
+   "buys": [
+    "crop",
+    "food"
+   ]
+  },
+  "wanderer2": {
+   "name": "陆远的小摊",
+   "sells": [
+    "fu_fire",
+    "fu_ice",
+    "fu_tp",
+    "talisman_paper",
+    "lingtu",
+    "pill_avert",
+    "seed_renshen"
+   ],
+   "buys": [
+    "mat",
+    "boss",
+    "rare",
+    "herb"
+   ]
+  }
+ },
+ "crafts": {
+  "fu_fire": {
+   "station": "fu",
+   "in": {
+    "talisman_paper": 1,
+    "yaodan": 1
+   },
+   "n": 2
+  },
+  "fu_ice": {
+   "station": "fu",
+   "in": {
+    "talisman_paper": 1,
+    "shard": 2
+   },
+   "n": 2
+  },
+  "fu_tp": {
+   "station": "fu",
+   "in": {
+    "talisman_paper": 2,
+    "spring": 1
+   },
+   "n": 1
+  },
+  "zhenqi": {
+   "station": "zhen",
+   "in": {
+    "shard": 5,
+    "iron": 5
+   },
+   "n": 1
+  },
+  "zhen_ju": {
+   "station": "zhen",
+   "in": {
+    "shard": 15,
+    "yaodan": 8,
+    "lingtu": 5
+   },
+   "n": 1
+  },
+  "zhen_yu": {
+   "station": "zhen",
+   "in": {
+    "shard": 12,
+    "spring": 10,
+    "silk": 5
+   },
+   "n": 1
+  },
+  "zhen_jie": {
+   "station": "zhen",
+   "in": {
+    "shard": 20,
+    "meteor_iron": 2,
+    "core_stone": 3
+   },
+   "n": 1
+  }
+ }
+}

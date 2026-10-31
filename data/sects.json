@@ -1,0 +1,71 @@
+{
+  "_note": "宗门（GDD 第 10 节）。join = 入门要的大境界（0 炼气 1 筑基 2 金丹 3 元婴）。techs = 功法：rank 要的门内地位（0 外门 1 内门 2 真传 3 长老），cost = 贡献点。fx 效果：dmg_sword / dmg_fist / dmg_talisman / dmg_all 伤害、crit 暴击率、dashCd 闪避冷却（秒）、dashIframe 闪避无敌（秒）、skillCd 技能冷却比例、slow 命中减速、qiRegen 灵力恢复、qiMax 灵力上限、hp 气血上限、hpPct 气血上限比例、regen 脱战回血（每秒比例）、dmgTaken 受伤减免、nightDef 夜里受伤减免、lifesteal 吸血、vsUndead 对鬼物行尸、moveSpeed 移速、flySpeed 御剑速度、flyQi 御剑耗灵减免、sense 神识、scanCost 扫描省神识、luck 掉落、meditate 打坐修为、alch 控火区间、pillPow 丹药药力、tox 丹毒减轻、herbAge 药龄加速（倍）、soilQi 灵田每天自生灵气、autoWater 灵雨阵自动浇水、tribRes 天劫减伤、pet 灵兽助战。",
+  "sects": {
+    "青锋剑派": { "id": "qingfeng", "join": 0, "robe": "#7ab8e8", "intro": "雪峰脚下的小剑派，剑法入门的好去处。", "techs": [
+      { "id": "qf1", "name": "青锋诀", "rank": 0, "cost": 40, "desc": "剑招伤害 +15%", "fx": { "dmg_sword": 0.15 } },
+      { "id": "qf2", "name": "流云步", "rank": 0, "cost": 60, "desc": "闪避冷却 −0.6 秒", "fx": { "dashCd": -0.6 } },
+      { "id": "qf3", "name": "剑心", "rank": 1, "cost": 120, "desc": "暴击率 +6%", "fx": { "crit": 0.06 } },
+      { "id": "qf4", "name": "回风剑", "rank": 1, "cost": 160, "desc": "技能冷却 −20%", "fx": { "skillCd": -0.2 } } ] },
+    "寒溪宗": { "id": "hanxi", "join": 0, "robe": "#a8d8f0", "intro": "冰系功法，出手带寒气。", "techs": [
+      { "id": "hx1", "name": "寒冰掌", "rank": 0, "cost": 50, "desc": "命中让妖兽减速 2 秒", "fx": { "slow": 1 } },
+      { "id": "hx2", "name": "冰心诀", "rank": 0, "cost": 60, "desc": "灵力恢复 +25%", "fx": { "qiRegen": 0.25 } },
+      { "id": "hx3", "name": "玄冰护体", "rank": 1, "cost": 140, "desc": "受到的伤害 −10%", "fx": { "dmgTaken": 0.1 } } ] },
+    "阵法阁": { "id": "zhenfa", "join": 2, "robe": "#c8a8ff", "intro": "区域控制与灵田阵法的大宗。", "techs": [
+      { "id": "zf1", "name": "聚灵阵", "rank": 0, "cost": 120, "desc": "灵田每天自生 1 点灵气；灵草药龄长得快 3 倍", "fx": { "soilQi": 1, "herbAge": 2 } },
+      { "id": "zf2", "name": "灵雨阵", "rank": 0, "cost": 150, "desc": "每天早上自动浇遍灵田", "fx": { "autoWater": 1 } },
+      { "id": "zf3", "name": "阵眼", "rank": 1, "cost": 220, "desc": "伤害 +10%", "fx": { "dmg_all": 0.1 } },
+      { "id": "zf4", "name": "护山大阵", "rank": 1, "cost": 260, "desc": "受到的伤害 −15%", "fx": { "dmgTaken": 0.15 } },
+      { "id": "zf5", "name": "渡劫阵旗", "rank": 2, "cost": 400, "desc": "天劫伤害 −25%", "fx": { "tribRes": 0.25 } } ] },
+    "剑宗": { "id": "jianzong", "join": 3, "robe": "#e8f0f8", "intro": "万剑峰上的剑修大宗，九重剑阶，飞剑无双。", "techs": [
+      { "id": "jz1", "name": "万剑诀", "rank": 0, "cost": 200, "desc": "剑招伤害 +30%", "fx": { "dmg_sword": 0.3 } },
+      { "id": "jz2", "name": "御剑术", "rank": 0, "cost": 200, "desc": "御剑快 50%、耗灵减半", "fx": { "flySpeed": 0.5, "flyQi": 0.5 } },
+      { "id": "jz3", "name": "剑意", "rank": 1, "cost": 320, "desc": "暴击率 +10%", "fx": { "crit": 0.1 } },
+      { "id": "jz4", "name": "万剑归宗", "rank": 2, "cost": 500, "desc": "伤害 +20%", "fx": { "dmg_all": 0.2 } } ] },
+    "御兽宗": { "id": "yushou", "join": 1, "robe": "#c89a5a", "intro": "驭兽召灵，灵兽随身助战。", "techs": [
+      { "id": "ys1", "name": "灵兽召唤", "rank": 0, "cost": 120, "desc": "一只灵狐随身，自动扑咬附近的妖兽", "fx": { "pet": 1 } },
+      { "id": "ys2", "name": "兽化", "rank": 0, "cost": 150, "desc": "气血上限 +20%", "fx": { "hpPct": 0.2 } },
+      { "id": "ys3", "name": "驭兽诀", "rank": 1, "cost": 240, "desc": "灵兽伤害翻倍", "fx": { "pet": 1 } } ] },
+    "百花谷": { "id": "baihua", "join": 0, "robe": "#ffb8d0", "intro": "医术为本，四季花开；道侣候选最多。", "techs": [
+      { "id": "bh1", "name": "回春术", "rank": 0, "cost": 40, "desc": "脱战后慢慢回血", "fx": { "regen": 0.015 } },
+      { "id": "bh2", "name": "百花护体", "rank": 0, "cost": 60, "desc": "气血上限 +15%", "fx": { "hpPct": 0.15 } },
+      { "id": "bh3", "name": "花间步", "rank": 1, "cost": 120, "desc": "移动速度 +10%", "fx": { "moveSpeed": 0.1 } } ] },
+    "丹鼎派": { "id": "danding", "join": 1, "robe": "#e8a050", "intro": "炼丹大宗，辅助、增益、毒。", "techs": [
+      { "id": "dd1", "name": "控火诀", "rank": 0, "cost": 100, "desc": "炼丹金色区间宽 40%", "fx": { "alch": 0.4 } },
+      { "id": "dd2", "name": "药王经", "rank": 0, "cost": 140, "desc": "丹药药力 +30%", "fx": { "pillPow": 0.3 } },
+      { "id": "dd3", "name": "丹心", "rank": 1, "cost": 200, "desc": "丹毒减半", "fx": { "tox": 0.5 } },
+      { "id": "dd4", "name": "毒雾", "rank": 1, "cost": 220, "desc": "伤害 +10%", "fx": { "dmg_all": 0.1 } } ] },
+    "五毒教": { "id": "wudu", "join": 2, "robe": "#5a8a3a", "intro": "邪派毒功。", "techs": [
+      { "id": "wd1", "name": "五毒掌", "rank": 0, "cost": 150, "desc": "伤害 +12%", "fx": { "dmg_all": 0.12 } },
+      { "id": "wd2", "name": "毒体", "rank": 0, "cost": 160, "desc": "受到的伤害 −10%", "fx": { "dmgTaken": 0.1 } },
+      { "id": "wd3", "name": "蛊术", "rank": 1, "cost": 260, "desc": "吸血 3%", "fx": { "lifesteal": 0.03 } } ] },
+    "铁匠山庄": { "id": "tiejiang", "join": 0, "robe": "#8a6a4a", "intro": "火山脚下的炼器小宗。", "techs": [
+      { "id": "tj1", "name": "淬火", "rank": 0, "cost": 50, "desc": "伤害 +10%", "fx": { "dmg_all": 0.1 } },
+      { "id": "tj2", "name": "铁骨", "rank": 0, "cost": 60, "desc": "受到的伤害 −10%", "fx": { "dmgTaken": 0.1 } },
+      { "id": "tj3", "name": "锻体", "rank": 1, "cost": 120, "desc": "气血上限 +40", "fx": { "hp": 40 } } ] },
+    "赤霞宗": { "id": "chixia", "join": 1, "robe": "#e05a3a", "intro": "火系法术的中宗。", "techs": [
+      { "id": "cx1", "name": "赤霞诀", "rank": 0, "cost": 100, "desc": "伤害 +12%", "fx": { "dmg_all": 0.12 } },
+      { "id": "cx2", "name": "烈火掌", "rank": 0, "cost": 120, "desc": "拳招伤害 +25%", "fx": { "dmg_fist": 0.25 } },
+      { "id": "cx3", "name": "火灵体", "rank": 1, "cost": 200, "desc": "灵力上限 +30", "fx": { "qiMax": 30 } } ] },
+    "血魔宫": { "id": "xuemo", "join": 3, "hidden": true, "evil": true, "robe": "#8a1a2a", "intro": "魔道，血系技能；入门就是踏上业力之路。", "techs": [
+      { "id": "xm1", "name": "血魔大法", "rank": 0, "cost": 200, "desc": "吸血 6%", "fx": { "lifesteal": 0.06 } },
+      { "id": "xm2", "name": "噬血", "rank": 0, "cost": 260, "desc": "伤害 +25%", "fx": { "dmg_all": 0.25 } },
+      { "id": "xm3", "name": "血遁", "rank": 1, "cost": 360, "desc": "闪避冷却 −1 秒、无敌 +0.2 秒", "fx": { "dashCd": -1, "dashIframe": 0.2 } } ] },
+    "符箓门": { "id": "fulu", "join": 1, "robe": "#e8d27a", "intro": "远程与陷阱的大宗。", "techs": [
+      { "id": "fl1", "name": "符箓精通", "rank": 0, "cost": 100, "desc": "符招伤害 +30%", "fx": { "dmg_talisman": 0.3 } },
+      { "id": "fl2", "name": "符阵", "rank": 0, "cost": 120, "desc": "灵力上限 +30", "fx": { "qiMax": 30 } },
+      { "id": "fl3", "name": "爆炸符", "rank": 1, "cost": 220, "desc": "符招伤害再 +20%", "fx": { "dmg_talisman": 0.2 } },
+      { "id": "fl4", "name": "封印符", "rank": 2, "cost": 360, "desc": "命中减速", "fx": { "slow": 1 } } ] },
+    "黄沙寺": { "id": "huangsha", "join": 2, "robe": "#d8a850", "intro": "佛修 / 体修。", "techs": [
+      { "id": "hs1", "name": "金刚体", "rank": 0, "cost": 150, "desc": "受到的伤害 −15%", "fx": { "dmgTaken": 0.15 } },
+      { "id": "hs2", "name": "罗汉拳", "rank": 0, "cost": 150, "desc": "拳招伤害 +30%", "fx": { "dmg_fist": 0.3 } },
+      { "id": "hs3", "name": "禅定", "rank": 1, "cost": 240, "desc": "睡觉打坐修为 +30%", "fx": { "meditate": 0.3 } } ] },
+    "镇魂观": { "id": "zhenhun", "join": 0, "robe": "#5a6a8a", "intro": "古战场边驱鬼的小观。", "techs": [
+      { "id": "zh1", "name": "镇魂诀", "rank": 0, "cost": 40, "desc": "对游魂、行尸伤害 +60%", "fx": { "vsUndead": 0.6 } },
+      { "id": "zh2", "name": "安神咒", "rank": 0, "cost": 60, "desc": "神识 +30", "fx": { "sense": 30 } },
+      { "id": "zh3", "name": "驱邪", "rank": 1, "cost": 120, "desc": "夜里受到的伤害 −15%", "fx": { "nightDef": 0.15 } } ] },
+    "天机阁": { "id": "tianji", "join": 1, "robe": "#4a4a7a", "intro": "神识与占卜的中宗。", "techs": [
+      { "id": "tj_1", "name": "天机诀", "rank": 0, "cost": 100, "desc": "神识 +50，扫描省一半", "fx": { "sense": 50, "scanCost": 0.5 } },
+      { "id": "tj_2", "name": "观星", "rank": 0, "cost": 120, "desc": "暴击率 +8%", "fx": { "crit": 0.08 } },
+      { "id": "tj_3", "name": "卜算", "rank": 1, "cost": 200, "desc": "掉落 +20%", "fx": { "luck": 0.2 } } ] }
+  }
+}
