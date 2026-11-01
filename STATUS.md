@@ -154,3 +154,4 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 2026-10-28 — 首次提交原型；8 张贴图接入；连招首次并入主游戏（commit 3d70ca9）
 - 2026-10-27 — 立项：GDD、地图数据、世界/角色/NPC/战斗试炼场
 - 2026-11-01 实验室：地形过渡（崖壁/草地边缘）锯齿 → 顶面法线改为 ±2 格中心差分平滑（ENVIRONMENT.md 第7条）。
+- 2026-11-01 实验室(青竹村)：草/土路/沙滩改为连续权重混色（原来按 k 硬切，边界出现锯齿）。

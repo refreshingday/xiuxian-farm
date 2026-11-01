@@ -194,10 +194,18 @@ export const BIOMES = [
       if (pond < 0) h = Math.max(-1.2, pond * 0.45);
       const path = Math.min(wavyPath(x, z, 3, 0.15, 1), t.pd - 0.2);
       const farm = x > -14 && x < -4 && z > 3 && z < 11;
-      return { h: farm ? 0.02 : h, k: pond < 0.6 || t.sd < 0.95 ? 'sand' : farm ? 'till' : path < 1.2 ? 'dirt' : 'grass', path, lv: t.lv };
+      return { h: farm ? 0.02 : h, k: pond < 0.6 || t.sd < 0.95 ? 'sand' : farm ? 'till' : path < 1.2 ? 'dirt' : 'grass', path, lv: t.lv, sd: t.sd, pond };
     },
     color(x, z, t) {
       const n = vnoise(x * 6, z * 6, 1);
+      if (t.k === 'dirt' || t.k === 'sand' || t.k === 'grass') {
+        // 草 / 土路 / 沙滩之间用连续权重混色，不再按 k 硬切（边界不出现锯齿）
+        const g = grassy([118, 188, 66], [88, 158, 50], [170, 208, 80], x, z, 1);
+        const dirt = mix([218, 172, 108], [190, 140, 84], vnoise(x * 1.2, z * 1.2, 4) * 0.7 + n * 0.2), sand = mix([226, 204, 146], [200, 176, 120], n * 0.5);
+        let c = mix(g, [210, 180, 110], smooth(2.4, 1.2, t.path) * 0.5);
+        c = mix(c, dirt, smooth(1.5, 0.9, t.path));
+        return mix(c, sand, Math.max(smooth(1.3, 0.6, t.sd), smooth(0.9, 0.2, t.pond)));
+      }
       if (t.k === 'dirt') return mix([218, 172, 108], [190, 140, 84], vnoise(x * 1.2, z * 1.2, 4) * 0.7 + n * 0.2);
       if (t.k === 'sand') return mix([226, 204, 146], [200, 176, 120], n * 0.5);
       if (t.k === 'till') return ((Math.floor(z * 2.4) & 1) ? [110, 76, 50] : [128, 88, 58]).map((v) => v * (0.94 + n * 0.1));
