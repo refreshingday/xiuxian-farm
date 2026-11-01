@@ -412,7 +412,8 @@ function cardMat(color, tex) {
 }
 
 // 树冠的几团球（树干加高后整体上移）
-const CROWN = [[0, 3.45, 0, 1.15], [0.75, 3.1, 0.3, 0.85], [-0.7, 3.15, -0.2, 0.9], [0.1, 3.1, -0.78, 0.85], [-0.25, 3.15, 0.75, 0.85], [0.15, 4.15, 0.05, 0.8]];
+// 冠团彼此拉开（偏移 ×1.3、半径 ×0.86），团与团之间留缝，影子才落得到叶子上（见 ENVIRONMENT.md）
+const CROWN = [[0, 3.45, 0, 1.15], [0.75, 3.1, 0.3, 0.85], [-0.7, 3.15, -0.2, 0.9], [0.1, 3.1, -0.78, 0.85], [-0.25, 3.15, 0.75, 0.85], [0.15, 4.15, 0.05, 0.8]].map(([x, y, z, r]) => [x * 1.3, 3.45 + (y - 3.45) * 1.3, z * 1.3, r * 0.86]);
 
 // 草卡：3 张散开的透明四边形（12 顶点），根部随机错开、宽高各异；
 // 顶点只记根部位置，着色器里正对镜头展开，所以不会出现米字形，俯视也看得到草叶
@@ -579,6 +580,8 @@ export class World {
     const shrink = (g, cy, k) => g.clone().translate(0, -cy, 0).scale(k, k, k).translate(0, cy, 0);
     this.G.crownCore = shrink(this.G.crown, 3.4, 0.8);
     this.G.bushCore = shrink(this.G.bush, 0.3, 0.8);
+    // 树整体放大 35%（树干、树冠、叶卡、实心内核、松树一起；脚底在原点，放大后仍贴地）
+    for (const k of ['trunk', 'crown', 'crownCards', 'crownCore', 'pine']) this.G[k].scale(1.35, 1.35, 1.35);
   }
 
   // ---------- 碰撞 ----------
@@ -725,17 +728,17 @@ export class World {
       const treeK = 1 + (sec.trees - 1) * bk, rockK = 1 + (sec.rocks - 1) * bk;
       if (!clear && r < smooth(0.35, 0.75, dens) * 0.34 * treeK) {
         const s = 0.62 + rng() * 0.4;
-        if (bio?.tree === 'dead') { trunks.push({ x, z, s: s * 0.9, rot: rng() * 6.28 }); cols.push({ x, z, r: 0.35 * s, off: false }); continue; }
+        if (bio?.tree === 'dead') { trunks.push({ x, z, s: s * 0.9, rot: rng() * 6.28 }); cols.push({ x, z, r: 0.47 * s, off: false }); continue; }
         const isPine = bio?.tree === 'pine' || (fbm(x * 0.02, z * 0.02, 31, 2) > 0.58 && maple < 0.3);
         const c = bio?.crown ? (rng() < 0.7 ? bio.crown : PINE[0]) : isPine ? PINE[Math.floor(rng() * PINE.length)] : (rng() < maple ? MAPLE : FOREST)[Math.floor(rng() * 4)];
         (isPine ? pines : trees).push({ x, z, s, rot: rng() * 6.28, c });
         trunks.push({ x, z, s, rot: rng() * 6.28 });
-        cols.push({ x, z, r: 0.42 * s, off: false });
+        cols.push({ x, z, r: 0.57 * s, off: false });
       } else if (!clear && r > 1 - 0.035 * rockK) {
         const s = 0.6 + rng() * 1.1, rc = bio?.rockC || ['#aaa59e', '#948f8a'];
         if (bio?.tomb && rng() < 0.6) tombs.push({ x, z, s: 0.8 + rng() * 0.4, rot: rng() * 0.6 - 0.3, c: rc[Math.floor(rng() * 2)] });
         else rocks.push({ x, z, s, sy: s * (0.6 + rng() * 0.5), rot: rng() * 6.28, c: rc[Math.floor(rng() * 2)] });
-        cols.push({ x, z, r: 0.6 * s, off: false });
+        cols.push({ x, z, r: 0.8 * s, off: false });
       } else if (!clear && r > 0.9 && r < 0.94) {
         bushes.push({ x, z, s: 0.8 + rng() * 0.6, rot: rng() * 6.28, c: rng() < maple ? '#d8803a' : FOREST[Math.floor(rng() * 5)] });
       } else if (r > 0.94 && !clear && dangerAt(x, z) > 0.2) {

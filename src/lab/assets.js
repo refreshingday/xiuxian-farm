@@ -58,7 +58,11 @@ const BROAD = [
   { t: [[0, 0, 0], [0.05, 0.6, 0], [0, 1.15, 0]], r: 0.09, c: [[0, 1.4, 0, 0.5], [0.3, 1.25, 0.1, 0.36], [-0.25, 1.3, -0.15, 0.38], [0, 1.75, 0, 0.35]] },
 ];
 function broadTree(v, leaf, accent, seed, o = {}) {
-  const T = BROAD[v % BROAD.length], k = new Kit();
+  const T0 = BROAD[v % BROAD.length], k = new Kit();
+  // 树整体放大 35%；冠团彼此拉开（偏移 ×1.3、半径 ×0.86），团与团之间留缝，影子才落得到叶子上
+  const S = 1.35, sc = (q) => q.map((x) => x * S), top0 = T0.t[T0.t.length - 1];
+  const T = { r: T0.r * S, t: T0.t.map(sc), branch: T0.branch && T0.branch.map(sc),
+    c: T0.c.map(([x, y, z, rr]) => [(top0[0] + (x - top0[0]) * 1.3) * S, (top0[1] + (y - top0[1]) * 1.3) * S, (top0[2] + (z - top0[2]) * 1.3) * S, rr * S * 0.86]) };
   trunk(k, T.t, T.r, T.r * 0.55, o.bark);
   if (T.branch) k.add(G.tube(T.branch, T.r * 0.7, T.r * 0.35, 6), grad(o.bark || '#7a5236', 0.6, 1));
   // 冠下可见的几根小枝
@@ -80,7 +84,7 @@ function broadTree(v, leaf, accent, seed, o = {}) {
 // 松树：层层圆锥（可带雪）
 function pine(v, color, seed, snow = false) {
   const k = new Kit(), r = rnd(seed + v);
-  const tiers = [4, 5, 3, 6][v % 4], H = [3.2, 4.2, 2.4, 5][v % 4], W = [1.25, 1.35, 1.1, 1.2][v % 4];
+  const tiers = [4, 5, 3, 6][v % 4], H = [3.2, 4.2, 2.4, 5][v % 4] * 1.35, W = [1.25, 1.35, 1.1, 1.2][v % 4] * 1.35;
   k.add(G.cyl(0.12, 0.18, H * 0.4), grad('#6a4630', 0.6, 1));
   for (let i = 0; i < tiers; i++) {
     const t = i / tiers, y = H * (0.18 + t * 0.62), rr = W * (1 - t * 0.72) * (0.9 + r() * 0.2);
@@ -377,8 +381,15 @@ function stump(v, seed) {
     }
   } else { // 倒木（可空心）
     const L = v === 1 ? 2.2 : 1.6;
-    k.add(new THREE.CylinderGeometry(0.3, 0.34, L, 10, 1, v === 2).rotateZ(Math.PI / 2), ring, { at: [0, 0.3, 0] });
-    if (v === 2) k.add(new THREE.CylinderGeometry(0.22, 0.25, L, 10, 1, true).rotateZ(Math.PI / 2).scale(1, 1, 1), grad('#3a2618'), { at: [0, 0.3, 0] });
+    const flip = (g) => { const f = g.clone(), ix = f.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } const nm = f.attributes.normal; for (let i = 0; i < nm.array.length; i++) nm.array[i] *= -1; return f; };
+    const outer = new THREE.CylinderGeometry(0.3, 0.34, L, 10, 1, v === 2).rotateZ(Math.PI / 2);
+    k.add(outer, ring, { at: [0, 0.3, 0] });
+    if (v === 2) { // 空心：外壁内侧（背面）也要画出来，否则从上往下看会穿帮
+      k.add(flip(outer), grad('#4a3020'), { at: [0, 0.3, 0] });
+      const inner = new THREE.CylinderGeometry(0.22, 0.25, L, 10, 1, true).rotateZ(Math.PI / 2);
+      k.add(inner, grad('#3a2618'), { at: [0, 0.3, 0] });
+      k.add(flip(inner), grad('#3a2618'), { at: [0, 0.3, 0] });
+    }
     for (const s of [-1, 1]) k.add(new THREE.CircleGeometry(v === 2 ? 0.02 : 0.31, 10).rotateY(s * Math.PI / 2), ring, { at: [s * L / 2, 0.3, 0] });
     k.add(G.tube([[0.2, 0.5, 0], [0.4, 0.8, 0.1], [0.45, 1.0, 0.25]], 0.06, 0.03, 5), grad('#7a5236'));
     for (let i = 0; i < 4; i++) k.add(G.sph(0.08 + r() * 0.05, 6, 4), grad('#5fae3e', 0.8, 1.2), { at: [(r() - 0.5) * L * 0.8, 0.58, (r() - 0.5) * 0.2], s: [1.4, 0.5, 1.1] });
