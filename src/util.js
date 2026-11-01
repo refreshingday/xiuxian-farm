@@ -129,6 +129,11 @@ function leafPatch(s, mat) {
   seasonU(s);
   const season = SEASON_LEAF.replace('SNOW_K', 'smoothstep(0.1, 0.7, normalize(vLeafN).y)');
   s.vertexShader = 'varying vec3 vLeafP;\nvarying vec3 vLeafN;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLeafP = position; vLeafN = normal;');
+  // 不要贴图、也不要程序叶斑：纯色，只保留季节 / 积雪
+  if (mat.userData.leafPlain) {
+    s.fragmentShader = SEASON_UNI + 'varying vec3 vLeafN;\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>\n{${season}\n}`);
+    return;
+  }
   if (tex) {
     // 有贴图：三向投影叶团贴图（无需 UV）
     s.uniforms.tLeaf = { value: tex };
@@ -210,18 +215,19 @@ function occlude(mat, pre) {
 
 const cache = new Map();
 export function toon(color, o = {}) {
-  const key = `${color}|${o.emissive || ''}|${o.ei || 0}|${o.occ ? 1 : 0}|${o.vc ? 1 : 0}|${o.map ? o.map.uuid : ''}|${o.leaf ? 1 : 0}|${o.grass ? 1 : 0}|${o.leafTex ? o.leafTex.uuid : ''}|${o.card ? 1 : 0}|${o.ref ? 1 : 0}`;
+  const key = `${color}|${o.emissive || ''}|${o.ei || 0}|${o.occ ? 1 : 0}|${o.vc ? 1 : 0}|${o.map ? o.map.uuid : ''}|${o.leaf ? 1 : 0}|${o.grass ? 1 : 0}|${o.leafTex ? o.leafTex.uuid : ''}|${o.card ? 1 : 0}|${o.ref ? 1 : 0}|${o.leafPlain ? 1 : 0}`;
   if (!o.unique && cache.has(key)) return cache.get(key);
   const m = new THREE.MeshToonMaterial({ color, gradientMap: o.ref ? gradient3() : gradient(), vertexColors: !!o.vc, map: o.map || null });
   if (o.emissive) { m.emissive.set(o.emissive); m.emissiveIntensity = o.ei ?? 1; }
   if (o.leafTex) m.userData.leafTex = o.leafTex;
+  if (o.leafPlain) m.userData.leafPlain = true;
   const patches = [];
   if (o.leaf) patches.push(leafPatch);
   if (o.grass) patches.push(grassPatch);
   if (o.card) patches.push(cardPatch);
   if (o.occ) patches.push(occPatch);
   if (o.ref) patches.push(refPatch);
-  if (patches.length) applyPatches(m, patches, `toon${o.leaf ? 'L' : ''}${o.grass ? 'G' : ''}${o.card ? 'C' : ''}${o.occ ? 'O' : ''}${o.ref ? 'R' : ''}`);
+  if (patches.length) applyPatches(m, patches, `toon${o.leaf ? 'L' : ''}${o.leafPlain ? 'P' : ''}${o.grass ? 'G' : ''}${o.card ? 'C' : ''}${o.occ ? 'O' : ''}${o.ref ? 'R' : ''}`);
   m.userData.baseE = m.emissive.clone();
   m.userData.baseEI = m.emissiveIntensity;
   if (!o.unique) cache.set(key, m);

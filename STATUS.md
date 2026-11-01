@@ -112,7 +112,10 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Claude 版素材缺的 6 种材质贴图（tree_bark / stone_carved / sandstone / thatch_straw / cloth_canvas / rusty_iron，Codex CLI · gpt-6.1-sol 生成）— 🟨 — 2026-11-01 — 贴图已生成并放入 assets/textures/，还没接进 Kit 材质（素材仍是顶点色）
 - 叶卡图集 `leaf_cards` / `blossom_cards`（Codex CLI · gpt-6.1-sol 生成）— 🟩 — 2026-11-01 — `leaf_cards` 用于森林树 / 灌木 / 竹子；`blossom_cards` 用于野外新增的桃花林（普通森林里成片出现，内核用 peach_foliage）
 
+- 松树不用贴图 — 🟩 — 2026-11-01 — 用户看过贴 foliage 的松树，纯色更好看；`M.pine` 保持 `leafPlain`，别加回去（只保留季节 / 积雪）
+
 ## 日志
+- 2026-11-01 — 主游戏：松树去掉贴图改纯色；村墙墙顶、村门和望楼屋顶用 roof_tiles 瓦片贴图（原来是纯色）
 - 2026-11-01 — 主游戏：野外加桃花林，用 blossom_cards 叶卡；按坐标哈希判定，原有树石位置不变
 - 2026-11-01 — 生成一直缺失的叶卡图集 leaf_cards / blossom_cards；leaf_cards 替换程序叶卡，blossom_cards 待接到树上
 - 2026-11-01 — 为 Claude 版 3D 素材补 6 张材质贴图（树皮 / 凿石砖 / 砂岩 / 茅草 / 粗麻布 / 锈铁），待接入

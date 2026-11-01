@@ -22,7 +22,7 @@ export function buildWall(world, R, gates, towers) {
   const T = world.T, line = world.M.line, scene = world.scene;
   const stoneM = toon('#9c978f', { occ: true, ref: true, map: T.stone });
   const plasterM = toon('#ece5d3', { occ: true, ref: true });
-  const tileM = toon('#3f4552', { occ: true, ref: true });
+  const tileM = toon('#5a6070', { occ: true, ref: true, map: T.tile });
   const woodM = toon('#6a4029', { occ: true, ref: true });
   const step = TAU / SEG, L = 2 * R * Math.sin(step / 2);
   const nearGate = (a, d) => gates.some((g) => R * angDist(a, g.a) < d);
@@ -30,8 +30,8 @@ export function buildWall(world, R, gates, towers) {
   // ---- 墙身 ----
   const base = boxUV(new THREE.BoxGeometry(L + 0.25, 0.6, 1.0), L, 0.6, 1.0, 1.4).translate(0, 0.3, 0);
   const body = new THREE.BoxGeometry(L + 0.15, H - 0.6, 0.66).translate(0, 0.6 + (H - 0.6) / 2, 0);
-  const slab = (s) => new THREE.BoxGeometry(L + 0.5, 0.1, 0.85).rotateX(s * 0.55).translate(0, H + 0.14, -s * 0.36);
-  const ridge = new THREE.BoxGeometry(L + 0.5, 0.1, 0.16).translate(0, H + 0.29, 0);
+  const slab = (s) => boxUV(new THREE.BoxGeometry(L + 0.5, 0.1, 0.85), L + 0.5, 0.1, 0.85, 0.8).rotateX(s * 0.55).translate(0, H + 0.14, -s * 0.36);
+  const ridge = boxUV(new THREE.BoxGeometry(L + 0.5, 0.1, 0.16), L + 0.5, 0.1, 0.16, 0.8).translate(0, H + 0.29, 0);
   const cap = mergeGeometries([slab(1), slab(-1), ridge]);
   const post = new THREE.BoxGeometry(0.5, H + 0.45, 0.5).translate(0, (H + 0.45) / 2, 0);
   const segs = [], posts = [];

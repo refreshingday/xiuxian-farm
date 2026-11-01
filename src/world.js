@@ -565,6 +565,8 @@ export class World {
       ground: toon('#ffffff', { vc: true }),
       trunk: toon('#8a5a34', { occ: true }),
       leafy: toon('#ffffff', { occ: true, vc: true, leaf: true }),
+      // 松树不要贴图：用户看过，纯色比贴 foliage 好看（2026-11-01），别再加回去
+      pine: toon('#ffffff', { occ: true, vc: true, leaf: true, leafPlain: true }),
       // 桃花冠的内核要用花瓣贴图：绿叶贴图是灰度化的，乘粉色会发蓝紫
       leafyBloom: toon('#ffffff', { occ: true, vc: true, leaf: true, leafTex: PNG.peach_foliage }),
       grass: (() => {
@@ -795,7 +797,7 @@ export class World {
     add(inst(this.G.trunk, this.M.trunk, trunks, true, this.M.line));
     for (const im of this.leafClump('crown', trees)) add(im);
     for (const im of this.leafClump('crown', blooms, this.M.blossom, this.M.leafyBloom)) add(im);
-    add(inst(this.G.pine, this.M.leafy, pines, true, this.M.leafLine));
+    add(inst(this.G.pine, this.M.pine, pines, true, this.M.leafLine));
     for (const im of this.leafClump('bush', bushes)) add(im);
     add(inst(this.G.rock, this.M.rock, rocks, true, this.M.line));
     add(inst(this.G.tomb, this.M.rock, tombs, true, this.M.line));
@@ -1252,7 +1254,7 @@ export class World {
         foot.push({ x: x + Math.cos(a) * (r + 0.3), z: z + Math.sin(a) * (r + 0.3), s: 0.5 + rng() * 0.5, sy: 0.4 + rng() * 0.3, rot: rng() * 6, c: '#a8a296' });
       }
     });
-    this.scene.add(...this.leafClump('bush', caps).filter(Boolean), inst(this.G.pine, this.M.leafy, pines, true, this.M.leafLine), inst(this.G.rock, this.M.rock, foot, true, this.M.line));
+    this.scene.add(...this.leafClump('bush', caps).filter(Boolean), inst(this.G.pine, this.M.pine, pines, true, this.M.leafLine), inst(this.G.rock, this.M.rock, foot, true, this.M.line));
 
     // 瀑布：竖直水帘，像素条纹向下流
     const B = BASIN, top = 6.2;
