@@ -961,7 +961,7 @@ function applyWet() {
 }
 const footW = (i) => chibi.legs[i].localToWorld(_wv.set(0, -0.48, 0.06));
 // 调试用（控制台 / 自动截图）：labDebug.chibi、labDebug.depthAt(x, z)
-window.labDebug = { get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
+window.labDebug = { get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, hAt: (x, z) => hAtCur(x, z), depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
 function walk(dt, t) {
   if (!chibi || !chibi.root.visible) return;
   let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
@@ -987,7 +987,9 @@ function walk(dt, t) {
     const sp = 5 * mag * slow * surge * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
     // 不走出小岛；岩浆只能踩到边上；断崖（坡度 >~50°）走不上去也跳不下去，梯子处可以爬
     const lavaEdge = W && W.mode === 'lava' ? W.level - 0.3 : -99;
-    const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25);
+    // 溪岸 / 水边是陡坎：脚下或前面 0.7 米内有水时放宽坡度，能直接蹚进去、爬上岸
+    const nearWater = [[0, 0], [0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7]].some(([ox, oz]) => waterLvl(b, nx + ox, nz + oz, hAtCur(nx + ox, nz + oz)) > -90 || waterLvl(b, P.x + ox, P.z + oz, hAtCur(P.x + ox, P.z + oz)) > -90);
+    const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25) / (nearWater ? 2.6 : 1);
     const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r);
     if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder)) {
       const dx = nx - P.x, dz = nz - P.z;
@@ -1006,7 +1008,8 @@ function walk(dt, t) {
   let y = ice ? Math.max(h, W.level) : h;
   if (swimming) y = Math.max(h - 0.6, wl - 0.55 - lerp(0.45, 0.12, moveK) + Math.sin(t * 2.2) * 0.035); // 踩水时身子直、低一点；游起来身子平（浅水里脚陷进湖底也看不见）
   const dy0 = P.y;
-  P.y = depth > 0.02 || swimK > 0.02 ? lerp(P.y, y, 1 - Math.exp(-10 * dt)) : y;
+  // 高度平滑追：从岸上走进溪里不再一下子掉下去，上岸也不是瞬移（平地小起伏几乎无延迟）
+  P.y = Math.abs(y - P.y) < 0.05 ? y : lerp(P.y, y, 1 - Math.exp(-(depth > 0.02 || swimK > 0.02 ? 10 : 16) * dt));
   const dy = P.y - dy0; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
   chibi.root.rotation.y += Math.atan2(Math.sin(walkYaw - chibi.root.rotation.y), Math.cos(walkYaw - chibi.root.rotation.y)) * (1 - Math.exp(-12 * dt));
   const prevStroke = strokePh - dt * (1.5 + 4.2 * moveK);
