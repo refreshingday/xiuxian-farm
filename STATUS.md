@@ -109,8 +109,10 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 - Claude 版素材缺的 6 种材质贴图（tree_bark / stone_carved / sandstone / thatch_straw / cloth_canvas / rusty_iron，Codex CLI · gpt-6.1-sol 生成）— 🟨 — 2026-11-01 — 贴图已生成并放入 assets/textures/，还没接进 Kit 材质（素材仍是顶点色）
+- 叶卡图集 `leaf_cards` / `blossom_cards`（Codex CLI · gpt-6.1-sol 生成）— 🟨 — 2026-11-01 — `leaf_cards` 已生效（森林树 / 灌木 / 竹子），替换程序叶卡，树林实景还没看过；`blossom_cards` 已加载但 `M.blossom` 没有树在用
 
 ## 日志
+- 2026-11-01 — 生成一直缺失的叶卡图集 leaf_cards / blossom_cards；leaf_cards 替换程序叶卡，blossom_cards 待接到树上
 - 2026-11-01 — 为 Claude 版 3D 素材补 6 张材质贴图（树皮 / 凿石砖 / 砂岩 / 茅草 / 粗麻布 / 锈铁），待接入
 - 2026-11-01 — 主游戏：套用实验场的环境规则——树整体放大 35%、冠团拉开留缝（影子落到叶子上）、碰撞半径同步放大。游戏里没有游泳 / 落体，暂未移植。
 - 2026-11-01 — 实验场：入水 / 落水 / 落地音效重做——去掉带音高的正弦和共振滤波（像敲金属），全部改成低通噪声 + 低沉的“噗”和小气泡。
