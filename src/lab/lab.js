@@ -14,7 +14,6 @@ import { ASSETS, getAsset } from './assets.js';
 import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
 import { REF, getRefAsset, REFU } from './ref/index.js';
 import { BIOMES, R } from './biomes.js';
-import { loadBlenderTree, getBlenderTree, hasBlenderTree, BLENDER_TREE } from './blenderTree.js';
 
 // ======================================================================
 // 素材实验场：只加载场景素材，不跑游戏逻辑。改素材只需刷新这一页。
@@ -105,7 +104,7 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, btree: true, v: 3, bloomK: {}, bloomT: {},
+  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, v: 3, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
@@ -576,11 +575,9 @@ const SRC = {
   // 参考画风（./ref/index.js）：同一套 Claude 素材按参考图画风重建（墨线 + 硬色阶 + 叶簇树冠 + 圆石）
   ref: { tag: '参考画风', strip: '#cfe3b0', get: (id) => REF[id], build: getRefAsset },
 };
-  // Blender 手建的阔叶树（assets/models/tree_broad.glb），与 Claude 的「阔叶树」成对对比
-SRC.blender = { tag: 'Blender', strip: '#e4c9f2', get: (id) => (id === 'tree' && hasBlenderTree() ? { name: '阔叶树', n: 1 } : null), build: () => getBlenderTree() };
 const assetOf = (id, v) => (S.src === 'codex' && CODEX[id] ? getCodexAsset(id, v) : S.src === 'ref' && REF[id] ? getRefAsset(id, v) : getAsset(id, v));
 function buildCatalog(ids, mode = 'catalog') {
-  const srcs = mode === 'codex' ? ['codex'] : mode === 'ref' ? ['ref'] : mode === 'refcmp' ? ['claude', 'ref'] : mode === 'compare' || mode === 'allcmp' ? ['claude', 'codex'] : mode === 'blender' ? ['claude', 'ref', 'blender'] : ['claude'];
+  const srcs = mode === 'codex' ? ['codex'] : mode === 'ref' ? ['ref'] : mode === 'refcmp' ? ['claude', 'ref'] : mode === 'compare' || mode === 'allcmp' ? ['claude', 'codex'] : ['claude'];
   const rows = [];
   for (const id of ids) for (const sk of srcs) {
     const A = SRC[sk].get(id); if (!A) continue;
@@ -748,12 +745,11 @@ function build() {
     buildWater(b, hAt);
     placeAll(b, hAt);
     if (b.fish) fishSchool(b, hAt);
-    if (S.btree) compareTrees(hAt);
     span = R;
     if (b.water) waterFx.setColor(b.water.foam);
     for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
-    const ids = S.mode === 'blender' ? ['tree'] : S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : b.catalog;
+    const ids = S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : b.catalog;
     span = buildCatalog(ids, S.mode);
     hAtCur = () => 0;
   }
@@ -777,18 +773,6 @@ function build() {
   applyLight();
   ui();
   stats.counts = countAssets();
-}
-// 场景里并排放：左 Claude 的阔叶树，右 Blender 的树，各 3 棵，站在出生点前面
-function compareTrees(hAt) {
-  if (!hasBlenderTree()) return;
-  const lvl = BIOMES[S.biome].water ? BIOMES[S.biome].water.level + 0.1 : -99;
-  [[-1, () => getAsset('tree', 0)], [1, () => getBlenderTree()]].forEach(([side, mk]) => {
-    for (let i = 0; i < 3; i++) {
-      const x = side * (3.2 + i * 0.4), z = -1.5 + i * 3.4;
-      if (hAt(x, z) < lvl) continue;
-      const g = mk().clone(); g.position.set(x, hAt(x, z), z); g.rotation.y = i * 1.7; root.add(g);
-    }
-  });
 }
 function countAssets() {
   const ids = S.mode === 'scene' ? [...new Set(BIOMES[S.biome].scatter.map((r) => r.id))] : S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : BIOMES[S.biome].catalog;
@@ -1144,7 +1128,6 @@ function storm(dt) {
 
 status('加载贴图…', 25);
 await loadCodex();
-await loadBlenderTree();
 await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 }, pine_needles: { norm: 0.88 }, ...CODEX_TEXTURES });
 status('生成地形与素材…', 55);
 await nextFrame();
