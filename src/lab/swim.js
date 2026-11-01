@@ -144,26 +144,22 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { const 
 /** kind: 'step' 涉水脚步 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
 export function waterSound(kind, vol = 1) {
   const a = AC; if (!a || a.state !== 'running') return;
-  const P = { step: [0.16, 900, 380, 0.22], stroke: [0.22, 700, 300, 0.2], enter: [0.35, 1300, 400, 0.45], plunge: [0.6, 1100, 260, 0.6], exit: [0.3, 900, 350, 0.3], land: [0.22, 420, 130, 0.5] }[kind];
-  const [len, f0, f1, g] = P, t = a.currentTime, r = 0.85 + Math.random() * 0.3;
-  const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = r;
-  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1.2;
-  lp.frequency.setValueAtTime(f0 * r, t); lp.frequency.exponentialRampToValueAtTime(f1, t + len);
-  const env = a.createGain(); env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(g * vol, t + 0.015); env.gain.exponentialRampToValueAtTime(0.001, t + len);
-  src.connect(lp).connect(env).connect(master);
-  src.start(t, Math.random() * 0.5, len + 0.05);
-  // 入水 / 下深水：再加一声低沉的"咕咚"
-  if (kind === 'land') { // 落地：低沉的闷响（不要高频）
-    const o = a.createOscillator(), og = a.createGain(); o.type = 'sine';
-    o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.16);
-    og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(0.3 * vol, t + 0.008); og.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-    o.connect(og).connect(master); o.start(t); o.stop(t + 0.22);
-  }
-  if (kind === 'plunge' || kind === 'enter') {
-    const o = a.createOscillator(), og = a.createGain(); o.type = 'sine';
-    o.frequency.setValueAtTime(kind === 'plunge' ? 210 : 260, t); o.frequency.exponentialRampToValueAtTime(80, t + 0.18);
-    og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(0.18 * vol, t + 0.01); og.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-    o.connect(og).connect(master); o.start(t); o.stop(t + 0.25);
+  // 全部用低通噪声（Q 很低，不共振）——不用正弦音高、不用高频，免得听起来像敲金属
+  const P = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], enter: [0.38, 900, 260, 0.4], plunge: [0.7, 800, 200, 0.55], exit: [0.3, 750, 300, 0.28], land: [0.2, 260, 90, 0.7] }[kind];
+  const [len, f0, f1, g] = P, t = a.currentTime, r = 0.88 + Math.random() * 0.24;
+  const layer = (len2, fa, fb, gain, attack = 0.02, off = 0) => {
+    const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = r;
+    const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.25;
+    lp.frequency.setValueAtTime(fa * r, t + off); lp.frequency.exponentialRampToValueAtTime(fb, t + off + len2);
+    const env = a.createGain(); env.gain.setValueAtTime(0, t + off); env.gain.linearRampToValueAtTime(gain * vol, t + off + attack); env.gain.exponentialRampToValueAtTime(0.001, t + off + len2);
+    src.connect(lp).connect(env).connect(master);
+    src.start(t + off, Math.random() * 0.5, len2 + 0.05);
+  };
+  layer(len, f0, f1, g);
+  if (kind === 'enter' || kind === 'plunge') { // 水花入水：再叠一层更低更慢的"噗"，和几声小气泡（也是低通噪声）
+    layer(len * 1.3, 320, 110, g * 0.9, 0.05);
+    const n = kind === 'plunge' ? 4 : 2;
+    for (let k = 0; k < n; k++) layer(0.07, 420 + Math.random() * 150, 200, g * 0.22, 0.01, 0.1 + k * 0.07 + Math.random() * 0.05);
   }
 }
 
