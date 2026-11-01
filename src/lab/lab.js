@@ -158,6 +158,14 @@ function buildIsland(b) {
   top.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   top.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   top.setIndex(idx); top.computeVertexNormals();
+  // 法线改用 ±2 格的中心差分（比逐三角形的法线平滑）：断崖边的岩壁 / 草地过渡不再出现一格一格的锯齿
+  { const nm = top.attributes.normal.array, K = 2;
+    for (let j = 0; j <= HN; j++) for (let i = 0; i <= HN; i++) {
+      const i0 = Math.max(0, i - K), i1 = Math.min(HN, i + K), j0 = Math.max(0, j - K), j1 = Math.min(HN, j + K), k = j * W1 + i;
+      const gx = (H[j * W1 + i1] - H[j * W1 + i0]) / ((i1 - i0) * cs), gz = (H[j1 * W1 + i] - H[j0 * W1 + i]) / ((j1 - j0) * cs), l = Math.hypot(gx, 1, gz);
+      nm[k * 3] = -gx / l; nm[k * 3 + 1] = 1 / l; nm[k * 3 + 2] = -gz / l;
+    }
+    top.attributes.normal.needsUpdate = true; }
   // 地面颜色贴图（线性过滤，平滑）：每单位约 10 像素；烘进环境光遮蔽（坡脚、崖底变暗）和高处提亮
   const N = 512, AO_R = 0.8, dirs = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [Math.cos(k / 8 * Math.PI * 2) * AO_R, Math.sin(k / 8 * Math.PI * 2) * AO_R]);
   const tex = canvasTex(N, N, (ctx) => {
