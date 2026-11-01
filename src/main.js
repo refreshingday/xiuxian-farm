@@ -7,6 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
 import { createChibi, animChibi } from './chibi.js';
 import { Weather } from './weather.js';
+import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
 import { World, configureVillage, configureClearings, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
 import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
@@ -160,6 +161,10 @@ P.pos = P.c.root.position;
 P.pos.set(0, 0, 4);
 scene.add(P.c.root);
 g.player = P;
+// 下水：池塘 / 瀑布脚下的深潭可以涉水、游泳（深度见 world.waterDepth），特效和姿势复用实验场的 swim.js
+const waterFx = createWaterFx(scene);
+const SW = { on: false, k: 0, ph: 0, prev: 0, ringT: 0 };
+const WATER_Y = 0.03; g.swim = SW;
 
 const xpNeed = () => realmXP(P.layer);
 g.xpNeed = xpNeed;
@@ -729,6 +734,7 @@ function tick(dt) {
 
 const NOMOVE = new THREE.Vector2();
 function updatePlayer(dt) {
+  P.pos.y += SW.sunk || 0; SW.sunk = 0; // 上一帧为了「沉进水里」压低的高度先还原，免得和战斗里的重力 / 跳跃叠加
   P.iframe -= dt; P.dashCd -= dt; P.pillCd -= dt; P.slowT = (P.slowT || 0) - dt; P.stunT = (P.stunT || 0) - dt;
   if (P.slowT > 0 && Math.random() < 0.3) fx.mote(P.pos.x + (Math.random() - 0.5) * 0.8, 0.1, P.pos.z + (Math.random() - 0.5) * 0.8, '#bfe8ff', { life: 0.5, size: 0.6, vy: 0.4 }); // 被冻慢 / 缠住
   if (P.dead) combat.cancel(); else combat.update(dt);
@@ -736,7 +742,8 @@ function updatePlayer(dt) {
   const mv = moveInput();
   if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
   // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里；御剑飞行时走得快、悬在半空
-  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0)) * (P.slowT > 0 ? 0.55 : 1));
+  const wd0 = realm.fly ? 0 : world.waterDepth(P.pos.x, P.pos.z), wadeK = SW.on ? 0.62 : lerp(1, WADE_SLOW, clamp(wd0 / SWIM_IN, 0, 1));
+  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0)) * (P.slowT > 0 ? 0.55 : 1) * wadeK);
   if (realm.fly) { st.y = 1.1 + Math.sin(g.time * 3) * 0.08; P.vy = 0; st.ghost = true; }
   flySword.visible = realm.fly;
   let vx = st.vx, vz = st.vz;
@@ -760,8 +767,26 @@ function updatePlayer(dt) {
   else if (mouseDown[0]) P.yaw = lerpAngle(P.yaw, aimYaw(), 1 - Math.exp(-20 * dt));
   else if (mv.lengthSq() > 0 && P.work <= 0) P.yaw = lerpAngle(P.yaw, Math.atan2(mv.x, mv.y), 1 - Math.exp(-14 * dt));
   P.c.root.rotation.y = P.yaw;
+  // 水里：深度超过 SWIM_IN 就游起来（有回差），身子沉进水面以下（地面挡住下半身），水花 / 波纹 / 水声
+  const wd = realm.fly || P.dead ? 0 : world.waterDepth(P.pos.x, P.pos.z), was = SW.on, moveK = Math.min(1, Math.hypot(vx, vz) / 6);
+  if (!SW.on && wd > SWIM_IN) SW.on = true; else if (SW.on && wd < SWIM_OUT) SW.on = false;
+  SW.k = lerp(SW.k, SW.on ? 1 : 0, 1 - Math.exp(-7 * dt));
+  if (SW.on) SW.ph += dt * (1.5 + 4.2 * moveK);
   P.c.root.position.y = st.y;
-  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6), { work: P.work });
+  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work });
+  if (SW.k > 0.002) swimPose(P.c, SW.k, moveK, SW.ph, g.time);
+  if (wd > 0.03) {
+    const fx0 = Math.sin(P.yaw), fz0 = Math.cos(P.yaw);
+    if (SW.prev <= 0.03 && moveK > 0.2) { waterFx.splash(P.pos.x + fx0 * 0.2, WATER_Y, P.pos.z + fz0 * 0.2, 10, 2.2, 0.9, 0.04, new THREE.Vector3(fx0, 0, fz0)); waterFx.ring(P.pos.x, WATER_Y, P.pos.z, 0.15, 1.0, 0.9); waterSound('enter', 0.6); }
+    if (SW.on && !was) { waterFx.splash(P.pos.x, WATER_Y, P.pos.z, 26, 3.4, 1.4, 0.05, null); waterFx.ring(P.pos.x, WATER_Y, P.pos.z, 0.3, 1.8, 1.3); waterFx.ring(P.pos.x, WATER_Y, P.pos.z, 0.2, 1.1, 1.0, 0.7); waterSound('plunge', 0.8); }
+    if (!SW.on && was) { waterFx.splash(P.pos.x, WATER_Y, P.pos.z, 10, 2, 0.7, 0.04, null); waterSound('exit', 0.5); }
+    SW.ringT -= dt;
+    if (SW.ringT < 0) { SW.ringT = SW.on ? (moveK > 0.3 ? 0.5 : 0.8) : moveK > 0.3 ? 0.4 : 1.1; const r0 = SW.on ? 0.35 : 0.22 + clamp(wd, 0, 0.6) * 0.25; waterFx.ring(P.pos.x, WATER_Y, P.pos.z, r0, r0 + (SW.on ? 1.3 : 1.0), SW.on ? 1.3 : 1.2, SW.on ? 0.65 : 0.55); }
+  }
+  SW.prev = wd;
+  SW.sunk = st.y < 0.3 ? SW.k * (0.5 + Math.sin(g.time * 2.2) * 0.03) + clamp(wd / SWIM_IN, 0, 1) * 0.1 * (1 - SW.k) : 0;
+  P.pos.y -= SW.sunk;
+  waterFx.update(dt);
   P.c.root.visible = !P.dead && !(P.iframe > 0 && P.iframe < 0.55 && Math.floor(g.time * 20) % 2 === 0);
 }
 

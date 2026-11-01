@@ -600,8 +600,16 @@ export class World {
   // 冬天池塘、小潭结冰：能走上去，荷叶、白沫收起
   setIce(on) {
     this.iced = on;
-    for (const c of this.iceCols || []) c.off = on;
+    for (const c of this.iceCols || []) c.off = true; // 池塘 / 小潭不再挡路：夏天涉水、游泳，冬天走冰面
     for (const o of this.iceHide || []) o.visible = !on;
+  }
+  // 水深（米）：池塘 / 小潭（瀑布脚下的深潭，能游泳）/ 溪流（浅，只能涉水）；冬天结冰为 0
+  waterDepth(x, z) {
+    if (this.iced) return 0;
+    const ramp = (d, w) => { const t = clamp(d / w, 0, 1); return t * t * (3 - 2 * t); };
+    const a = Math.atan2(z - BASIN.z, x - BASIN.x), br = BASIN.r * (1 + 0.1 * Math.sin(a * 3 + 0.5));
+    const sd = segDist(x, z, ...STREAM);
+    return Math.max(1.35 * ramp(-pondDist(x, z), 1.7), 1.25 * ramp(br - Math.hypot(x - BASIN.x, z - BASIN.z), 0.8), 0.3 * ramp(0.6 - sd, 0.3));
   }
   addBox(x0, z0, x1, z1) { const bx = { x0, z0, x1, z1 }; this._cells(x0, z0, x1, z1, (b) => b.b.push(bx)); return bx; }
 
