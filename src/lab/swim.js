@@ -20,14 +20,15 @@ const ringVS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projecti
 const ringFS = `uniform float uT, uOp, uSeed; uniform vec3 uCol; varying vec2 vUv;
   void main() {
     vec2 p = vUv * 2.0 - 1.0; float d = length(p);
-    float w = mix(0.16, 0.05, uT);
-    float a = 1.0 - smoothstep(w * 0.55, w, abs(d - (1.0 - w)));
+    // 软边：高斯式的剖面（中间最实、两边慢慢淡出去），不是一条硬边的线；圈越扩越细
+    float w = mix(0.17, 0.06, uT), c = 1.0 - w * 1.7, e = (d - c) / (w * 0.8);
+    float a = exp(-e * e * 1.6) * (1.0 - smoothstep(0.9, 1.0, d));
     // 沿圆周固定的断口花纹：越到后面断得越多
     float ang = atan(p.y, p.x);
     float n = 0.5 + 0.25 * sin(ang * 5.0 + uSeed) + 0.25 * sin(ang * 3.0 - uSeed * 1.7);
-    a *= smoothstep(uT * 1.05 - 0.12, uT * 1.05 + 0.02, n);
-    a *= uOp * (1.0 - uT * uT);
-    if (a < 0.01) discard;
+    a *= smoothstep(uT * 1.05 - 0.32, uT * 1.05 + 0.1, n); // 断口也是慢慢淡掉的，不是一刀切
+    a *= uOp * 0.8 * (1.0 - uT * uT);
+    if (a < 0.008) discard;
     gl_FragColor = vec4(uCol, a);
   }`;
 

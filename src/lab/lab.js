@@ -308,7 +308,7 @@ function makeWater(W, hAt, area, masked = false) {
           // 2) 卡通焦散线（风之杖式）：扰动后的 Voronoi 边，两层叠加
           vec2 v1 = cell(q * 0.75 * uCaus - drift), v2 = cell(q * 1.3 * uCaus + drift.yx * 0.7 + 3.1);
           float caus = max(smoothstep(0.09, 0.0, v1.y - v1.x), smoothstep(0.06, 0.0, v2.y - v2.x) * 0.6);
-          c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * mix(0.42, 0.22, smoothstep(0.2, 0.9, d)));
+          c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * 0.5 * mix(0.42, 0.22, smoothstep(0.2, 0.9, d))); // 水面的白线（焦散）半透明：原来的 50%
           // 波光点点
           c += step(0.975, vn(q * 3.0 + vec2(uTime * 0.9, -uTime * 0.7))) * 0.4;
           // 3) 溪流：沿流向滚动的白色水纹
