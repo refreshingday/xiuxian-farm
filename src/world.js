@@ -320,6 +320,7 @@ function groundMat(ox, oz, maps) {
 const _c = new THREE.Color();
 const FOREST = ['#5fae3e', '#4f9e36', '#72bc46', '#469432', '#66b040'];
 const MAPLE = ['#e8783a', '#d8582e', '#f2a640', '#cc4a2f'];
+const BLOSSOM = ['#ffb6d0', '#ffc4dc', '#ffa8c8', '#ffd0e0'];
 const PINE = ['#2f7a4a', '#3a8752', '#2a6c44'];
 const FLOWERS = ['#ffe36b', '#ff9ec7', '#ffffff', '#b7a4ff', '#ff7a6a'];
 const GRASS = ['#6cb342', '#5aa238', '#82c24a', '#4f9632'];
@@ -564,6 +565,8 @@ export class World {
       ground: toon('#ffffff', { vc: true }),
       trunk: toon('#8a5a34', { occ: true }),
       leafy: toon('#ffffff', { occ: true, vc: true, leaf: true }),
+      // 桃花冠的内核要用花瓣贴图：绿叶贴图是灰度化的，乘粉色会发蓝紫
+      leafyBloom: toon('#ffffff', { occ: true, vc: true, leaf: true, leafTex: PNG.peach_foliage }),
       grass: (() => {
         const map = PNG.grass_blades || fallbackBlades();
         map.wrapS = THREE.RepeatWrapping; map.needsUpdate = true; // 每丛随机截取一段
@@ -578,7 +581,7 @@ export class World {
     };
     const cards = PNG.leaf_cards || fallbackCards();
     this.M.cards = cardMat('#ffffff', cards);
-    this.M.blossom = cardMat('#ffc4dc', PNG.blossom_cards || cards);
+    this.M.blossom = cardMat('#ffffff', PNG.blossom_cards || cards);
     // 叶卡下面的实心内核：缩小、压暗，负责投影和填补空隙
     const shrink = (g, cy, k) => g.clone().translate(0, -cy, 0).scale(k, k, k).translate(0, cy, 0);
     this.G.crownCore = shrink(this.G.crown, 3.4, 0.8);
@@ -730,7 +733,7 @@ export class World {
     group.add(mesh(gg, gmat, { cast: false, recv: true }));
 
     // 程序填充：树、石、草、花、野生灵草
-    const trees = [], pines = [], trunks = [], rocks = [], grass = [], flowers = [], bushes = [], cols = [], herbs = [], tombs = [];
+    const trees = [], blooms = [], pines = [], trunks = [], rocks = [], grass = [], flowers = [], bushes = [], cols = [], herbs = [], tombs = [];
     const step = 2.6;
     let hi = 0;
     for (let gx = 0; gx < CHUNK; gx += step) for (let gz = 0; gz < CHUNK; gz += step) {
@@ -748,7 +751,9 @@ export class World {
         if (bio?.tree === 'dead') { trunks.push({ x, z, s: s * 0.9, rot: rng() * 6.28 }); cols.push({ x, z, r: 0.47 * s, off: false }); continue; }
         const isPine = bio?.tree === 'pine' || (fbm(x * 0.02, z * 0.02, 31, 2) > 0.58 && maple < 0.3);
         const c = bio?.crown ? (rng() < 0.7 ? bio.crown : PINE[0]) : isPine ? PINE[Math.floor(rng() * PINE.length)] : (rng() < maple ? MAPLE : FOREST)[Math.floor(rng() * 4)];
-        (isPine ? pines : trees).push({ x, z, s, rot: rng() * 6.28, c });
+        // 桃花林：成片出现；用坐标哈希判定，不多耗 rng，原有的树石位置不变
+        const grove = !isPine && !bio?.crown && maple < 0.3 && fbm(x * 0.03, z * 0.03, 47, 2) > 0.6 && hash01(Math.floor(x * 10), Math.floor(z * 10), 61) < 0.6;
+        (isPine ? pines : grove ? blooms : trees).push({ x, z, s, rot: rng() * 6.28, c: grove ? BLOSSOM[Math.floor(hash01(Math.floor(x * 10), Math.floor(z * 10), 62) * 4)] : c });
         trunks.push({ x, z, s, rot: rng() * 6.28 });
         cols.push({ x, z, r: 0.57 * s, off: false });
       } else if (!clear && r > 1 - 0.035 * rockK) {
@@ -789,6 +794,7 @@ export class World {
     const add = (im) => { if (im) { group.add(im); ims.push(im); } };
     add(inst(this.G.trunk, this.M.trunk, trunks, true, this.M.line));
     for (const im of this.leafClump('crown', trees)) add(im);
+    for (const im of this.leafClump('crown', blooms, this.M.blossom, this.M.leafyBloom)) add(im);
     add(inst(this.G.pine, this.M.leafy, pines, true, this.M.leafLine));
     for (const im of this.leafClump('bush', bushes)) add(im);
     add(inst(this.G.rock, this.M.rock, rocks, true, this.M.line));
@@ -938,9 +944,9 @@ export class World {
   }
 
   // 叶卡树冠 = 压暗的实心内核（投影）+ 叶片卡（不投影）
-  leafClump(kind, list) {
+  leafClump(kind, list, cards = this.M.cards, core = this.M.leafy) {
     const dark = list.map((o) => ({ ...o, c: o.c && '#' + _c.set(o.c).multiplyScalar(0.6).getHexString() }));
-    return [inst(this.G[kind + 'Core'], this.M.leafy, dark, true), inst(this.G[kind + 'Cards'], this.M.cards, list, false)];
+    return [inst(this.G[kind + 'Core'], core, dark, true), inst(this.G[kind + 'Cards'], cards, list, false)];
   }
 
   // 人字形瓦顶 + 微翘的屋脊（修仙味），返回 Group
