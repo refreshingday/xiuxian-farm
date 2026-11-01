@@ -8,3 +8,4 @@
 
 ## 音效禁令
 - 符的音效（掐诀 chant / 符炸 talisBoom）永远不要用 ring()、高音 sine/triangle 或 2kHz 以上的滤波噪声——"叮 / tin"的金属声已被用户否决，任何类似的声音都不要再做。只用低频闷响 + 低通噪声。
+- **Always republish the lab Artifact (https://claude.ai/artifact/UPChGbRg2oGrwz2MgXcYU7) after every lab commit and open it for the user** — publish `pub/` (copy changed files incl. `src/version.js`, rebuild `pub/lab.html` from `lab.html`), then Artifact `open`. Don't wait to be asked.

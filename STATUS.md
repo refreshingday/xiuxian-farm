@@ -108,6 +108,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-11-01 — 实验场：右下角版本号（src/version.js）补进 Artifact 镜像；CLAUDE.md 加规则：每次实验场提交后都要重新发布并打开 Artifact。
 - 2026-11-01 — 实验场：每挂瀑布脚下必有水潭，大小看落差（半径 1.5~3.4 米），地面挖浅盆；新增 ENVIRONMENT.md 记录环境规则（CLAUDE.md 已指向它）。
 - 2026-11-01 — 实验场：从瀑布口 / 断崖边踏空会自由落体——空中双臂上举乱挥、蹬腿、身体拉长；落地压扁再阻尼弹回 + 低沉闷响（落水则大水花 + 波纹）。
 - 2026-11-01 — 实验场：瀑布口 1.5 米内可以顺着水流往下跳（只许下不许上），其余断崖仍走不过。

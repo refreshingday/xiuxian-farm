@@ -186,7 +186,7 @@ export const BIOMES = [
   // ================================================================ 春野
   {
     id: 'meadow', name: '青竹村', sub: '新手村 · 四级后山 · 石阶 / 之字土路 / 木梯 / 木桩台阶 · 梯级瀑布', gdd: true,
-    terrace: { rock: '#9a948a', pools: M_T.pools, falls: M_T.falls, ladders: M_T.ladders, stream: M_T.stream },
+    terrace: { rock: '#9a948a', pools: M_T.pools, falls: M_T.falls, ponds: M_T.ponds, ladders: M_T.ladders, stream: M_T.stream },
     terrain(x, z) {
       const t = terraceAt(M_T, x, z);
       const pond = Math.hypot(x - 10, z - 7) - 3.6 - (vnoise(x * 0.5, z * 0.5, 2) - 0.5) * 1.4;
@@ -317,7 +317,7 @@ export const BIOMES = [
   // ================================================================ 赤枫林
   {
     id: 'autumn', name: '赤枫林', sub: '赤枫狼王领地 · 三级山 · 五级叠石塔（木梯）· 之字土路 · 瀑布', gdd: true,
-    terrace: { rock: '#a08a70', pools: A_T.pools, falls: A_T.falls, ladders: A_T.ladders, stream: A_T.stream },
+    terrace: { rock: '#a08a70', pools: A_T.pools, falls: A_T.falls, ponds: A_T.ponds, ladders: A_T.ladders, stream: A_T.stream },
     terrain(x, z) {
       const t = terraceAt(A_T, x, z);
       let h = (n2(x, z, 4, 0.08) - 0.5) * 0.25 + LH * t.lv - t.chan;
@@ -692,7 +692,7 @@ export const BIOMES = [
   // ================================================================ 珊瑚湾（风格试验）
   {
     id: 'reef', name: '珊瑚湾', sub: '风格试验 · 参考图 · 珊瑚浅湾 · 长栈桥 · 断吊桥 · 灰岩瀑布 · 鱼群',
-    terrace: { rock: '#a4a8aa', pools: RF_T.pools, falls: RF_T.falls, ladders: RF_T.ladders, stream: RF_T.stream },
+    terrace: { rock: '#a4a8aa', pools: RF_T.pools, falls: RF_T.falls, ponds: RF_T.ponds, ladders: RF_T.ladders, stream: RF_T.stream },
     terrain(x, z) {
       const t = terraceAt(RF_T, x, z), s = reefShore(x, z);
       let h = LH * t.lv + (n2(x, z, 6, 0.08) - 0.5) * 0.2 - t.chan;
