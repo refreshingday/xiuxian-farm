@@ -8,9 +8,11 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, PNG, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
 import { createChibi, animChibi } from '../chibi.js';
 import { TouchControls } from '../touch.js';
+import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './swim.js';
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
 import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
+import { REF, getRefAsset, REFU } from './ref/index.js';
 import { BIOMES, R } from './biomes.js';
 
 // ======================================================================
@@ -102,17 +104,18 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {}, bloomT: {},
+  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, v: 3, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
   if ((saved.v || 1) < 2) delete saved.outline; // v2：描边默认关闭，旧存档里的描边开关作废
-  Object.assign(S, saved, { v: 2 });
+  if ((saved.v || 1) < 3) delete saved.ink; // v3：参考画风的墨线也默认关闭
+  Object.assign(S, saved, { v: 3 });
 } catch { /* 无痕模式等 */ }
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
 
 let root = new THREE.Group(); scene.add(root);
-let emitters = [], bobbers = [], labels = [], waterMats = [], particleSys = [];
+let fish = null, emitters = [], bobbers = [], labels = [], waterMats = [], particleSys = [];
 
 // ======================================================================
 // 地面：圆形小岛（像素贴图顶面 + 分层土壁）
@@ -269,14 +272,14 @@ function makeWater(W, hAt, area, masked = false) {
     uniforms: fogU({
       tDepth: { value: dt }, uTime: U.time, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: sz }, uMask: { value: masked ? 1 : 0 }, uMode: { value: mode },
       cShallow: { value: new THREE.Color(W.shallow) }, cDeep: { value: new THREE.Color(W.deep) }, cFoam: { value: new THREE.Color(W.foam) },
-      uSky: { value: new THREE.Color() }, uGlow: { value: W.glow || 0 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
+      uSky: { value: new THREE.Color() }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
     }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
+    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -303,7 +306,7 @@ function makeWater(W, hAt, area, masked = false) {
           // 流动方向：静水用 uFlow 慢漂，溪流里按流向快速顺流
           vec2 drift = uFlow * uTime * 0.35 + fd * fs * uTime * 1.6;
           // 2) 卡通焦散线（风之杖式）：扰动后的 Voronoi 边，两层叠加
-          vec2 v1 = cell(q * 0.75 - drift), v2 = cell(q * 1.3 + drift.yx * 0.7 + 3.1);
+          vec2 v1 = cell(q * 0.75 * uCaus - drift), v2 = cell(q * 1.3 * uCaus + drift.yx * 0.7 + 3.1);
           float caus = max(smoothstep(0.09, 0.0, v1.y - v1.x), smoothstep(0.06, 0.0, v2.y - v2.x) * 0.6);
           c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * mix(0.42, 0.22, smoothstep(0.2, 0.9, d)));
           // 波光点点
@@ -324,7 +327,7 @@ function makeWater(W, hAt, area, masked = false) {
           float rings = smoothstep(0.1, 0.0, abs(wave - 0.5)) * (1.0 - smoothstep(0.08, 0.38, d));
           c = mix(c, cFoam, max(foam, rings * 0.7));
           c += cShallow * uGlow * (1.0 - d);
-          a = mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
+          a = uClear > 0.5 ? mix(0.55, 0.86, smoothstep(0.0, 0.8, d)) : mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
         } else if (uMode < 1.5) {
           vec2 v = cell(p * 0.6);
           c = mix(cShallow, cDeep, smoothstep(0.1, 0.9, d) * 0.6);
@@ -439,6 +442,7 @@ function placeAll(b, hAt) {
         // 台阶类：以下坡那一头（下一级平台）的地面高度为底，避免悬空
         if (rule.base === 'bottom') { const e = 1.5 * (sz || 1) + 0.35; y = hAt(x + Math.sin(rot) * e, z + Math.cos(rot) * e); }
         const o = { x, z, y, rot, s: 1, sz };
+        if (rule.float) o.bob = i * 2.3;
         add(rule.id, v, o); taken.push([x, z, 1.4, rule.id]);
       });
       continue;
@@ -474,14 +478,15 @@ function placeAll(b, hAt) {
       }
       if (Math.hypot(x, z) > R - 1 || Math.hypot(x, z - 2) < 1.6) continue;
       const t = b.terrain(x, z), h = hAt(x, z);
-      if (rule.water) { if (h > level - 0.12) continue; }
+      // water: 'bed' = 长在水底（珊瑚 / 海草），只放在够深、且地面种类对的地方
+      if (rule.water) { if (h > level - (rule.water === 'bed' ? 0.22 : 0.12) || (rule.water === 'bed' && rule.k && !rule.k.includes(t.k))) continue; }
       else if (h < level + 0.02 || (rule.k && !rule.k.includes(t.k))) continue;
       // 不放在断崖坡面上（高处水潭里也不放陆地物件）
       if (!rule.water && Math.max(Math.abs(hAt(x + 0.35, z) - hAt(x - 0.35, z)), Math.abs(hAt(x, z + 0.35) - hAt(x, z - 0.35))) > 0.3) continue;
       if (!rule.water && (b.terrace?.pools || []).some((p) => h < p.level + 0.05 && h > p.level - 1.2 && Math.hypot(x - p.x, z - p.z) < p.r)) continue;
       const s = lerp(rule.s[0], rule.s[1], rng());
       if (!free(x, z, gap * s * 0.5)) continue;
-      const o = { x, z, y: rule.water ? level + 0.01 : h - 0.03, rot: rng() * Math.PI * 2, s, sy: s * (0.9 + rng() * 0.2) };
+      const o = { x, z, y: rule.water === 'bed' ? h - 0.04 : rule.water ? level + 0.01 : h - 0.03, rot: rng() * Math.PI * 2, s, sy: s * (0.9 + rng() * 0.2) };
       if (rule.float) o.bob = rng() * 6;
       add(rule.id, variant(), o);
       taken.push([x, z, gap * s * 0.5, rule.id]);
@@ -501,6 +506,43 @@ function placeAll(b, hAt) {
     if (light) for (const o of list) emitters.push({ p: new THREE.Vector3(o.x, o.y + light.y * (o.sy ?? o.s), o.z), color: light.color, i: light.i, d: light.d * o.s, flicker: light.flicker, smoke: light.smoke, k: Math.random() * 9 });
   }
   contactShadows(taken);
+}
+
+// 水下鱼群：一群扁平的深色小鱼影，各自绕小圈游（圈上每一点都得是水），每帧更新实例矩阵
+function fishSchool(b, hAt) {
+  const W = b.water, rng = mulberry32(S.seed * 31 + 5), deep = (x, z, d) => W.level - hAt(x, z) > d;
+  const shape = new THREE.Shape();
+  shape.moveTo(0.2, 0); shape.quadraticCurveTo(0.08, 0.075, -0.1, 0.02); shape.lineTo(-0.2, 0.07); shape.lineTo(-0.17, 0); shape.lineTo(-0.2, -0.07); shape.lineTo(-0.1, -0.02); shape.quadraticCurveTo(0.08, -0.075, 0.2, 0);
+  const geo = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).scale(1.6, 1, 1.6);
+  const mat = new THREE.MeshBasicMaterial({ color: b.fish.color || '#124a58', transparent: true, opacity: 0.42, depthWrite: false });
+  const list = [];
+  for (let t = 0; t < b.fish.n * 30 && list.length < b.fish.n; t++) {
+    const a = rng() * Math.PI * 2, rr = Math.sqrt(rng()) * (R - 2), cx = Math.cos(a) * rr, cz = Math.sin(a) * rr, r = 0.6 + rng() * 2.2;
+    let ok = deep(cx, cz, 0.3);
+    for (let i = 0; ok && i < 8; i++) ok = deep(cx + Math.cos(i * 0.785) * r, cz + Math.sin(i * 0.785) * r, 0.18);
+    if (!ok) continue;
+    const s = 0.7 + rng() * 0.8, n = rng() < 0.35 ? 3 : 1; // 偶尔三条一起游
+    for (let j = 0; j < n && list.length < b.fish.n; j++) list.push({ cx, cz, r: r + j * 0.25, w: (0.25 + rng() * 0.35) * (rng() < 0.5 ? 1 : -1), ph: rng() * 6.3 + j * 0.25, s: s * (1 - j * 0.12), y: W.level + 0.004 + rng() * 0.004 });
+  }
+  if (!list.length) return;
+  const im = new THREE.InstancedMesh(geo, mat, list.length);
+  // 水面会写深度，鱼放在水面下会被挡住：改成贴着水面、在水之后画的半透明深色剪影，看起来就是水下的鱼影
+  im.renderOrder = 2; im.frustumCulled = false;
+  fish = { im, list, m: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler(), p: new THREE.Vector3(), sc: new THREE.Vector3() };
+  root.add(im);
+}
+function updateFish(t) {
+  if (!fish) return;
+  const { im, list, m, q, e, p, sc } = fish;
+  list.forEach((f, i) => {
+    // 速度时快时慢；朝向 = 圆周切线，加一点摆尾
+    const a = f.ph + t * f.w + Math.sin(t * 0.7 + f.ph) * 0.3;
+    p.set(f.cx + Math.cos(a) * f.r, f.y, f.cz + Math.sin(a) * f.r);
+    e.set(0, -a - Math.sign(f.w) * Math.PI / 2 + Math.sin(t * 9 + f.ph * 5) * 0.12, 0);
+    q.setFromEuler(e); sc.setScalar(f.s);
+    im.setMatrixAt(i, m.compose(p, q, sc));
+  });
+  im.instanceMatrix.needsUpdate = true;
 }
 
 // 物件脚下的柔和接触阴影：直接画进地面贴图（正片叠底），比实时阴影更"贴地"
@@ -530,10 +572,12 @@ const ALL_IDS = () => [...new Set([...BIOMES.flatMap((x) => x.catalog), ...Objec
 const SRC = {
   claude: { tag: 'Claude', strip: '#f0d9a6', get: (id) => ASSETS[id], build: getAsset },
   codex: { tag: 'Codex', strip: '#a9dcd6', get: (id) => CODEX[id], build: getCodexAsset },
+  // 参考画风（./ref/index.js）：同一套 Claude 素材按参考图画风重建（墨线 + 硬色阶 + 叶簇树冠 + 圆石）
+  ref: { tag: '参考画风', strip: '#cfe3b0', get: (id) => REF[id], build: getRefAsset },
 };
-const assetOf = (id, v) => (S.src === 'codex' && CODEX[id] ? getCodexAsset(id, v) : getAsset(id, v));
+const assetOf = (id, v) => (S.src === 'codex' && CODEX[id] ? getCodexAsset(id, v) : S.src === 'ref' && REF[id] ? getRefAsset(id, v) : getAsset(id, v));
 function buildCatalog(ids, mode = 'catalog') {
-  const srcs = mode === 'codex' ? ['codex'] : mode === 'compare' || mode === 'allcmp' ? ['claude', 'codex'] : ['claude'];
+  const srcs = mode === 'codex' ? ['codex'] : mode === 'ref' ? ['ref'] : mode === 'refcmp' ? ['claude', 'ref'] : mode === 'compare' || mode === 'allcmp' ? ['claude', 'codex'] : ['claude'];
   const rows = [];
   for (const id of ids) for (const sk of srcs) {
     const A = SRC[sk].get(id); if (!A) continue;
@@ -689,8 +733,9 @@ function clear() {
   scene.remove(root);
   root.traverse((o) => { if (o.material && o.material.map && o.material.map.isCanvasTexture && o.material.userData.own) o.material.map.dispose(); });
   root = new THREE.Group(); scene.add(root);
-  emitters = []; bobbers = []; particleSys = []; waterMats = []; groundTex = null;
+  emitters = []; bobbers = []; fish = null; particleSys = []; waterMats = []; groundTex = null;
   labels = []; $('#labels').innerHTML = '';
+  waterFx.clear(); resetSwim();
 }
 function build() {
   clear();
@@ -699,7 +744,9 @@ function build() {
     const hAt = buildIsland(b); hAtCur = hAt;
     buildWater(b, hAt);
     placeAll(b, hAt);
+    if (b.fish) fishSchool(b, hAt);
     span = R;
+    if (b.water) waterFx.setColor(b.water.foam);
     for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
     const ids = S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : b.catalog;
@@ -729,9 +776,9 @@ function build() {
 }
 function countAssets() {
   const ids = S.mode === 'scene' ? [...new Set(BIOMES[S.biome].scatter.map((r) => r.id))] : S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : BIOMES[S.biome].catalog;
-  const src = S.mode === 'codex' || (S.mode === 'scene' && S.src === 'codex') ? CODEX : null;
+  const src = S.mode === 'codex' || (S.mode === 'scene' && S.src === 'codex') ? CODEX : S.mode === 'ref' || (S.mode === 'scene' && S.src === 'ref') ? REF : null;
   const have = src ? ids.filter((id) => src[id]) : ids;
-  return { types: have.length, variants: have.reduce((s, id) => s + (src || ASSETS)[id].n, 0) };
+  return { types: have.length, variants: have.reduce((s, id) => s + ((src && src[id]) || ASSETS[id]).n, 0) };
 }
 function frame(reset = true) {
   if (!reset) return;
@@ -798,8 +845,9 @@ function updateLights(time) {
 // ---------- 开关 ----------
 function applyToggles() {
   document.body.classList.toggle('noWalk', S.mode !== 'scene' || !S.chibi);
-  root.traverse((o) => { if (o.userData.isLine) o.visible = S.outline; });
+  root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认关）
   sun.castShadow = S.shadows;
+  REFU.grad.value = S.refgrad ? 1 : 0;
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
   if (chibi) chibi.root.visible = S.chibi && S.mode === 'scene';
@@ -810,13 +858,15 @@ function applyToggles() {
 // ======================================================================
 // UI
 // ======================================================================
+// 「描边」按钮：看参考画风素材时管它的墨线，否则管原版描边（都默认关）
+const lineKey = () => (S.mode === 'ref' || S.mode === 'refcmp' || (S.mode === 'scene' && S.src === 'ref') ? 'ink' : 'outline');
 function ui() {
   document.querySelectorAll('#biomes button').forEach((b, i) => b.classList.toggle('on', i === S.biome));
   document.querySelectorAll('#modes button').forEach((b) => b.classList.toggle('on', b.dataset.m === S.mode));
   document.querySelectorAll('[data-src]').forEach((b) => b.classList.toggle('on', b.dataset.src === S.src));
-  document.querySelectorAll('[data-t]').forEach((b) => b.classList.toggle('on', !!S[b.dataset.t]));
+  document.querySelectorAll('[data-t]').forEach((b) => b.classList.toggle('on', !!S[b.dataset.t === 'outline' ? lineKey() : b.dataset.t]));
   const b = BIOMES[S.biome];
-  const who = S.mode === 'codex' ? ' · <span class="tag codex">Codex</span>' : S.mode === 'compare' || S.mode === 'allcmp' ? ' · <span class="tag claude">Claude</span> vs <span class="tag codex">Codex</span>' : S.mode === 'scene' ? ` · <span class="tag ${S.src}">${SRC[S.src].tag} 素材</span>` : S.mode === 'catalog' ? ' · <span class="tag claude">Claude</span>' : '';
+  const who = S.mode === 'codex' ? ' · <span class="tag codex">Codex</span>' : S.mode === 'ref' ? ' · <span class="tag ref">参考画风</span>' : S.mode === 'refcmp' ? ' · <span class="tag claude">Claude</span> vs <span class="tag ref">参考画风</span>' : S.mode === 'compare' || S.mode === 'allcmp' ? ' · <span class="tag claude">Claude</span> vs <span class="tag codex">Codex</span>' : S.mode === 'scene' ? ` · <span class="tag ${S.src}">${SRC[S.src].tag} 素材</span>` : S.mode === 'catalog' ? ' · <span class="tag claude">Claude</span>' : '';
   $('#title').innerHTML = (S.mode === 'all' ? '全部素材 <small>所有区域的图鉴</small>' : S.mode === 'allcmp' ? '全部对比 <small>所有区域 · 每种素材两行</small>' : `${b.name} <small>${b.sub}</small>`) + who;
   $('#time').value = S.time;
 }
@@ -829,7 +879,7 @@ function setupUI() {
   });
   document.querySelectorAll('#modes button').forEach((el) => el.onclick = () => { S.mode = el.dataset.m; save(); rebuild(true); });
   document.querySelectorAll('[data-src]').forEach((el) => el.onclick = () => { S.src = el.dataset.src; save(); rebuild(false); });
-  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { S[el.dataset.t] = !S[el.dataset.t]; save(); applyToggles(); ui(); });
+  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { const k = el.dataset.t === 'outline' ? lineKey() : el.dataset.t; S[k] = !S[k]; save(); applyToggles(); ui(); });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
   $('#bloomS').oninput = (e) => { S.bloomK[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
@@ -846,10 +896,10 @@ function setupUI() {
     if (e.target.tagName === 'INPUT') return;
     const n = e.key === '0' ? 10 : +e.key; if (n >= 1 && n <= BIOMES.length) { S.biome = n - 1; if (S.mode === 'all') S.mode = 'catalog'; else if (S.mode === 'allcmp') S.mode = 'compare'; save(); rebuild(true); }
     if (e.key === 'c' || e.key === 'C') { S.mode = S.mode === 'scene' ? 'catalog' : 'scene'; save(); rebuild(true); }
-    if (e.key === 'x' || e.key === 'X') { S.mode = { scene: 'scene', catalog: 'codex', codex: 'compare', compare: 'catalog', all: 'codex', allcmp: 'catalog' }[S.mode]; if (S.mode === 'scene') S.src = S.src === 'codex' ? 'claude' : 'codex'; save(); rebuild(S.mode !== 'scene'); }
+    if (e.key === 'x' || e.key === 'X') { S.mode = { scene: 'scene', catalog: 'codex', codex: 'compare', compare: 'catalog', all: 'codex', allcmp: 'catalog', ref: 'refcmp', refcmp: 'ref' }[S.mode]; if (S.mode === 'scene') S.src = S.src === 'codex' ? 'claude' : 'codex'; save(); rebuild(S.mode !== 'scene'); }
     if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
     if (e.key === 'r' || e.key === 'R') { S.seed++; save(); rebuild(false); }
-    if (e.key === 'o' || e.key === 'O') { S.outline = !S.outline; save(); applyToggles(); ui(); }
+    if (e.key === 'o' || e.key === 'O') { const k = lineKey(); S[k] = !S[k]; save(); applyToggles(); ui(); }
   });
 }
 
@@ -886,39 +936,167 @@ const keys = new Set();
 addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT') keys.add(e.code); });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
-const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3();
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3(), _wv = new THREE.Vector3();
 let walkYaw = 0, moveK = 0;
-function walk(dt) {
+// ---------- 下水：能走进水里，水深了就游 ----------
+const waterFx = createWaterFx(scene);
+const sfx = (k, v) => { if (S.sound) waterSound(k, v); };
+// 这一点的水面高度（没有水 = -99）。台地上的高处水潭单独一层水面；岩浆不算水
+function waterLvl(b, x, z, h) {
+  const W = b.water; if (!W || W.mode !== 'water') return -99;
+  for (const p of b.terrace?.pools || []) if (h < p.level && p.level - h < 0.85 && Math.hypot(x - p.x, z - p.z) < p.r) return p.level;
+  return h < W.level ? W.level : -99;
+}
+let swimming = false, swimK = 0, strokePh = 0, wasDepth = 0, stepSign = 0, ringT = 0, foamT = 0, kickT = 0, dripT = 0, dripMax = 1, wet = 0, wetLow = 0;
+function resetSwim() { swimming = false; swimK = 0; wasDepth = 0; dripT = 0; wet = wetLow = 0; if (chibi) { swimPose(chibi, 0, 0, 0, 0); applyWet(); } }
+// 湿衣服：颜色变深，慢慢晾干（下半身涉水只湿裙摆和裤子）
+const WET_ALL = [1, 2, 3, 4, 5, 7], WET_LOW = [2, 5];
+function applyWet() {
+  chibi.mats.forEach((m, i) => {
+    if (!WET_ALL.includes(i)) return;
+    m.userData.dry ??= m.color.clone();
+    const w = WET_LOW.includes(i) ? Math.max(wet, wetLow) : wet;
+    m.color.copy(m.userData.dry).multiplyScalar(1 - 0.32 * w);
+  });
+}
+const footW = (i) => chibi.legs[i].localToWorld(_wv.set(0, -0.48, 0.06));
+// 调试用（控制台 / 自动截图）：labDebug.chibi、labDebug.depthAt(x, z)
+window.labDebug = { get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
+function walk(dt, t) {
   if (!chibi || !chibi.root.visible) return;
   let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
   let iy = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   if (touch.on && (touch.stick.x || touch.stick.y)) { ix = touch.stick.x; iy = touch.stick.y; }
   const mag = Math.min(1, Math.hypot(ix, iy));
   moveK = lerp(moveK, mag, 1 - Math.exp(-10 * dt));
-  const P = chibi.root.position;
+  const P = chibi.root.position, b = BIOMES[S.biome], W = b.water;
+  const ice = W && W.mode === 'ice';
+  // 有效地面：水里按"游泳时身体的高度"算坡度，否则从深水游到岸边会被当成断崖
+  const eff = (x, z) => {
+    const h = hAtCur(x, z); if (ice) return Math.max(h, W.level);
+    const wl = waterLvl(b, x, z, h); return wl > -90 ? Math.max(h, wl - SWIM_IN) : h;
+  };
+  let h = hAtCur(P.x, P.z), wl = waterLvl(b, P.x, P.z, h), depth = wl > -90 ? wl - h : 0;
+  const slow = swimming ? 0.62 : lerp(1, WADE_SLOW, clamp(depth / SWIM_IN, 0, 1));
   if (mag > 0.01) {
     // 相对镜头方向：前 = 镜头看向的水平方向
     _f.subVectors(controls.target, camera.position).setY(0).normalize();
     _r.set(-_f.z, 0, _f.x);
     _d.copy(_r).multiplyScalar(ix).addScaledVector(_f, iy).normalize();
-    const sp = 5 * mag * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
-    const b = BIOMES[S.biome], deep = b.water ? b.water.level - 0.3 : -99;
-    // 不走出小岛、不走进深水
-    // 断崖：坡度太陡（>~50°）走不上去也跳不下去，台阶坡道可以走
-    const slope = Math.abs(hAtCur(nx + _d.x * 0.25, nz + _d.z * 0.25) - hAtCur(P.x, P.z)) / (sp + 0.25);
-    const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r); // 梯子处可以爬崖
-    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > deep && (slope < 1.2 || onLadder)) {
+    const surge = swimming ? 0.8 + 0.4 * Math.max(0, Math.sin(strokePh * 2)) : 1; // 每划一下往前冲一点
+    const sp = 5 * mag * slow * surge * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
+    // 不走出小岛；岩浆只能踩到边上；断崖（坡度 >~50°）走不上去也跳不下去，梯子处可以爬
+    const lavaEdge = W && W.mode === 'lava' ? W.level - 0.3 : -99;
+    const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25);
+    const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r);
+    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder)) {
       const dx = nx - P.x, dz = nz - P.z;
       P.x = nx; P.z = nz;
       camera.position.x += dx; camera.position.z += dz;
       controls.target.x += dx; controls.target.z += dz;
     }
     walkYaw = Math.atan2(_d.x, _d.z);
+    h = hAtCur(P.x, P.z); wl = waterLvl(b, P.x, P.z, h); depth = wl > -90 ? wl - h : 0;
   }
-  const y = hAtCur(P.x, P.z), dy = y - P.y;
-  P.y = y; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
+  // 涉水 ↔ 游泳（有回差）
+  const wasSwim = swimming;
+  if (!swimming && depth > SWIM_IN) swimming = true; else if (swimming && depth < SWIM_OUT) swimming = false;
+  swimK = lerp(swimK, swimming ? 1 : 0, 1 - Math.exp(-7 * dt));
+  if (swimming) strokePh += dt * (1.5 + 4.2 * moveK);
+  let y = ice ? Math.max(h, W.level) : h;
+  if (swimming) y = Math.max(h - 0.6, wl - 0.55 - lerp(0.45, 0.12, moveK) + Math.sin(t * 2.2) * 0.035); // 踩水时身子直、低一点；游起来身子平（浅水里脚陷进湖底也看不见）
+  const dy0 = P.y;
+  P.y = depth > 0.02 || swimK > 0.02 ? lerp(P.y, y, 1 - Math.exp(-10 * dt)) : y;
+  const dy = P.y - dy0; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
   chibi.root.rotation.y += Math.atan2(Math.sin(walkYaw - chibi.root.rotation.y), Math.cos(walkYaw - chibi.root.rotation.y)) * (1 - Math.exp(-12 * dt));
-  animChibi(chibi, dt, { move: moveK, attack: -1, cast: 0, work: 0 });
+  const prevStroke = strokePh - dt * (1.5 + 4.2 * moveK);
+  animChibi(chibi, dt, { move: moveK * (1 - swimK) * lerp(1, 0.8, clamp(depth / SWIM_IN, 0, 1)), attack: -1, cast: 0, work: 0 });
+  swimPose(chibi, swimK, moveK, strokePh, t);
+  chibi.root.updateMatrixWorld(true);
+
+  // ---------- 特效 ----------
+  const fwd = _f.set(Math.sin(chibi.root.rotation.y), 0, Math.cos(chibi.root.rotation.y)), side = _r.set(fwd.z, 0, -fwd.x);
+  const inWater = depth > 0.03;
+  if (inWater) {
+    // 刚踩进水：一小簇水花；从涉水变成游泳：大水花 + 两圈大波纹 + 一圈白沫
+    if (wasDepth <= 0.03 && moveK > 0.2) { waterFx.splash(P.x + fwd.x * 0.2, wl, P.z + fwd.z * 0.2, 10, 2.2, 0.9, 0.04, fwd); waterFx.ring(P.x, wl, P.z, 0.15, 1.0, 0.9); sfx('enter', 0.6); }
+    if (swimming && !wasSwim) {
+      waterFx.splash(P.x, wl, P.z, 26, 3.4, 1.4, 0.05, fwd);
+      waterFx.ring(P.x, wl, P.z, 0.3, 1.8, 1.3); waterFx.ring(P.x, wl, P.z, 0.2, 1.1, 1.0, 0.7);
+      for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; waterFx.foam(P.x + Math.cos(a) * 0.4, wl, P.z + Math.sin(a) * 0.4, Math.cos(a) * 1.2, Math.sin(a) * 1.2, 0.13, 0.9); }
+      sfx('plunge', 0.8);
+    }
+    if (!swimming && wasSwim) { waterFx.splash(P.x, wl, P.z, 10, 2, 0.7, 0.04); sfx('exit', 0.5); }
+    // 身边的波纹圈：走 / 游时密，停着时疏
+    ringT -= dt;
+    if (ringT < 0) {
+      ringT = swimming ? (moveK > 0.3 ? 0.5 : 0.8) : moveK > 0.3 ? 0.4 : 1.1;
+      const o = swimming ? 0.35 * moveK : 0, r0 = swimming ? 0.35 : 0.22 + clamp(depth, 0, 0.6) * 0.25;
+      waterFx.ring(P.x + fwd.x * o, wl, P.z + fwd.z * o, r0, r0 + (swimming ? 1.3 : 1.0), swimming ? 1.3 : 1.2, swimming ? 0.65 : 0.55);
+    }
+    if (!swimming) {
+      // 涉水脚步：落脚那一下溅水、起小圈（水越深溅得越多）
+      const sg = Math.sign(Math.sin(chibi.phase));
+      if (moveK > 0.3 && sg !== stepSign && stepSign !== 0) {
+        const f = footW(sg > 0 ? 0 : 1), dk = clamp(depth / 0.6, 0, 1);
+        waterFx.splash(f.x, wl, f.z, 3 + Math.round(dk * 7), 1.4 + dk * 1.6, 0.55, 0.03 + dk * 0.012, fwd);
+        waterFx.ring(f.x, wl, f.z, 0.08, 0.55 + dk * 0.5, 0.8, 0.75);
+        sfx('step', 0.35 + dk * 0.5);
+      }
+      stepSign = sg;
+      // 腿前面推开的水：小白沫
+      foamT -= dt;
+      if (moveK > 0.3 && depth > 0.12 && foamT < 0) {
+        foamT = 0.07;
+        const s = Math.random() - 0.5;
+        waterFx.foam(P.x + fwd.x * 0.25 + side.x * s * 0.4, wl, P.z + fwd.z * 0.25 + side.z * s * 0.4, side.x * s * 1.6 + fwd.x * 0.3, side.z * s * 1.6 + fwd.z * 0.3, 0.07 + depth * 0.06, 0.7);
+      }
+    } else {
+      stepSign = 0;
+      // 尾迹：头前推起白沫，身后左右两道往外散（V 字），脚后打水
+      foamT -= dt;
+      if (moveK > 0.25 && foamT < 0) {
+        foamT = 0.045;
+        waterFx.foam(P.x + fwd.x * 0.75, wl, P.z + fwd.z * 0.75, fwd.x * 0.6 + side.x * (Math.random() - 0.5), fwd.z * 0.6 + side.z * (Math.random() - 0.5), 0.12, 0.6);
+        for (const sd of [-1, 1]) waterFx.foam(P.x + side.x * sd * 0.32 - fwd.x * 0.1, wl, P.z + side.z * sd * 0.32 - fwd.z * 0.1, side.x * sd * 1.1 * moveK - fwd.x * 0.3, side.z * sd * 1.1 * moveK - fwd.z * 0.3, 0.1, 1.4);
+      }
+      kickT -= dt;
+      if (moveK > 0.25 && kickT < 0) {
+        kickT = 0.11;
+        const f = footW(Math.random() < 0.5 ? 0 : 1);
+        waterFx.drop(f.x, wl, f.z, (Math.random() - 0.5) * 0.6 - fwd.x * 0.6, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 0.6 - fwd.z * 0.6, 0.032, wl);
+        waterFx.foam(f.x, wl, f.z, -fwd.x * 0.4, -fwd.z * 0.4, 0.09, 0.8);
+      }
+      // 划水：手入水那一下（转到正前方）溅水花
+      if (moveK > 0.25) for (let i = 0; i < 2; i++) {
+        const a0 = (prevStroke + i * Math.PI) % (Math.PI * 2), a1 = (strokePh + i * Math.PI) % (Math.PI * 2);
+        if (a0 < Math.PI && a1 >= Math.PI) {
+          const hw = chibi.arms[i].hand.getWorldPosition(_wv);
+          waterFx.splash(hw.x, wl, hw.z, 7, 2.2, 0.6, 0.04, fwd);
+          waterFx.ring(hw.x, wl, hw.z, 0.1, 0.7, 0.8, 0.8);
+          sfx('stroke', 0.6);
+        }
+      }
+    }
+    // 衣服湿了
+    if (swimming) wet = 1; else wetLow = Math.max(wetLow, clamp(depth / 0.5, 0, 1));
+    if (depth > 0.25 || swimming) { dripMax = swimming ? 2.6 : 1.4; dripT = dripMax; }
+  } else {
+    stepSign = 0;
+    if (wasDepth > 0.03 && moveK > 0.2) { waterFx.splash(P.x, wl > -90 ? wl : P.y, P.z, 5, 1.4, 0.5, 0.03); }
+    // 出水后身上往下滴水
+    if (dripT > 0) {
+      dripT -= dt;
+      if (Math.random() < dt * 28 * (dripT / dripMax)) {
+        const a = Math.random() * Math.PI * 2, r = 0.15 + Math.random() * 0.2, hy = 0.2 + Math.random() * (wet > 0.5 ? 1.0 : 0.35);
+        const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;
+        waterFx.drop(x, P.y + hy, z, 0, -0.2, 0, 0.022, hAtCur(x, z), false, 1.5);
+      }
+    }
+    if (wet > 0 || wetLow > 0) { wet = Math.max(0, wet - dt / 12); wetLow = Math.max(0, wetLow - dt / 8); }
+  }
+  wasDepth = depth;
+  applyWet();
 }
 
 // ======================================================================
@@ -970,8 +1148,10 @@ renderer.setAnimationLoop(() => {
     if (p.material.uniforms.uPR) p.material.uniforms.uPR.value = pixelRatio * innerHeight / 900;
     if (p.userData.night) p.material.uniforms.uAlpha.value = nightK;
   }
-  walk(dt);
+  walk(dt, t);
+  waterFx.update(dt);
   storm(dt);
+  updateFish(t);
   updateLights(t);
   composer.render();
   updateStats(dt);

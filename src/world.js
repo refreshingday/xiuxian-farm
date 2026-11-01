@@ -2,23 +2,56 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   CHUNK, mulberry32, hashInt, hash01, fbm, vnoise, clamp, smooth, approach, angDiff,
-  flat, toon, glow, mesh, at, outlineMat, addOutline, canvasTex, boxUV, wind, PNG, weatherU,
+  flat, toon as toonBase, glow, mesh, at, outlineMat, addOutline, canvasTex, boxUV, wind, PNG, weatherU,
 } from './util.js';
+import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
+import { buildWall } from './wall.js';
+import { makeLabWater, makeLabFall } from './water.js';
+import { getRefAsset } from './lab/ref/index.js';
+
+// 村子里的东西用参考画风（lab 里的 ref：三阶色阶 + 冷暗暖亮 + 叶簇树冠）：建村期间打开，toon() 自动带上 ref
+let REFMODE = false;
+const toon = (c, o = {}) => toonBase(c, REFMODE && !o.leaf && !o.grass && !o.card ? { ...o, ref: true } : o);
+// 参考画风的树叶没有季节着色：给树叶材质补上和叶卡一样的春夏秋冬
+const LEAFK = new Set(['clump', 'leaf', 'bloom', 'pine', 'sway']);
+function seasonRef(root) {
+  root.traverse((o) => {
+    const m = o.material;
+    if (!o.isMesh || o.userData.isLine || !m || m.userData.seasoned || !LEAFK.has(o.userData.kind)) return;
+    m.userData.seasoned = true;
+    const prev = m.onBeforeCompile, key = m.customProgramCacheKey ? m.customProgramCacheKey() : '';
+    m.onBeforeCompile = (s, r) => {
+      prev?.call(m, s, r);
+      s.uniforms.uSeason = weatherU.season; s.uniforms.uAutumn = weatherU.autumn; s.uniforms.uSnow = weatherU.snow;
+      s.fragmentShader = 'uniform vec3 uSeason;\nuniform float uAutumn, uSnow;\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+        diffuseColor.rgb *= uSeason;
+        diffuseColor.rgb = mix(diffuseColor.rgb, dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)) * vec3(3.5, 1.4, 0.26), uAutumn);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.96, 1.0), uSnow * 0.55);`);
+    };
+    m.customProgramCacheKey = () => key + 'S';
+    m.needsUpdate = true;
+  });
+}
 
 // ---------- 世界骨架（手工） ----------
-export const VILLAGE_R = 32;
+export const VILLAGE_R = 40;
 export const MINE = new THREE.Vector2(64, -56);
 export const MINE_R = 24;
 const MINE_ANG = Math.atan2(-MINE.y, -MINE.x); // 矿洞入口朝向村子
 export const MINE_GATE = new THREE.Vector2(MINE.x + Math.cos(MINE_ANG) * MINE_R, MINE.y + Math.sin(MINE_ANG) * MINE_R);
 export const ARENA = new THREE.Vector2(MINE.x - Math.cos(MINE_ANG) * (MINE_R - 10), MINE.y - Math.sin(MINE_ANG) * (MINE_R - 10));
-export const FARM = { x0: -19, z0: -1, cols: 6, rows: 4, size: 1.5 };
+export const FARM = { x0: -19, z0: -1, cols: 8, rows: 6, size: 1.5 }; // 灵田：地块和作物在 farm.js
 export const POND = { x: -7, z: -19, r: 4.6 };
+// 村墙（wall.js）：一圈围起来的村子，只有三个门——东北（通矿洞的大路）、南、西
+export const WALL_R = 41;
+const gate = (id, name, a) => ({ id, name, a, x: Math.sin(a) * WALL_R, z: -Math.cos(a) * WALL_R });
+export const GATES = [gate('ne', '玄晶门', Math.atan2(MINE_GATE.x, -MINE_GATE.y)), gate('s', '迎客门', Math.PI), gate('w', '竹海门', -1.493)];
+const TOWERS = [2.0, 3.93, 5.78];
 // 仙山：村北的石峰群；瀑布从中间那座落进小潭，再流进荷花池
 const PEAKS = [[-13, -31, 7, 2.6], [-9.5, -33, 9.5, 2.9], [-6, -31.2, 8, 2.4], [-2.4, -32.6, 10.5, 2.7], [1.2, -30.6, 6, 2], [-16.4, -28.6, 4.5, 1.8], [4, -28.4, 3.6, 1.5], [-19, -31, 6.5, 2.2]];
 const BASIN = { x: -6, z: -26.6, r: 1.7 };
 const STREAM = [BASIN.x, BASIN.z + 1.2, -6.6, -22.6];
-const HOUSES = [
+let HOUSES = [
   { cx: -15, cz: -8, w: 7, d: 6, roof: '#6e7688', wall: '#c08048', player: true },
   { cx: 17, cz: 0, w: 7, d: 6, roof: '#65708a', wall: '#b87a46' },
   { cx: -14, cz: 16, w: 6, d: 5, roof: '#727a8a', wall: '#c88a52' },
@@ -36,14 +69,27 @@ function segDist(px, pz, ax, az, bx, bz) {
   return Math.hypot(px - ax - vx * t, pz - az - vz * t);
 }
 export const roadDist = (x, z) => segDist(x, z, 0, 0, MINE_GATE.x, MINE_GATE.y);
-export const mapleAmount = (x, z) => smooth(0.55, 0.66, fbm(x * 0.008, z * 0.008, 11, 2)) * smooth(60, 110, Math.hypot(x, z));
-export const dangerAt = (x, z) => clamp((Math.hypot(x, z) - 40) / 60, 0, 6);
+// 赤枫林只长在竹海扇区（其他扇区走远了就换成自己的地貌）
+export const mapleAmount = (x, z) => smooth(0.55, 0.66, fbm(x * 0.008, z * 0.008, 11, 2)) * smooth(60, 110, Math.hypot(x, z)) * (sectorAt(x, z).id === 'bamboo' ? 1 : 1 - biomeK(x, z));
+export const dangerAt = dangerFor;
+
+// 野生灵草：多数是灵草，离村越远越可能长出凝露草、人参（按位置固定，不吃区块的随机序列）
+const HERB_GLOW = { lingcao: '#7dffe0', ninglu: '#8ad8ff', renshen: '#ffd27a', chiyang: '#ff8a5a', yuehua: '#fff2a0' };
+export function wildHerb(x, z) {
+  const r = hash01(Math.floor(x * 10), Math.floor(z * 10), 7), far = clamp((Math.hypot(x, z) - 60) / 200, 0, 1);
+  if (r < 0.04 + far * 0.08) return 'renshen';
+  if (r < 0.2 + far * 0.1) return mapleAmount(x, z) > 0.5 ? 'chiyang' : 'ninglu';
+  if (r < 0.26 + far * 0.1) return 'yuehua';
+  return 'lingcao';
+}
 
 export function regionName(x, z) {
   if (Math.hypot(x - MINE.x, z - MINE.y) < MINE_R + 1) return '玄晶矿洞';
   if (Math.hypot(x, z) < VILLAGE_R) return '青竹村';
-  const stars = '★'.repeat(Math.min(5, 1 + Math.floor(dangerAt(x, z))));
-  return (mapleAmount(x, z) > 0.5 ? '赤枫林 ' : '翠竹野 ') + stars;
+  const stars = '★'.repeat(Math.min(5, 1 + Math.floor(dangerAt(x, z) / 5)));
+  const sec = sectorAt(x, z), near = Math.hypot(x, z) < 110;
+  const name = near ? (mapleAmount(x, z) > 0.5 ? '赤枫林' : '翠竹野') : sec.id === 'bamboo' && mapleAmount(x, z) > 0.5 ? '赤枫林' : sec.name;
+  return `${name} · ${RINGS[Math.max(0, ringAt(x, z))].realm}圈 ${stars}`;
 }
 
 // ---------- 地面配色（sRGB 0..255，直接画进 canvas） ----------
@@ -53,7 +99,22 @@ const GP = {
   plaza: [204, 198, 186], stone: [64, 60, 74], stone2: [44, 42, 52], crystal: [74, 60, 104],
 };
 const mix3 = (o, a, b, t) => { o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t; return o; };
-const PATHS = HOUSES.map((h) => [h.cx, h.cz + h.d / 2 + 0.6, 0, 0]).concat([[POND.x + 3, POND.z + 3.5, 0, 0], [FARM.x0 + 4.5, FARM.z0 - 0.6, -15, -4.4]]);
+const makePaths = () => HOUSES.map((h) => [h.cx, h.cz + h.d / 2 + 0.6, 0, 0]).concat([[POND.x + 3, POND.z + 3.5, 0, 0], [FARM.x0 + 4.5, FARM.z0 - 0.6, -15, -4.4], [-1, 27.5, GATES[1].x, GATES[1].z], [-7, -3.2, GATES[2].x, GATES[2].z]]);
+let PATHS = makePaths();
+// 村子布局（data/villagers.json）：房屋、茶摊、委托板。要在 new World 之前调用
+let STALL = null;
+// 野外空地：坊市、宗门所在的地方不长树，中间铺石板（main 在 new World 之前登记）
+let CLEARINGS = [];
+export function configureClearings(list) { CLEARINGS = list; }
+export const BOARD = { x: -4.5, z: -7 };
+export function configureVillage(data) {
+  HOUSES = Object.entries(data.houses).map(([id, h]) => {
+    const old = HOUSES.find((o) => o.cx === h.x && o.cz === h.z) || { w: 7, d: 6, roof: '#6e7688', wall: '#c08048' };
+    return { ...old, w: h.w ?? old.w, d: h.d ?? old.d, roof: h.roof ?? old.roof, wall: h.wall ?? old.wall, id, name: h.name, cx: h.x, cz: h.z, player: id === 'home' };
+  });
+  STALL = data.stall;
+  PATHS = makePaths();
+}
 
 // 返回基础色到 out，并给出路面程度 path(0..1)、地面类型 kind
 const GS = { path: 0, kind: 0 };
@@ -64,17 +125,22 @@ function groundSample(x, z, out) {
   mix3(out, out, GP.meadow, smooth(0.6, 0.8, fbm(x * 0.03, z * 0.03, 5, 2)) * 0.55);
   mix3(out, out, GP.maple, mapleAmount(x, z) * 0.6);
   mix3(out, out, GP.village, (1 - smooth(VILLAGE_R - 6, VILLAGE_R + 4, dv + (n - 0.5) * 8)) * 0.5);
+  // 扇区地貌：雪峰发白、沼泽深绿、火山赤褐、沙漠沙黄、古战场灰褐
+  const sec = sectorAt(x, z), bk = biomeK(x, z);
+  if (sec.tint && bk > 0) mix3(out, out, sec.tint, bk * (0.75 + n * 0.25));
   // 路：大路 + 各家门口通向广场的小路
   let rd = roadDist(x, z) - 0.5;
   for (const [ax, az, bx, bz] of PATHS) rd = Math.min(rd, segDist(x, z, ax, az, bx, bz) + 0.25);
   GS.path = 1 - smooth(0.9, 1.6, rd + (n - 0.5) * 0.9);
   GS.kind = 0;
   if (dv < 7.5 + (n - 0.5) * 1.5) { GS.kind = 1; GS.path = 1; }
+  for (const g of GATES) if (Math.hypot(x - g.x, z - g.z) < 5 + (n - 0.5) * 1.2) { GS.kind = 1; GS.path = 1; } // 村门口铺石板
   const pd = pondDist(x, z);
   if (pd < 1.1 + (n - 0.5) * 0.6) { GS.kind = 2; GS.path = Math.max(GS.path, 1); }
   const bd = Math.min(Math.hypot(x - BASIN.x, z - BASIN.z) - BASIN.r, segDist(x, z, ...STREAM) - 0.55);
   if (bd < 0.8 + (n - 0.5) * 0.5) { GS.kind = 2; GS.path = 1; }
   for (const [px, pz, , pr] of PEAKS) if (Math.hypot(x - px, z - pz) < pr + 0.9 + (n - 0.5) * 0.8) { GS.kind = 4; GS.path = 1; mix3(out, out, [96, 112, 84], 0.7); }
+  for (const c of CLEARINGS) if (c.plaza && Math.abs(x - c.x) < c.plaza + (n - 0.5) && Math.abs(z - c.z) < c.plaza * 0.75 + (n - 0.5)) { GS.kind = 1; GS.path = 1; }
   const F = FARM;
   if (x > F.x0 - 0.5 && x < F.x0 + F.cols * F.size + 0.5 && z > F.z0 - 0.5 && z < F.z0 + F.rows * F.size + 0.5) { GS.kind = 3; GS.path = 1; }
   const mine = 1 - smooth(MINE_R - 1, MINE_R + 5, dm + (n - 0.5) * 4);
@@ -179,6 +245,18 @@ const GROUND_FRAG = `
     c *= mix(1.0, mix(0.84, 0.62, hard), uWet);
     c *= 1.0 - gPud * 0.5;
     gWetS = uWet * (0.3 + 0.7 * hard);
+    // 季节：草地跟着变色；冬天积雪（石板上薄一些）
+    c = mix(c, c * uGrassT, 1.0 - hard);
+    // 秋天：草地上一片片散着红、橙、黄的落叶（路上、石板上少一些）
+    if (uLitter > 0.0) {
+      vec2 li = floor(wp * 1.6), lf = fract(wp * 1.6) - 0.35 - vec2(gHash(li + 3.1), gHash(li + 5.7)) * 0.3;
+      float la = gHash(li + 9.2) * 6.28, lk = gHash(li + 1.3);
+      vec2 lr = mat2(cos(la), -sin(la), sin(la), cos(la)) * lf;
+      float leaf = step(lr.x * lr.x / 0.09 + lr.y * lr.y / 0.03, 1.0) * step(gHash(li), uLitter * (gNoise(wp * 0.18 + 2.0) * 0.95 - 0.12)) * (1.0 - 0.7 * hard);
+      vec3 lc = lk < 0.4 ? vec3(0.62, 0.1, 0.03) : lk < 0.75 ? vec3(0.8, 0.26, 0.03) : vec3(0.85, 0.55, 0.07);
+      c = mix(c, lc * (0.8 + 0.4 * gHash(li + 4.4)) * (1.0 - step(abs(lr.y), 0.025) * 0.25), leaf);
+    }
+    c = mix(c, vec3(0.9, 0.93, 0.98) * (0.92 + gl * 0.25), uSnow * (1.0 - ws * 0.5) * (0.82 + 0.18 * n));
     diffuseColor.rgb *= c;
   }`;
 // 草地 / 土路的法线图：只扰动这两种地面，石板保持平
@@ -223,12 +301,12 @@ function groundMat(ox, oz, maps) {
       tTint: { value: maps.tint }, tMask: { value: maps.mask }, uOrigin: { value: new THREE.Vector2(ox, oz) },
       tGrass: { value: PNG.grass_ground }, tDirt: { value: PNG.dirt_path }, tStone: { value: PNG.stone_plaza },
       tGrassN: { value: PNG.grass_ground_n }, tDirtN: { value: PNG.dirt_path_n },
-      uWet: weatherU.wet, uRain: weatherU.rain, uSky: weatherU.sky, uRainT: wind,
+      uWet: weatherU.wet, uRain: weatherU.rain, uSky: weatherU.sky, uRainT: wind, uGrassT: weatherU.grassT, uSnow: weatherU.snow, uLitter: weatherU.litter,
       uGrassRef: { value: lin(GP.grass) }, uPlaza: { value: lin(GP.plaza) },
       uFarm: { value: lin(mix3([0, 0, 0], GP.dirt2, GP.till, 0.75)).divide(lin(GP.dirt)) }, uSand: { value: lin(GP.sand).divide(lin(GP.dirt)) },
     });
     s.vertexShader = 'varying vec2 vGW;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = position.xz;');
-    s.fragmentShader = (PNG.grass_ground_n && PNG.dirt_path_n ? '#define GROUND_NORMALS\n' : '') + 'uniform sampler2D tTint, tMask, tGrass, tDirt, tStone, tGrassN, tDirtN;\nuniform float uWet, uRain, uRainT;\nuniform vec3 uSky;\n' + GROUND_NOISE + 'uniform vec2 uOrigin;\nuniform vec3 uGrassRef, uPlaza, uFarm, uSand;\nvarying vec2 vGW;\n'
+    s.fragmentShader = (PNG.grass_ground_n && PNG.dirt_path_n ? '#define GROUND_NORMALS\n' : '') + 'uniform sampler2D tTint, tMask, tGrass, tDirt, tStone, tGrassN, tDirtN;\nuniform float uWet, uRain, uRainT, uSnow, uLitter;\nuniform vec3 uSky, uGrassT;\n' + GROUND_NOISE + 'uniform vec2 uOrigin;\nuniform vec3 uGrassRef, uPlaza, uFarm, uSand;\nvarying vec2 vGW;\n'
       + s.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>' + GROUND_FRAG).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>' + GROUND_NRM)
       .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + GROUND_WET);
   };
@@ -446,12 +524,14 @@ export class World {
     this.houses = [];
     this.ores = [];
     this.farm = [];
-    this.picked = new Set(); // 只存改动：被采过的野生灵草
+    this.picked = new Map(); // 只存改动：被采过的野生灵草 id → 采摘那天（3 天后重新长出来）
+    this.day = 1;
     this.mineFactor = 0;
+    this.herbGlows = {};
     this.onSpawn = null;
     this.time = 0;
     this.initAssets();
-    this.buildVillage();
+    REFMODE = true; this.buildVillage(); REFMODE = false;
     this.buildMine();
   }
 
@@ -474,6 +554,7 @@ export class World {
       leaf: flat(new THREE.ConeGeometry(0.12, 0.45, 4)),
       spike: flat(new THREE.ConeGeometry(0.6, 2.4, 5)).translate(0, 1.2, 0),
       shard: flat(new THREE.OctahedronGeometry(0.4, 0)),
+      tomb: mergeGeometries([new THREE.BoxGeometry(0.6, 0.85, 0.22).translate(0, 0.42, 0), new THREE.CylinderGeometry(0.3, 0.3, 0.22, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, 0.85, 0)]),
     };
     this.M = {
       ground: toon('#ffffff', { vc: true }),
@@ -511,9 +592,18 @@ export class World {
       }
   }
   addCircle(x, z, r) { const c = { x, z, r, off: false }; this._cells(x - r, z - r, x + r, z + r, (b) => b.c.push(c)); return c; }
+  // 参考画风素材的墨线（树、竹、石）：跟设置里的「描边」走，默认关
+  setInk(on) { this.inkOn = on; for (const c of this.refInk || []) c.visible = on; }
+  // 冬天池塘、小潭结冰：能走上去，荷叶、白沫收起
+  setIce(on) {
+    this.iced = on;
+    for (const c of this.iceCols || []) c.off = on;
+    for (const o of this.iceHide || []) o.visible = !on;
+  }
   addBox(x0, z0, x1, z1) { const bx = { x0, z0, x1, z1 }; this._cells(x0, z0, x1, z1, (b) => b.b.push(bx)); return bx; }
 
-  resolve(p, r) {
+  // skipWall：兽潮 / 入侵的妖兽可以穿过村墙（它们不会绕路找门）
+  resolve(p, r, skipWall = false) {
     const cx = Math.floor(p.x / CHUNK), cz = Math.floor(p.z / CHUNK);
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
       const ch = this.chunks.get(key(cx + dx, cz + dz));
@@ -523,7 +613,7 @@ export class World {
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
       const b = this.prefabCols.get(key(gx + dx, gz + dz));
       if (!b) continue;
-      for (const c of b.c) pushCircle(p, r, c);
+      for (const c of b.c) if (!(skipWall && c.wall)) pushCircle(p, r, c);
       for (const bx of b.b) pushBox(p, r, bx);
     }
   }
@@ -554,9 +644,12 @@ export class World {
     }
 
     // 房屋：进门屋顶淡出、墙体剖开（同一个世界，不切场景）
+    // 只有屋顶在变（进门 / 出门过程中）才动材质，平时 70 来座房子都跳过
     for (const h of this.houses) {
       const inside = p.x > h.x0 && p.x < h.x1 && p.z > h.z0 && p.z < h.z1;
+      if (!inside && h.t === 0 && h.settled) continue;
       h.t = approach(h.t, inside ? 1 : 0, dt * 3.5);
+      h.settled = h.t === 0;
       for (const m of h.roofMats) {
         m.opacity = 1 - h.t;
         m.transparent = h.t > 0.001;
@@ -578,9 +671,9 @@ export class World {
       if (e.glowMesh) e.glowMesh.material.color.copy(e.glowMesh.material.userData.base).multiplyScalar(0.25 + k * 0.75);
     }
     for (const w of this.windowMats) w.color.copy(w.userData.day).lerp(w.userData.base, nightK);
-    if (this.water) { this.water.uniforms.uTime.value = this.time; this.water.uniforms.uLight.value = 1 - nightK * 0.72; }
+    for (const wm of [this.water, this.wellWater]) if (wm) { wm.uniforms.uTime.value = this.time; wm.uniforms.uLight.value = 1 - nightK * 0.72; }
     if (this.fall) { this.fall.uniforms.uTime.value = this.time; this.fall.uniforms.uLight.value = 1 - nightK * 0.72; }
-    if (this.wheel) this.wheel.rotation.z -= dt * 0.9;
+    if (this.wheel && !this.iced) this.wheel.rotation.z -= dt * 0.9; // 冬天水冻住，水车也停了
     this.updateSky(dt, p, nightK);
     wind.value = this.time;
 
@@ -588,8 +681,6 @@ export class World {
     for (const o of this.ores) {
       if (!o.alive) { o.respawn -= dt; if (o.respawn <= 0) { o.alive = true; o.hp = 3; o.group.visible = true; o.col.off = false; } }
     }
-    // 农田生长（按游戏小时）
-    this.updateFarm(hours);
     // 野生灵草摆动
     for (const ch of this.chunks.values()) for (const h of ch.herbs) {
       h.mesh.children[1].rotation.y += dt;
@@ -619,37 +710,42 @@ export class World {
     group.add(mesh(gg, gmat, { cast: false, recv: true }));
 
     // 程序填充：树、石、草、花、野生灵草
-    const trees = [], pines = [], trunks = [], rocks = [], grass = [], flowers = [], bushes = [], cols = [], herbs = [];
+    const trees = [], pines = [], trunks = [], rocks = [], grass = [], flowers = [], bushes = [], cols = [], herbs = [], tombs = [];
     const step = 2.6;
     let hi = 0;
     for (let gx = 0; gx < CHUNK; gx += step) for (let gz = 0; gz < CHUNK; gz += step) {
       const x = ox + gx + rng() * step, z = oz + gz + rng() * step;
       const dv = Math.hypot(x, z), dm = Math.hypot(x - MINE.x, z - MINE.y), rd = roadDist(x, z);
-      const clear = dv < VILLAGE_R - 3 || rd < 3 || dm < MINE_R + 7 || pondDist(x, z) < 2;
+      const clear = dv < WALL_R + 4 || rd < 3 || dm < MINE_R + 7 || pondDist(x, z) < 2 || CLEARINGS.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
       const dens = fbm(x * 0.035, z * 0.035, 21, 2);
       const r = rng();
       const maple = mapleAmount(x, z);
-      if (!clear && r < smooth(0.35, 0.75, dens) * 0.34) {
-        const isPine = fbm(x * 0.02, z * 0.02, 31, 2) > 0.58 && maple < 0.3;
+      // 扇区：树、石头、草的多少和样子都按本扇区来（离村越远越明显）
+      const sec = sectorAt(x, z), bk = biomeK(x, z), bio = bk > 0.5 ? sec : null;
+      const treeK = 1 + (sec.trees - 1) * bk, rockK = 1 + (sec.rocks - 1) * bk;
+      if (!clear && r < smooth(0.35, 0.75, dens) * 0.34 * treeK) {
         const s = 0.62 + rng() * 0.4;
-        const c = isPine ? PINE[Math.floor(rng() * PINE.length)] : (rng() < maple ? MAPLE : FOREST)[Math.floor(rng() * 4)];
+        if (bio?.tree === 'dead') { trunks.push({ x, z, s: s * 0.9, rot: rng() * 6.28 }); cols.push({ x, z, r: 0.35 * s, off: false }); continue; }
+        const isPine = bio?.tree === 'pine' || (fbm(x * 0.02, z * 0.02, 31, 2) > 0.58 && maple < 0.3);
+        const c = bio?.crown ? (rng() < 0.7 ? bio.crown : PINE[0]) : isPine ? PINE[Math.floor(rng() * PINE.length)] : (rng() < maple ? MAPLE : FOREST)[Math.floor(rng() * 4)];
         (isPine ? pines : trees).push({ x, z, s, rot: rng() * 6.28, c });
         trunks.push({ x, z, s, rot: rng() * 6.28 });
         cols.push({ x, z, r: 0.42 * s, off: false });
-      } else if (!clear && r > 0.965) {
-        const s = 0.6 + rng() * 1.1;
-        rocks.push({ x, z, s, sy: s * (0.6 + rng() * 0.5), rot: rng() * 6.28, c: rng() < 0.5 ? '#aaa59e' : '#948f8a' });
+      } else if (!clear && r > 1 - 0.035 * rockK) {
+        const s = 0.6 + rng() * 1.1, rc = bio?.rockC || ['#aaa59e', '#948f8a'];
+        if (bio?.tomb && rng() < 0.6) tombs.push({ x, z, s: 0.8 + rng() * 0.4, rot: rng() * 0.6 - 0.3, c: rc[Math.floor(rng() * 2)] });
+        else rocks.push({ x, z, s, sy: s * (0.6 + rng() * 0.5), rot: rng() * 6.28, c: rc[Math.floor(rng() * 2)] });
         cols.push({ x, z, r: 0.6 * s, off: false });
       } else if (!clear && r > 0.9 && r < 0.94) {
         bushes.push({ x, z, s: 0.8 + rng() * 0.6, rot: rng() * 6.28, c: rng() < maple ? '#d8803a' : FOREST[Math.floor(rng() * 5)] });
       } else if (r > 0.94 && !clear && dangerAt(x, z) > 0.2) {
         const id = `${k}:${hi++}`;
-        if (!this.picked.has(id)) herbs.push(this.makeHerb(x, z, id, group));
+        if (!this.herbGone(id)) herbs.push(this.makeHerb(x, z, id, group, wildHerb(x, z)));
       }
       const inPlaza = dv < 8.5, inMine = dm < MINE_R + 1, onRoad = rd < 1.8;
       if (!inPlaza && !inMine && !onRoad) {
         // 密草：每格 ~30 丛，颜色取自地面，草丛疏密随噪声成片
-        const lush = 0.45 + fbm(x * 0.12, z * 0.12, 41, 2) * 0.9;
+        const lush = (0.45 + fbm(x * 0.12, z * 0.12, 41, 2) * 0.9) * (1 + (sec.grass - 1) * bk);
         const gn = Math.floor(30 * lush);
         for (let i = 0; i < gn; i++) {
           const gx2 = x + (rng() - 0.5) * step, gz2 = z + (rng() - 0.5) * step;
@@ -659,7 +755,7 @@ export class World {
           _c.setRGB(_b[0] / 255 * v * 1.08, _b[1] / 255 * v * 1.1, _b[2] / 255 * v, THREE.SRGBColorSpace);
           grass.push({ x: gx2, z: gz2, s: 0.75 + rng() * 0.6, sy: (0.7 + rng() * 0.7) * (0.7 + lush * 0.5), rot: rng() * 6.28, c: '#' + _c.getHexString() });
         }
-        if (rng() < 0.16) {
+        if (rng() < 0.16 * (1 + (sec.grass - 1) * bk)) {
           const c = FLOWERS[Math.floor(rng() * 5)];
           for (let i = 0; i < 3; i++) {
             const fx = x + rng() * 1.2, fz = z + rng() * 1.2;
@@ -676,6 +772,7 @@ export class World {
     add(inst(this.G.pine, this.M.leafy, pines, true, this.M.leafLine));
     for (const im of this.leafClump('bush', bushes)) add(im);
     add(inst(this.G.rock, this.M.rock, rocks, true, this.M.line));
+    add(inst(this.G.tomb, this.M.rock, tombs, true, this.M.line));
     add(inst(this.G.grass, this.M.grass, grass, false));
     add(inst(this.G.flower, this.M.plain, flowers, false));
 
@@ -685,10 +782,10 @@ export class World {
     if (this.onSpawn) this.onSpawn(cx, cz, rng);
   }
 
-  makeHerb(x, z, id, parent) {
+  makeHerb(x, z, id, parent, kind = 'lingcao') {
     const g = new THREE.Group();
     g.add(mesh(this.G.stem, toon('#3f9a5a'), { cast: false }));
-    const b = mesh(this.G.bulb, this.M.herbGlow, { cast: false }); b.position.y = 0.62; g.add(b);
+    const b = mesh(this.G.bulb, this.herbGlows[kind] ??= glow(HERB_GLOW[kind] || '#7dffe0', 3), { cast: false }); b.position.y = 0.62; g.add(b);
     for (let i = 0; i < 3; i++) {
       const l = mesh(this.G.leaf, toon('#4fbf7a'), { cast: false });
       l.position.set(Math.cos(i * 2.1) * 0.15, 0.15, Math.sin(i * 2.1) * 0.15);
@@ -697,11 +794,12 @@ export class World {
     }
     g.position.set(x, 0, z);
     parent.add(g);
-    return { id, x, z, mesh: g };
+    return { id, x, z, mesh: g, kind };
   }
+  herbGone(id) { return this.picked.has(id) && this.day - this.picked.get(id) < 3; }
 
   pickHerb(ch, h) {
-    this.picked.add(h.id);
+    this.picked.set(h.id, this.day);
     ch.group.remove(h.mesh);
     ch.herbs.splice(ch.herbs.indexOf(h), 1);
   }
@@ -717,9 +815,11 @@ export class World {
   buildVillage() {
     this.windowMats = [];
     for (const h of HOUSES) this.buildHouse(h.cx, h.cz, h.w, h.d, h);
+    this.buildVillageProps();
     this.buildPond();
     this.buildPeaks();
-    this.initSky();
+    buildWall(this, WALL_R, GATES, TOWERS);
+    REFMODE = false; this.initSky(); REFMODE = true;
 
     // 井：石砌井身 + 瓦顶
     const T = this.T;
@@ -728,7 +828,8 @@ export class World {
     const wuv = wellG.attributes.uv; for (let i = 0; i < wuv.count; i++) wuv.setXY(i, wuv.getX(i) * 7, wuv.getY(i) * 0.85);
     well.add(mesh(wellG, toon('#b4aea8', { occ: true, map: T.stone }), { recv: true }));
     well.add(mesh(new THREE.TorusGeometry(1.12, 0.1, 6, 18).rotateX(Math.PI / 2).translate(0, 0.86, 0), toon('#9a948e', { occ: true })));
-    well.add(mesh(new THREE.CircleGeometry(1.05, 16).rotateX(-Math.PI / 2).translate(0, 0.55, 0), glow('#2a5a90', 0.8)));
+    this.wellWater = makeLabWater({ x0: -1.3, z0: -1.3, size: 2.6, N: 48, depthAt: (x, z) => Math.max(0, 1.05 - Math.hypot(x, z)) * 0.55 }); // 井水也用 lab 的水面
+    well.add(mesh(new THREE.CircleGeometry(1.05, 24).rotateX(-Math.PI / 2).translate(0, 0.55, 0), this.wellWater, { cast: false }));
     for (const s of [-1, 1]) well.add(at(mesh(new THREE.BoxGeometry(0.15, 2.0, 0.15).translate(0, 1, 0), toon('#7a5236', { occ: true })), s * 0.95, 0, 0));
     well.add(at(mesh(new THREE.BoxGeometry(2.1, 0.12, 0.12), toon('#7a5236', { occ: true })), 0, 1.8, 0));
     const wr = this.gableRoof(2.6, 1.8, 0.7, toon('#5a6070', { occ: true, map: T.tile }), toon('#3a3e48', { occ: true }));
@@ -738,61 +839,45 @@ export class World {
     this.addCircle(0, 0, 1.3);
 
     // 灯笼柱
-    for (const [x, z] of [[5, 4], [-5, -4], [6, -1], [-5, 5], [-11, -3.5], [11, -6], [-9, 12], [9, 10], [20, -12], [26, -18]]) this.lanternPost(x, z);
+    for (const [x, z] of [[5, 4], [-5, -4], [6, -1], [-5, 5], [-11, -3.5], [11, -6], [-9, 12], [9, 10], [20, -12], [26, -18]]) if (!this.insideHouse(x, z, 1)) this.lanternPost(x, z);
 
-    // 村中树木（手放）
-    const trees = [[-24, -2], [-15, -23], [4, 22], [24, 2], [22, 24], [-24, 24], [-26, -16], [0, -24], [7, -15], [-2, -14]];
+    // 村里的树、竹、灌木、花、石：lab 里参考画风的素材（叶簇树冠），再补上季节着色
+    const ref = (id, v, x, z, s = 1, r = 0) => {
+      const o = getRefAsset(id, v)?.clone(); if (!o) return null;
+      seasonRef(o); o.traverse((c) => { if (c.userData.isLine) { (this.refInk ||= []).push(c); c.visible = !!this.inkOn; } });
+      o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = r; this.scene.add(o); return o;
+    };
+    const prng = mulberry32(21);
+    const trees = [[-26, 3], [-15, -23], [4, 22], [24, 2], [22, 24], [-24, 24], [-26, -16], [0, -24], [7, -15], [-2, -14], [31, -12], [-32, 12], [32, 14], [-12, 33], [12, 33], [-33, -14]];
     trees.forEach(([x, z], i) => {
-      const t = new THREE.Group();
-      t.add(mesh(this.G.trunk, this.M.trunk));
-      const peach = i % 2 === 0, c = peach ? '#ffc4dc' : FOREST[i % 4];
-      addOutline(t, this.M.leafLine);
-      t.add(mesh(this.G.crownCore, toon('#' + _c.set(c).multiplyScalar(0.6).getHexString(), { occ: true, vc: true, leaf: true, leafTex: peach ? PNG.peach_foliage : null })));
-      t.add(mesh(this.G.crownCards, peach ? this.M.blossom : cardMat(c, PNG.leaf_cards || this.M.cards.map), { cast: false }));
-      t.position.set(x, 0, z); t.scale.setScalar(1.1);
-      this.scene.add(t);
+      if (this.insideHouse(x, z, 2.5) || roadDist(x, z) < 2.5) return;
+      ref(i % 2 === 0 ? 'peach' : 'tree', i, x, z, 1.05 + prng() * 0.15, prng() * 6.28);
       this.addCircle(x, z, 0.5);
     });
-    // 竹丛（村子外圈）
-    const bamboo = [], bleaf = [], crng = mulberry32(88);
-    for (const [bx, bz] of [[-27, 6], [-28, -8], [-22, -26], [27, -6], [28, 8], [-6, 27], [10, 26], [-29, 14]]) {
-      for (let k = 0; k < 7; k++) {
-        const x = bx + (crng() - 0.5) * 2.4, z = bz + (crng() - 0.5) * 2.4, s = 0.8 + crng() * 0.5;
-        const sy = s * (1 + crng() * 0.4);
-        bamboo.push({ x, z, s, sy, rot: crng() * 6, c: crng() < 0.5 ? '#7cae3a' : '#5e9a34' });
-        bleaf.push({ x, z, s: s * 0.9, sy, rot: crng() * 6, c: '#5fa83a' });
-      }
+    // 竹丛（靠近村墙的一圈）
+    [[-27, 6], [-28, -8], [-22, -26], [27, -6], [28, 8], [-6, 27], [10, 26], [-29, 14], [34, 0], [-36, 22], [36, 24]].forEach(([bx, bz], i) => {
+      if (this.insideHouse(bx, bz, 2.5) || roadDist(bx, bz) < 3) return;
+      ref('bamboo', i, bx, bz, 1, prng() * 6.28);
       this.addCircle(bx, bz, 1.4);
-    }
-    const seg = [0, 1, 2, 3, 4, 5];
-    const stalk = mergeGeometries(seg.map((i) => new THREE.CylinderGeometry(0.065 - i * 0.004, 0.08 - i * 0.004, 1.15, 6).translate(0, 0.6 + i * 1.18, 0)).concat(seg.map((i) => new THREE.CylinderGeometry(0.095 - i * 0.004, 0.095 - i * 0.004, 0.06, 6).translate(0, 1.18 * (i + 1), 0))));
-    this.scene.add(inst(stalk, toon('#ffffff'), bamboo, true, this.M.line));
-    this.scene.add(inst(this.G.bambooCards, this.M.cards, bleaf, false));
-
+    });
     // 灌木与花丛点缀
     const brng = mulberry32(5);
-    const bush = [], flw = [];
-    for (let i = 0; i < 60; i++) {
-      const a = brng() * 6.28, r = 9 + brng() * 22, x = Math.cos(a) * r, z = Math.sin(a) * r;
+    for (let i = 0, nb = 0, nf = 0; i < 90; i++) {
+      const a = brng() * 6.28, r = 9 + brng() * 29, x = Math.cos(a) * r, z = Math.sin(a) * r;
       groundSample(x, z, _b);
-      if (GS.path > 0.1 || this.insideHouse(x, z, 2) || pondDist(x, z) < 1.5 || roadDist(x, z) < 2.5) continue;
-      if (i % 3 === 0) { bush.push({ x, z, s: 0.7 + brng() * 0.5, rot: brng() * 6, c: FOREST[i % 5] }); this.addCircle(x, z, 0.4); }
-      else for (let k = 0; k < 4; k++) flw.push({ x: x + brng() * 1.4, z: z + brng() * 1.4, s: 1, rot: brng() * 6, c: FLOWERS[i % 5] });
+      if (GS.path > 0.1 || this.insideHouse(x, z, 2) || pondDist(x, z) < 1.5 || roadDist(x, z) < 2.5 || (z < -26 && Math.abs(x + 8) < 14)) continue;
+      if (i % 3 === 0 && nb < 20) { nb++; ref('bush', i, x, z, 0.9 + brng() * 0.4, brng() * 6); this.addCircle(x, z, 0.5); }
+      else if (nf < 16) { nf++; ref('flower', i, x, z, 1, brng() * 6); }
     }
-    this.scene.add(...this.leafClump('bush', bush).filter(Boolean));
-    this.scene.add(inst(this.G.flower, this.M.plain, flw, false));
+    // 村门两侧各摆一块大石头
+    for (const gt of GATES) for (const sd of [-1, 1]) {
+      const tx = Math.cos(gt.a) * sd * 8.5, tz = Math.sin(gt.a) * sd * 8.5, nx = Math.sin(gt.a) * 3, nz = -Math.cos(gt.a) * 3;
+      ref('rock', Math.round(Math.abs(gt.a * 7)) + (sd > 0 ? 1 : 0), gt.x + tx + nx, gt.z + tz + nz, 1.3, prng() * 6.28);
+      this.addCircle(gt.x + tx + nx, gt.z + tz + nz, 1.2);
+    }
 
-    // 农田 + 篱笆
+    // 农田篱笆（地块本身由 farm.js 建）
     const F = FARM;
-    const soilG = new THREE.BoxGeometry(F.size * 0.92, 0.08, F.size * 0.92);
-    const soilM = toon('#9a6a44', { map: this.T.soil }), wetM = toon('#6a4630', { map: this.T.soil });
-    for (let c = 0; c < F.cols; c++) for (let r = 0; r < F.rows; r++) {
-      const x = F.x0 + (c + 0.5) * F.size, z = F.z0 + (r + 0.5) * F.size;
-      const soil = mesh(soilG, soilM, { cast: false, recv: true }); soil.position.set(x, 0.04, z); soil.visible = false;
-      const plant = this.makeCrop(); plant.position.set(x, 0.08, z);
-      this.scene.add(soil, plant);
-      this.farm.push({ x, z, c, r, state: 0, stage: 0, grow: 0, soil, plant, soilM, wetM });
-    }
     const postG = mergeGeometries([new THREE.BoxGeometry(0.16, 0.8, 0.16).translate(0, 0.4, 0), new THREE.ConeGeometry(0.12, 0.14, 4).rotateY(Math.PI / 4).translate(0, 0.87, 0)]);
     const railG = new THREE.BoxGeometry(1, 0.1, 0.07);
     const wood = toon('#a8743f');
@@ -811,38 +896,6 @@ export class World {
     };
     fence(fx0, F.z0 - 0.4, fx0, fz1);
     fence(fx0, fz1, fx1, fz1);
-  }
-
-  makeCrop() {
-    const g = new THREE.Group();
-    const sprout = new THREE.Group();
-    for (let i = 0; i < 2; i++) { const l = mesh(this.G.leaf, toon('#6fcf6a'), { cast: false }); l.scale.setScalar(0.6); l.position.set(i ? 0.06 : -0.06, 0.12, 0); l.rotation.z = i ? -0.6 : 0.6; sprout.add(l); }
-    const mid = new THREE.Group();
-    for (let i = 0; i < 4; i++) { const l = mesh(this.G.leaf, toon('#4fbf6a')); l.position.set(Math.cos(i * 1.57) * 0.12, 0.2, Math.sin(i * 1.57) * 0.12); l.rotation.set(Math.sin(i * 1.57) * 0.6, 0, -Math.cos(i * 1.57) * 0.6); mid.add(l); }
-    const ripe = new THREE.Group();
-    ripe.add(mesh(this.G.stem, toon('#3f9a5a')));
-    for (let i = 0; i < 5; i++) { const l = mesh(this.G.leaf, toon('#3faa6a')); l.position.set(Math.cos(i * 1.26) * 0.16, 0.22, Math.sin(i * 1.26) * 0.16); l.rotation.set(Math.sin(i * 1.26) * 0.8, 0, -Math.cos(i * 1.26) * 0.8); ripe.add(l); }
-    const b = mesh(this.G.bulb, this.M.herbGlow, { cast: false }); b.position.y = 0.6; b.scale.setScalar(1.3); ripe.add(b);
-    g.add(sprout, mid, ripe);
-    g.userData.stages = [sprout, mid, ripe];
-    for (const s of g.userData.stages) s.visible = false;
-    return g;
-  }
-
-  updateFarm(hours) {
-    if (this.lastHours === undefined) this.lastHours = hours;
-    let dh = hours - this.lastHours; this.lastHours = hours;
-    if (dh < 0) dh = 0;
-    for (const t of this.farm) {
-      t.soil.visible = t.state > 0;
-      t.soil.material = t.state === 2 ? t.wetM : t.soilM;
-      if (t.state === 2 && t.stage < 2) {
-        t.grow += dh;
-        if (t.grow >= 2.5) { t.grow = 0; t.stage++; }
-      }
-      const st = t.plant.userData.stages;
-      st.forEach((s, i) => (s.visible = t.state === 2 && t.stage === i));
-    }
   }
 
   farmTileAt(x, z) {
@@ -982,7 +1035,64 @@ export class World {
     prop(new THREE.CylinderGeometry(0.34, 0.3, 0.8, 10).translate(0, 0.4, 0), toon('#9a6438', { map: TX.plank }), x1 + 0.6, z1 - 0.6);
     prop(boxUV(new THREE.BoxGeometry(0.7, 0.6, 0.6), 0.7, 0.6, 0.6, 1.5).translate(0, 0.3, 0), toon('#a8743f', { map: TX.plank }), x0 - 0.6, z1 - 0.5);
 
-    this.houses.push({ x0, x1, z0, z1, cx, cz, wallsG, roof, roofMats, hideWhenCut, t: 0, door: { x: cx, z: z1 + 1.2 }, inside: { x: cx, z: cz + 0.6 }, player: !!opt.player });
+    // 门匾：店铺和人家的名字
+    if (opt.name && !opt.player) {
+      const tex = canvasTex(256, 72, (c, w, h) => {
+        c.fillStyle = '#3a2416'; c.fillRect(0, 0, w, h); c.strokeStyle = '#d6b670'; c.lineWidth = 6; c.strokeRect(5, 5, w - 10, h - 10);
+        c.fillStyle = '#ffe7a8'; c.font = 'bold 40px "STKaiti","KaiTi","Noto Serif SC",serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(opt.name, w / 2, h / 2 + 2);
+      }, { pixel: false, repeat: false });
+      const sign = mesh(new THREE.PlaneGeometry(1.6, 0.45), toon('#ffffff', { map: tex }), { cast: false });
+      sign.position.set(cx, H + 0.05, z1 + T / 2 + 0.06); root.add(sign); hideWhenCut.push(sign);
+    }
+    this.houses.push({ id: opt.id, name: opt.name, x0, x1, z0, z1, cx, cz, wallsG, roof, roofMats, hideWhenCut, t: 0, door: { x: cx, z: z1 + 1.2 }, inside: { x: cx, z: cz + 0.6 }, player: !!opt.player });
+  }
+
+  // 铁匠铺门口的铁砧和炉子、村口茶摊、委托板
+  buildVillageProps() {
+    const line = this.M.line, stoneM = toon('#9a948e', { occ: true, map: this.T.stone }), woodM = toon('#8a5a34', { occ: true, map: this.T.plank });
+    const smithy = this.houses.find((h) => h.id === 'smithy');
+    if (smithy) {
+      const x = smithy.x0 - 1.4, z = smithy.z1 - 1.2, g = new THREE.Group();
+      g.add(at(mesh(new THREE.BoxGeometry(0.5, 0.5, 0.4).translate(0, 0.25, 0), toon('#5a3a26')), 0, 0, 0));
+      g.add(at(mesh(new THREE.BoxGeometry(0.9, 0.22, 0.4).translate(0, 0.61, 0), toon('#4a4e58')), 0, 0, 0));
+      g.add(at(mesh(new THREE.ConeGeometry(0.11, 0.4, 6).rotateZ(Math.PI / 2).translate(0.62, 0.61, 0), toon('#4a4e58')), 0, 0, 0));
+      g.position.set(x, 0, z); addOutline(g, line); this.scene.add(g); this.addCircle(x, z, 0.5);
+      const f = new THREE.Group(), fx = smithy.x0 - 1.4, fz = smithy.z0 + 1.6;
+      f.add(mesh(boxUV(new THREE.BoxGeometry(1.4, 1.0, 1.2), 1.4, 1, 1.2, 1.4).translate(0, 0.5, 0), stoneM));
+      const coal = mesh(new THREE.BoxGeometry(1.0, 0.1, 0.8), glow('#ff6a2a', 3, true), { cast: false }); coal.position.y = 1.02; f.add(coal);
+      f.add(at(mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.6, 8).translate(0, 1.8, 0), stoneM), 0.3, 0, -0.3));
+      f.position.set(fx, 0, fz); addOutline(f, line); this.scene.add(f); this.addBox(fx - 0.75, fz - 0.65, fx + 0.75, fz + 0.65);
+      this.addEmitter(fx, 1.4, fz, '#ff8a3a', 1.2, 'torch', coal);
+      this.anvil = { x: x + 0.9, z };
+    }
+    if (STALL) {
+      const { x, z } = STALL, g = new THREE.Group();
+      g.add(mesh(boxUV(new THREE.BoxGeometry(1.8, 0.1, 1.0), 1.8, 0.1, 1, 1.5).translate(0, 0.8, 0), woodM));
+      for (const [a, b] of [[-0.8, -0.4], [0.8, -0.4], [-0.8, 0.4], [0.8, 0.4]]) g.add(at(mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1).translate(0, 0.4, 0), woodM), a, 0, b));
+      for (const s of [-1, 1]) g.add(at(mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.45, 8).translate(0, 0.22, 0), woodM), s * 1.4, 0, 0.6));
+      g.add(at(mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 6).translate(0, 1.3, 0), woodM), 0, 0, 0));
+      g.add(at(mesh(new THREE.ConeGeometry(1.8, 0.7, 10).translate(0, 2.7, 0), toon('#c94f4f', { occ: true })), 0, 0, 0));
+      g.add(at(mesh(new THREE.SphereGeometry(0.16, 10, 8).scale(1, 0.8, 1), toon('#e8e0d0')), 0.4, 0.95, 0));
+      for (let i = 0; i < 3; i++) g.add(at(mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.1, 8), toon('#f0ece0')), -0.5 + i * 0.25, 0.9, 0.15));
+      const lan = mesh(new THREE.SphereGeometry(0.2, 10, 8).scale(1, 1.2, 1), glow('#ff4a2a', 1.8, true), { cast: false }); lan.position.set(1.1, 2.1, 0); g.add(lan);
+      g.position.set(x, 0, z); addOutline(g, line); this.scene.add(g);
+      this.addBox(x - 0.95, z - 0.55, x + 0.95, z + 0.55);
+      this.addEmitter(x + 1.1, 2.1, z, '#ff7a4a', 0.8, 'lantern', lan);
+      this.stall = { x, z: z + 1.4 };
+    }
+    // 委托板：两根柱子 + 木板 + 小瓦顶，上面钉着几张纸
+    {
+      const { x, z } = BOARD, g = new THREE.Group();
+      for (const s of [-1, 1]) g.add(at(mesh(new THREE.BoxGeometry(0.14, 2.2, 0.14).translate(0, 1.1, 0), woodM), s * 0.85, 0, 0));
+      g.add(at(mesh(boxUV(new THREE.BoxGeometry(1.7, 1.0, 0.08), 1.7, 1, 0.08, 1.5), woodM), 0, 1.4, 0));
+      const notes = [[-0.5, 1.6, 0.04], [0.1, 1.5, -0.08], [0.55, 1.65, 0.1], [-0.2, 1.15, 0.06], [0.45, 1.15, -0.05]];
+      for (const [a, b, r] of notes) { const n = mesh(new THREE.PlaneGeometry(0.34, 0.42), toon('#f2ead2'), { cast: false }); n.position.set(a, b, 0.05); n.rotation.z = r; g.add(n); }
+      const roof = this.gableRoof(2.1, 0.7, 0.3, toon('#5a6070', { occ: true, map: this.T.tile }), toon('#3a3e48', { occ: true }));
+      roof.position.y = 2.15; g.add(roof);
+      g.position.set(x, 0, z); addOutline(g, line); this.scene.add(g);
+      this.addBox(x - 1, z - 0.2, x + 1, z + 0.2);
+      this.board = { x, z: z + 1.2 };
+    }
   }
 
   // ---------- 池塘：带噪声轮廓的水面 + 石岸 + 小码头 ----------
@@ -1008,36 +1118,24 @@ export class World {
   buildPond() {
     const P = POND;
     const g = this.waterGeo(P.x, P.z, pondR);
-    this.water = new THREE.ShaderMaterial({
-      side: THREE.DoubleSide,
-      uniforms: { uTime: { value: 0 }, uLight: { value: 1 } },
-      vertexShader: `attribute float edge; varying float vEdge; varying vec2 vW;
-        void main() { vEdge = edge; vW = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform float uTime; uniform float uLight; varying float vEdge; varying vec2 vW;
-        float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        void main() {
-          vec2 px = floor(vW * 8.0);
-          vec3 deep = vec3(0.10, 0.36, 0.72), mid = vec3(0.20, 0.58, 0.88), rim = vec3(0.50, 0.84, 0.95);
-          float e = vEdge + (h(px) - 0.5) * 0.06;
-          vec3 c = mix(deep, mid, smoothstep(0.2, 0.75, e));
-          c = mix(c, rim, smoothstep(0.86, 0.97, e));
-          float w = sin(vW.x * 1.7 + uTime * 1.3) + sin(vW.y * 2.3 - uTime * 1.1) + sin((vW.x + vW.y) * 1.1 + uTime * 0.7);
-          float band = step(2.55, w) * step(0.55, h(floor(vW * vec2(3.0, 8.0))));
-          c = mix(c, vec3(0.80, 0.94, 1.0), band * 0.55);
-          float sp = step(0.985, h(px + floor(uTime * 2.0)));
-          c += sp * 0.5;
-          if (e > 0.985) c = vec3(0.92, 0.98, 1.0);
-          gl_FragColor = vec4(pow(c, vec3(2.2)) * uLight, 1.0);
-          #include <colorspace_fragment>
-        }`,
+    // 水面：lab 里 Claude 版的水面着色器。池塘 + 小潭 + 溪流共用一张深度图（越往里越深；溪流里带流向）
+    const Bz = BASIN, [sx0, sz0, sx1, sz1] = STREAM, sl = Math.hypot(sx1 - sx0, sz1 - sz0);
+    this.water = makeLabWater({
+      x0: -15.5, z0: -30.5, size: 18, N: 144,
+      depthAt: (x, z) => {
+        const pond = -pondDist(x, z), basin = Bz.r * (1 + 0.1 * Math.sin(Math.atan2(z - Bz.z, x - Bz.x) * 3 + 0.5)) - Math.hypot(x - Bz.x, z - Bz.z), stream = 0.85 - segDist(x, z, sx0, sz0, sx1, sz1);
+        return Math.max(0, pond, basin, stream) * 0.32;
+      },
+      flowAt: (x, z) => { const k = smooth(0.95, 0.3, segDist(x, z, sx0, sz0, sx1, sz1)); return [(sx1 - sx0) / sl * k, (sz1 - sz0) / sl * k]; },
     });
     const w = new THREE.Mesh(g, this.water); w.receiveShadow = false; this.scene.add(w);
-    // 碰撞：池子内部不可走
+    // 碰撞：池子内部不可走（冬天结冰后可以走上去，见 setIce）
+    this.iceCols = []; this.iceHide = [];
     for (let i = 0; i < 16; i++) {
       const a = i / 16 * Math.PI * 2, r = pondR(a) * 0.62;
-      this.addCircle(P.x + Math.cos(a) * r, P.z + Math.sin(a) * r, pondR(a) * 0.42);
+      this.iceCols.push(this.addCircle(P.x + Math.cos(a) * r, P.z + Math.sin(a) * r, pondR(a) * 0.42));
     }
-    this.addCircle(P.x, P.z, P.r * 0.6);
+    this.iceCols.push(this.addCircle(P.x, P.z, P.r * 0.6));
     // 石岸
     const rng = mulberry32(42), rocks = [];
     for (let a = 0; a < Math.PI * 2; a += 0.32 + rng() * 0.2) {
@@ -1053,11 +1151,12 @@ export class World {
       pads.push({ x: P.x + Math.cos(a) * r, z: P.z + Math.sin(a) * r, s: 0.7 + rng() * 0.5, rot: rng() * 6, c: i % 3 ? '#4f9e3e' : '#6cb84a' });
     }
     const padG = new THREE.CircleGeometry(0.32, 10, 0.4, Math.PI * 1.8).rotateX(-Math.PI / 2).translate(0, 0.06, 0);
-    this.scene.add(inst(padG, toon('#ffffff'), pads, false));
+    const padM = inst(padG, toon('#ffffff'), pads, false);
     const lotus = pads.filter((_, i) => i % 2 === 0).map((p) => ({ ...p, s: 1, c: '#ff9ec4' }));
     const lotusG = mergeGeometries([0, 1, 2, 3, 4].map((i) => new THREE.ConeGeometry(0.09, 0.3, 4).translate(0, 0.15, 0).rotateZ(0.45).rotateY(i * 1.256).toNonIndexed()).concat([new THREE.IcosahedronGeometry(0.07, 1)]));
     lotusG.translate(0, 0.1, 0);
-    this.scene.add(inst(lotusG, toon('#ffffff'), lotus, false, this.M.line));
+    const lotusM = inst(lotusG, toon('#ffffff'), lotus, false, this.M.line);
+    this.scene.add(padM, lotusM); this.iceHide.push(padM, lotusM);
     // 木码头（朝向村子一侧）
     const a = Math.PI * 0.25, ex = P.x + Math.cos(a) * pondR(a), ez = P.z + Math.sin(a) * pondR(a);
     const dock = new THREE.Group();
@@ -1135,31 +1234,14 @@ export class World {
     const fp = fg.attributes.position;
     for (let k = 0; k < fp.count; k++) { const t = (fp.getY(k) + top / 2) / top; fp.setZ(k, 0.5 * t * t); }
     fg.translate(0, top / 2, 0);
-    this.fall = new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uTime: { value: 0 }, uLight: { value: 1 } },
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform float uTime; uniform float uLight; varying vec2 vUv;
-        float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        void main() {
-          vec2 px = floor(vUv * vec2(10.0, 40.0));
-          float sp = 0.9 + h(vec2(px.x, 3.0)) * 0.8;
-          float v = fract((px.y / 40.0) * 3.0 + uTime * sp + h(vec2(px.x, 7.0)));
-          vec3 c = mix(vec3(0.42, 0.74, 0.92), vec3(0.75, 0.92, 1.0), step(0.55, v));
-          c = mix(c, vec3(1.0), step(0.86, v));
-          float ex = min(vUv.x, 1.0 - vUv.x);
-          if (ex < 0.1) c = mix(c, vec3(1.0), 0.6);
-          if (vUv.y < 0.08 || vUv.y > 0.96) c = vec3(1.0);
-          float a = ex < 0.05 && h(px + floor(uTime * 6.0)) > 0.5 ? 0.0 : 0.95;
-          gl_FragColor = vec4(pow(c, vec3(2.2)) * uLight, a);
-        }`,
-    });
+    this.fall = makeLabFall(weatherU.ice);
     const fall = new THREE.Mesh(fg, this.fall);
     fall.position.set(B.x, 0, B.z - B.r + 0.05 - 0.3); fall.rotation.y = 0;
     this.scene.add(fall);
     // 小潭 + 溪流（复用池塘水面材质）
     const br = (a) => B.r * (1 + 0.1 * Math.sin(a * 3 + 0.5));
     this.scene.add(new THREE.Mesh(this.waterGeo(B.x, B.z, br, 0.032), this.water));
+    this.iceCols ||= []; this.iceHide ||= [];
     const [sx, sz, ex2, ez] = STREAM, L = Math.hypot(ex2 - sx, ez - sz), nx = -(ez - sz) / L, nz = (ex2 - sx) / L;
     const sp = [], se = [], si = [], SEG = 8;
     for (let i = 0; i <= SEG; i++) {
@@ -1172,7 +1254,7 @@ export class World {
     sg.setAttribute('edge', new THREE.Float32BufferAttribute(se, 1));
     sg.setIndex(si);
     const stream = new THREE.Mesh(sg, this.water); this.scene.add(stream);
-    this.addCircle(B.x, B.z, B.r * 0.75);
+    this.iceCols.push(this.addCircle(B.x, B.z, B.r * 0.75));
     // 潭边石头 + 落水处白沫
     const rng = mulberry32(9), rocks = [];
     for (let a = 0; a < Math.PI * 2; a += 0.55 + rng() * 0.3) {
@@ -1183,7 +1265,7 @@ export class World {
     this.foam = [];
     for (let i = 0; i < 4; i++) {
       const f = mesh(new THREE.SphereGeometry(0.3, 10, 6).scale(1, 0.35, 1), toon('#ffffff'), { cast: false });
-      f.position.set(B.x + (i - 1.5) * 0.35, 0.08, B.z - B.r + 0.6); this.scene.add(f); this.foam.push(f);
+      f.position.set(B.x + (i - 1.5) * 0.35, 0.08, B.z - B.r + 0.6); this.scene.add(f); this.foam.push(f); this.iceHide.push(f);
     }
 
     // 水车：轮子一半浸在小潭东侧

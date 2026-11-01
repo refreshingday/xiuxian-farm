@@ -20,12 +20,12 @@ const SWAY_V = `
     transformed.x += sw * sh * 0.06;
     transformed.z += cos(uTime * 1.3 + sp.z * 0.5) * sh * 0.035;
   }`;
-function swayPatch(s, k, y0) {
+export function swayPatch(s, k, y0) {
   s.uniforms.uTime = U.time; s.uniforms.uWind = U.wind;
   s.uniforms.uSwayK = { value: k }; s.uniforms.uSwayY = { value: y0 };
   s.vertexShader = 'uniform float uTime;\nuniform float uWind;\nuniform float uSwayK;\nuniform float uSwayY;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>' + SWAY_V);
 }
-function chain(mat, fn, key) {
+export function chain(mat, fn, key) {
   const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey();
   mat.onBeforeCompile = (s, r) => { prev.call(mat, s, r); fn(s); };
   mat.customProgramCacheKey = () => prevKey + key;
@@ -92,7 +92,7 @@ export function mats() {
 export function prep(g) {
   let geo = g.index ? g.toNonIndexed() : g;
   if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
-  for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) geo.deleteAttribute(k);
+  for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv', 'color', 'lineNormal'].includes(k)) geo.deleteAttribute(k);
   return geo;
 }
 // 噪声扰动顶点（同一位置同一偏移，所以不会裂缝）
@@ -188,7 +188,7 @@ export function instance(proto, list) {
     im.computeBoundingSphere();
     for (const l of m.children) if (l.userData.isLine) {
       const li = new THREE.InstancedMesh(l.geometry, l.material, list.length);
-      li.instanceMatrix = im.instanceMatrix; li.boundingSphere = im.boundingSphere; li.userData.isLine = true;
+      li.instanceMatrix = im.instanceMatrix; li.boundingSphere = im.boundingSphere; li.userData.isLine = true; li.userData.ink = l.userData.ink;
       im.add(li);
     }
     out.add(im);

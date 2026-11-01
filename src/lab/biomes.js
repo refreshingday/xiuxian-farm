@@ -147,6 +147,23 @@ const A_T = makeTerrace({
   stream: [[-9, -18], [-8, -10], [-7, -4], [-7, 5]],
 });
 
+// 珊瑚湾（风格试验）：西北一座三级灰岩台地（松林，溪水一级级跌下）、东北两级小丘；
+// 溪水穿过村边（断了的绳吊桥）流进东南的珊瑚浅湾；沙滩 + 长栈桥 + 小船，湾里一座小沙洲
+const RF_T = makeTerrace({
+  F: hills([
+    { x: -9, z: -15, r: 11, lv: 3, sx: 1.3, p: 1.25, seed: 61 },
+    { x: 11, z: -16, r: 7, lv: 2, p: 1.5, seed: 62 },
+    { x: -19, z: 0, r: 5, lv: 1, sz: 1.3, wob: 2, seed: 63 },
+  ]),
+  paths: [
+    { kind: 'trail', pts: [[-14, -3], [-17, -7.5], [-13.5, -10.5], [-16, -14]] },
+    { kind: 'stairs', pts: [[9, -6], [10.5, -12]] },
+  ],
+  erode: (x, z) => smooth(0.72, 0.78, fbm(x * 0.09 + 11, z * 0.09, 46, 2)) * smooth(3, 5, Math.hypot(x - 11, z + 15)),
+  stream: [[-9, -21], [-7, -13], [-3, -7], [3, -3], [7, 2], [11, 8]],
+});
+const reefShore = (x, z) => x * 0.5 + z * 0.86 - 7 + Math.sin(x * 0.3 + 1) * 1.6 + (vnoise(x * 0.18, z * 0.18, 64) - 0.5) * 3;
+
 export const BIOMES = [
   // ================================================================ 春野
   {
@@ -654,8 +671,69 @@ export const BIOMES = [
     ],
     catalog: ['formation', 'floatRock', 'stormPine', 'stele', 'crystal', 'vein'],
   },
+  // ================================================================ 珊瑚湾（风格试验）
+  {
+    id: 'reef', name: '珊瑚湾', sub: '风格试验 · 参考图 · 珊瑚浅湾 · 长栈桥 · 断吊桥 · 灰岩瀑布 · 鱼群',
+    terrace: { rock: '#a4a8aa', pools: RF_T.pools, falls: RF_T.falls, ladders: RF_T.ladders, stream: RF_T.stream },
+    terrain(x, z) {
+      const t = terraceAt(RF_T, x, z), s = reefShore(x, z);
+      let h = LH * t.lv + (n2(x, z, 6, 0.08) - 0.5) * 0.2 - t.chan;
+      // 沙滩斜着没入水里；水下是浅浅的沙底（起伏的沙垄），越往外越深
+      const beach = -0.47 - s * 0.13 + (s > 0 ? (n2(x, z, 7, 0.2) - 0.5) * 0.25 : 0);
+      h = Math.min(h, Math.max(-1.55, beach));
+      // 下游河道放宽
+      if (t.lv < 0.3 && t.sd < 2.1) h = Math.min(h, -0.5 - smooth(2.1, 0.7, t.sd) * 0.55);
+      const isle = Math.hypot(x - 13, z - 13) - 2.6 - (vnoise(x * 0.6, z * 0.6, 65) - 0.5) * 1.2;
+      if (isle < 0.8) h = Math.max(h, -0.47 - isle * 0.32);
+      const path = Math.min(Math.abs(z - 2 - Math.sin(x * 0.2) * 1.5) + (x < -12 || x > 12 ? 9 : 0), t.pd - 0.2);
+      const k = s > 0.3 && isle > 0.4 ? 'seabed' : t.lv < 0.3 && t.sd < 2.1 ? 'river' : s > -3.4 || isle < 0.9 ? 'sand' : path < 1.0 ? 'dirt' : 'grass';
+      return { h, k, path, lv: t.lv };
+    },
+    color(x, z, t) {
+      const n = vnoise(x * 6, z * 6, 6);
+      // 水下沙底：越深越偏青绿（透明水面叠在上面才显得是饱和的碧蓝）
+      if (t.k === 'seabed' || t.k === 'river') return mix(mix([236, 226, 180], [212, 200, 152], vnoise(x * 0.9, z * 0.9, 8) * 0.7 + n * 0.2), [70, 196, 188], smooth(-0.5, -1.3, t.h) * 0.75);
+      if (t.k === 'sand') {
+        const c = mix([244, 226, 176], [226, 204, 150], vnoise(x * 1.4, z * 1.4, 9) * 0.6 + n * 0.2);
+        // 湿沙：贴着水线的一条深色带
+        return mix(c, [206, 180, 128], smooth(-0.15, -0.42, t.h) * 0.8);
+      }
+      if (t.k === 'dirt') return mix([222, 188, 128], [200, 166, 108], vnoise(x * 1.2, z * 1.2, 4) * 0.7 + n * 0.2);
+      const c = grassy([112, 192, 72], [84, 160, 56], [168, 214, 92], x, z, 6);
+      return mix(c, [214, 190, 130], smooth(2.2, 1.0, t.path) * 0.45);
+    },
+    water: { level: -0.12, mode: 'water', shallow: '#30e0d2', deep: '#0a9cc0', foam: '#ffffff', clear: true, caus: 1.8, flow: [0.25, 0.3] },
+    fish: { n: 46, color: '#0f4a5a' },
+    light: { sun: '#fff6e4', sunI: 3.0, sky: '#d8f4ff', ground: '#c8b880', hemiI: 1.2, fog: '#cdeef8', top: '#5ab0f0', bottom: '#d4f2fa', exposure: 1.12, bloom: 0.45, fogNear: 60, fogFar: 130 },
+    particles: [{ type: 'motes', n: 40, color: '#ffffff', size: 3 }],
+    scatter: [
+      { id: 'pier', n: 1, list: [[-1, 8, 0.526]], y: 0.45 },
+      { id: 'boat', n: 1, list: [[2.9, 11.5, 0.6]], y: -0.2, float: true },
+      { id: 'boat', n: 1, list: [[12.2, 10.6, 2.2]], y: -0.2, float: true, pick: [1] },
+      { id: 'ropeBridge', n: 1, list: [[5, -0.5, 0.675]], y: 0.42, pick: [1] },
+      { id: 'fishHut', n: 1, list: [[-7, 4.5, 0.25]] },
+      { id: 'crate', n: 3, list: [[-4.6, 6.2, 0.3], [-4.0, 6.9, 0.9], [-9.6, 6.6, 0.2]] },
+      { id: 'barrel', n: 2, list: [[-4.9, 7.2, 0], [-9.8, 5.6, 0]] },
+      { id: 'palmLush', n: 1, list: [[13, 13, 0]] },
+      { id: 'palmLush', n: 14, k: ['sand'], s: [0.85, 1.2], gap: 3 },
+      { id: 'fir', n: 14, k: ['grass'], zone: (x, z) => terraceAt(RF_T, x, z).lv > 0.9, s: [0.9, 1.3], gap: 2.6 },
+      { id: 'tree', n: 5, k: ['grass'], r: [6, 22], s: [0.9, 1.25], gap: 3 },
+      { id: 'bush', n: 16, k: ['grass'], s: [0.7, 1.2], gap: 1.2 },
+      { id: 'mossRock', n: 12, k: ['grass'], s: [0.5, 1.3], gap: 1.2 },
+      { id: 'beachRock', n: 8, k: ['sand'], s: [0.4, 1.2], gap: 1.2 },
+      { id: 'beachRock', n: 9, water: 'bed', k: ['seabed'], s: [1.1, 1.9], gap: 2 },
+      { id: 'coral', n: 44, water: 'bed', k: ['seabed'], s: [0.9, 1.5], gap: 1.3 },
+      { id: 'seaweed', n: 40, water: 'bed', k: ['seabed', 'river'], s: [0.8, 1.2], gap: 0.6 },
+      { id: 'fir', n: 4, k: ['grass'], r: [12, 22], s: [0.8, 1.1], gap: 2.6 },
+      { id: 'shell', n: 16, k: ['sand'], s: [1, 1.4], gap: 0.8 },
+      { id: 'duneGrass', n: 36, k: ['sand'], s: [0.7, 1.1], gap: 0.6 },
+      { id: 'flower', n: 70, k: ['grass'], s: [0.8, 1.2], gap: 0.45 },
+      { id: 'grass', n: 240, k: ['grass'], s: [0.8, 1.4], gap: 0.25 },
+    ],
+    catalog: ['coral', 'seaweed', 'boat', 'pier', 'ropeBridge', 'fishHut', 'palmLush', 'fir', 'shell', 'beachRock', 'mossRock', 'crate', 'barrel'],
+  },
 ];
 
 // 按 world_map.json 的顺序排：村子 → 近处 → 各扇区 → 唯一地点，参考图场景放最后
-const ORDER = ['meadow', 'xian', 'bamboo', 'autumn', 'cave', 'flowers', 'winter', 'swamp', 'volcano', 'desert', 'battlefield', 'tribulation', 'lake'];
+const ORDER = ['meadow', 'xian', 'bamboo', 'autumn', 'cave', 'flowers', 'winter', 'swamp', 'volcano', 'desert', 'battlefield', 'tribulation', 'lake', 'reef'];
 BIOMES.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
