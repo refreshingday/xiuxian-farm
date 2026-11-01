@@ -988,8 +988,9 @@ function walk(dt, t) {
     // 不走出小岛；岩浆只能踩到边上；断崖（坡度 >~50°）走不上去也跳不下去，梯子处可以爬
     const lavaEdge = W && W.mode === 'lava' ? W.level - 0.3 : -99;
     const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25);
+    const downFall = (b.terrace?.falls || []).some((f) => Math.hypot(nx - f.x, nz - f.z) < 1.5); // 瀑布口：可以顺着水流跳下去（只许往下，不许爬上去）
     const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r);
-    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder)) {
+    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder || (downFall && eff(nx + _d.x * 0.25, nz + _d.z * 0.25) < eff(P.x, P.z)))) {
       const dx = nx - P.x, dz = nz - P.z;
       P.x = nx; P.z = nz;
       camera.position.x += dx; camera.position.z += dz;
