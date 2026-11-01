@@ -141,6 +141,7 @@ function groundSample(x, z, out) {
   if (bd < 0.8 + (n - 0.5) * 0.5) { GS.kind = 2; GS.path = 1; }
   for (const [px, pz, , pr] of PEAKS) if (Math.hypot(x - px, z - pz) < pr + 0.9 + (n - 0.5) * 0.8) { GS.kind = 4; GS.path = 1; mix3(out, out, [96, 112, 84], 0.7); }
   for (const c of CLEARINGS) {
+    if (c.tint) { const e = Math.max(Math.abs(x - c.x), Math.abs(z - c.z)); if (e < c.r) mix3(out, out, c.tint, c.tintK * (1 - smooth(c.r - 14, c.r, e + (n - 0.5) * 6))); } // 门派地貌色（寒溪宗覆霜）
     if (c.ground) { if (Math.abs(x - c.x) < c.r && Math.abs(z - c.z) < c.r) { const k = c.ground(x - c.x, z - c.z, n - 0.5); if (k) { GS.kind = k; GS.path = 1; } } }
     else if (c.plaza && Math.abs(x - c.x) < c.plaza + (n - 0.5) && Math.abs(z - c.z) < c.plaza * 0.75 + (n - 0.5)) { GS.kind = 1; GS.path = 1; }
   }
@@ -522,6 +523,7 @@ function textures() {
 // ---------- 世界 ----------
 export class World {
   constructor(scene) {
+    this.extraWater = [];
     this.scene = scene;
     this.chunks = new Map();
     this.prefabCols = new Map();
@@ -623,7 +625,9 @@ export class World {
     const ramp = (d, w) => { const t = clamp(d / w, 0, 1); return t * t * (3 - 2 * t); };
     const a = Math.atan2(z - BASIN.z, x - BASIN.x), br = BASIN.r * (1 + 0.1 * Math.sin(a * 3 + 0.5));
     const sd = segDist(x, z, ...STREAM);
-    return Math.max(1.35 * ramp(-pondDist(x, z), 1.7), 1.25 * ramp(br - Math.hypot(x - BASIN.x, z - BASIN.z), 0.8), 0.3 * ramp(0.6 - sd, 0.3));
+    let d = Math.max(1.35 * ramp(-pondDist(x, z), 1.7), 1.25 * ramp(br - Math.hypot(x - BASIN.x, z - BASIN.z), 0.8), 0.3 * ramp(0.6 - sd, 0.3));
+    for (const f of this.extraWater) d = Math.max(d, f(x, z)); // 门派里的溪水（sectsites 登记，浅，只能涉水）
+    return d;
   }
   addBox(x0, z0, x1, z1) { const bx = { x0, z0, x1, z1 }; this._cells(x0, z0, x1, z1, (b) => b.b.push(bx)); return bx; }
 
