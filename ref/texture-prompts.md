@@ -104,3 +104,34 @@ Seamless tileable texture, 512x512 PNG, close-up of dense evergreen pine / fir n
 ```
 Seamless tileable texture, 512x512 PNG, top-down orthographic view of freshly tilled farm soil for a cozy xianxia (Chinese immortal cultivation) farming game. Neat parallel furrow rows running horizontally, about 8 rows across the image, raised ridges lighter on top and darker moist soil in the grooves. Rich dark brown tones (#5a3a22 to #8a5a36) with small clods and a few tiny pebbles, no plants, no grass. Hand-painted pixel-art style with soft painterly shading, matching a warm ochre dirt path texture. Even flat lighting, no cast shadows, no perspective, no text, no border. Edges must tile seamlessly on all four sides; rows must line up across the top and bottom edges.
 ```
+
+---
+
+# 第六批：Claude 版 3D 素材缺的材质（2026-11-01，Claude 经 Codex CLI 生成，模型 gpt-6.1-sol）
+
+通用后缀（每条都带）：`Hand-painted pixel-art style with soft painterly shading, matching a cozy xianxia farming game texture set (like a warm brown wood plank texture and a layered cliff-rock texture). Even flat lighting, no cast shadows, no perspective, no text, no border. Edges must tile seamlessly on all four sides.` 开头统一为 `Seamless tileable texture, 512x512 PNG, `。
+
+## 14. tree_bark.png — 树皮（树干 / 树桩 / 倒木 / 盆景）
+```
+straight-on orthographic view of rough tree trunk bark for stylized trees. Vertical ridged furrows with irregular deep grooves and a few small knots, warm brown (#6a4a32 to #a07850) with darker crevices (#3a2616) and lighter ridge highlights.
+```
+## 15. stone_carved.png — 凿石砖（石灯笼 / 石碑 / 石柱 / 残墙 / 水井 / 石阶）
+```
+straight-on orthographic view of carved grey stone blocks (stone lanterns, steles, ruined pillars and walls) for a xianxia game: neat rectangular blocks with thin dark seams, weathered rounded edges, subtle chisel marks and a little pale moss in the cracks, cool grey (#8a8c90 to #c0bcb4).
+```
+## 16. sandstone.png — 砂岩（砂岩 / 赤砂岩 / 沙漠）
+```
+straight-on orthographic view of desert sandstone rock for a xianxia game: soft horizontal sediment banding, small pits and fine cracks, warm tan to orange-ochre (#c8a070 to #e0b888) with darker bands (#a07848).
+```
+## 17. thatch_straw.png — 茅草（渔屋 / 稻草人 / 晒药架）
+```
+straight-on orthographic view of golden thatched straw roofing for a xianxia fishing hut and scarecrow: dense overlapping straw bundles in slightly diagonal strands, darker gaps, golden yellow to tan (#d8b45a to #f0d888) with darker underside strands (#8a6a30).
+```
+## 18. cloth_canvas.png — 粗麻布（残旗 / 帆 / 布条，灰白可被顶点色染色）
+```
+straight-on orthographic view of coarse woven linen canvas cloth for banners, sails and cloth wraps: visible plain weave threads, slight wrinkles and fraying, neutral light cream-beige (#d8cdb0 to #efe6cc), designed to be tinted by vertex colour, no pattern, no stripes.
+```
+## 19. rusty_iron.png — 锈铁板（矿车 / 残剑 / 盾盔 / 破战车）
+```
+straight-on orthographic view of worn dark iron metal plates for a mine cart, broken swords and shields: dark steel grey (#4a4c52 to #7a7c84) with scattered orange-brown rust patches (#8a4a28), scratches, tiny rivets and edge wear.
+```
