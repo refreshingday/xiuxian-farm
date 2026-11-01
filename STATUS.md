@@ -110,9 +110,13 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 - Claude 版素材缺的 6 种材质贴图（tree_bark / stone_carved / sandstone / thatch_straw / cloth_canvas / rusty_iron，Codex CLI · gpt-6.1-sol 生成）— 🟨 — 2026-11-01 — 贴图已生成并放入 assets/textures/，还没接进 Kit 材质（素材仍是顶点色）
-- 叶卡图集 `leaf_cards` / `blossom_cards`（Codex CLI · gpt-6.1-sol 生成）— 🟨 — 2026-11-01 — `leaf_cards` 已生效（森林树 / 灌木 / 竹子），替换程序叶卡，树林实景还没看过；`blossom_cards` 已加载但 `M.blossom` 没有树在用
+- 叶卡图集 `leaf_cards` / `blossom_cards`（Codex CLI · gpt-6.1-sol 生成）— 🟩 — 2026-11-01 — `leaf_cards` 用于森林树 / 灌木 / 竹子；`blossom_cards` 用于野外新增的桃花林（普通森林里成片出现，内核用 peach_foliage）
+
+- 松树不用贴图 — 🟩 — 2026-11-01 — 用户看过贴 foliage 的松树，纯色更好看；`M.pine` 保持 `leafPlain`，别加回去（只保留季节 / 积雪）
 
 ## 日志
+- 2026-11-01 — 主游戏：松树去掉贴图改纯色；村墙墙顶、村门和望楼屋顶用 roof_tiles 瓦片贴图（原来是纯色）
+- 2026-11-01 — 主游戏：野外加桃花林，用 blossom_cards 叶卡；按坐标哈希判定，原有树石位置不变
 - 2026-11-01 — 生成一直缺失的叶卡图集 leaf_cards / blossom_cards；leaf_cards 替换程序叶卡，blossom_cards 待接到树上
 - 2026-11-01 — 为 Claude 版 3D 素材补 6 张材质贴图（树皮 / 凿石砖 / 砂岩 / 茅草 / 粗麻布 / 锈铁），待接入
 - 2026-11-01 — 主游戏：套用实验场的环境规则——树整体放大 35%、冠团拉开留缝（影子落到叶子上）、碰撞半径同步放大。游戏里没有游泳 / 落体，暂未移植。

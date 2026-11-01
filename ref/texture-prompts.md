@@ -69,7 +69,7 @@ Game texture atlas, 1024x1024 PNG with TRANSPARENT background (if transparency i
 
 ## 10. blossom_cards.png — 桃花簇贴图集
 
-（2026-11-01 由 Claude 经 Codex CLI 生成，模型 gpt-6.1-sol，已放入 assets/textures/；`world.js` 的 `M.blossom` 目前没有任何树在用，图未生效）
+（2026-11-01 由 Claude 经 Codex CLI 生成，模型 gpt-6.1-sol，已放入 assets/textures/；用于野外桃花林（`world.js` 的 `M.blossom`））
 
 ```
 Game texture atlas, 1024x1024 PNG with TRANSPARENT background (if transparency is impossible, use a solid flat pure magenta #FF00FF background with no gradient). The image is split into a 2x2 grid of four equal 512x512 cells. Each cell contains ONE isolated cluster of peach blossoms for stylized cozy tree canopies in a xianxia game: 6-10 small pink five-petal flowers packed together with a few small fresh green leaves peeking out, the cluster fills roughly 85% of the cell and stays fully inside it, crisp edges, nothing touching the cell borders. Four different cluster shapes, one per cell. Hand-painted style, soft pinks (#ffd0e0 to #ef7aa6) with tiny yellow centers, lighter petal tips, soft painterly shading, no branches, no drop shadow, no outline, no text, no grid lines.
