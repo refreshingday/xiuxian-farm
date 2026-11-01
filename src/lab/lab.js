@@ -8,7 +8,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, PNG, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
 import { createChibi, animChibi } from '../chibi.js';
 import { TouchControls } from '../touch.js';
-import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './swim.js';
+import { createWaterFx, swimPose, fallPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './swim.js';
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
 import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
@@ -940,6 +940,7 @@ const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3
 let walkYaw = 0, moveK = 0;
 // ---------- 下水：能走进水里，水深了就游 ----------
 const waterFx = createWaterFx(scene);
+const fall = { on: false, vy: 0, top: 0, k: 0, sq: 0, sqT: 9 };
 const sfx = (k, v) => { if (S.sound) waterSound(k, v); };
 // 这一点的水面高度（没有水 = -99）。台地上的高处水潭单独一层水面；岩浆不算水
 function waterLvl(b, x, z, h) {
@@ -961,7 +962,7 @@ function applyWet() {
 }
 const footW = (i) => chibi.legs[i].localToWorld(_wv.set(0, -0.48, 0.06));
 // 调试用（控制台 / 自动截图）：labDebug.chibi、labDebug.depthAt(x, z)
-window.labDebug = { get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, hAt: (x, z) => hAtCur(x, z), depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
+window.labDebug = { get fall() { return fall; }, get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, hAt: (x, z) => hAtCur(x, z), depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
 function walk(dt, t) {
   if (!chibi || !chibi.root.visible) return;
   let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
@@ -991,6 +992,7 @@ function walk(dt, t) {
     const downFall = (b.terrace?.falls || []).some((f) => Math.hypot(nx - f.x, nz - f.z) < 1.5); // 瀑布口：可以顺着水流跳下去（只许往下，不许爬上去）
     const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r);
     if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder || (downFall && eff(nx + _d.x * 0.25, nz + _d.z * 0.25) < eff(P.x, P.z)))) {
+      if (slope >= 1.2 && !onLadder && !fall.on && !swimming) { fall.on = true; fall.vy = 0.6; fall.top = P.y; } // 从瀑布口 / 断崖边踏空：进入自由落体
       const dx = nx - P.x, dz = nz - P.z;
       P.x = nx; P.z = nz;
       camera.position.x += dx; camera.position.z += dz;
@@ -1008,12 +1010,24 @@ function walk(dt, t) {
   if (swimming) y = Math.max(h - 0.6, wl - 0.55 - lerp(0.45, 0.12, moveK) + Math.sin(t * 2.2) * 0.035); // 踩水时身子直、低一点；游起来身子平（浅水里脚陷进湖底也看不见）
   const dy0 = P.y;
   // 高度平滑追：从岸上走进溪里不再一下子掉下去，上岸也不是瞬移（平地小起伏几乎无延迟）
-  P.y = Math.abs(y - P.y) < 0.05 ? y : lerp(P.y, y, 1 - Math.exp(-(depth > 0.02 || swimK > 0.02 ? 10 : 16) * dt));
+  if (fall.on) { // 自由落体：重力加速，落到地面 / 水面才结束
+    fall.vy += 19 * dt; P.y -= fall.vy * dt;
+    if (P.y <= y + 0.02 || y > P.y) {
+      const hgt = fall.top - y; fall.on = false; P.y = y;
+      if (hgt > 0.5) {
+        const imp = clamp(hgt / 4, 0.25, 1); fall.sq = imp; fall.sqT = 0;
+        if (depth > 0.03 || swimming) { waterFx.splash(P.x, wl, P.z, 10 + Math.round(imp * 24), 2.4 + imp * 2, 1.0 + imp * 0.6, 0.05, null); waterFx.ring(P.x, wl, P.z, 0.25, 1.8 + imp, 1.3); waterFx.ring(P.x, wl, P.z, 0.15, 1.1, 1.0, 0.7); sfx('plunge', 0.6 + imp * 0.5); }
+        else sfx('land', 0.5 + imp * 0.6);
+      }
+    }
+  } else P.y = Math.abs(y - P.y) < 0.05 ? y : lerp(P.y, y, 1 - Math.exp(-(depth > 0.02 || swimK > 0.02 ? 10 : 16) * dt));
   const dy = P.y - dy0; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
   chibi.root.rotation.y += Math.atan2(Math.sin(walkYaw - chibi.root.rotation.y), Math.cos(walkYaw - chibi.root.rotation.y)) * (1 - Math.exp(-12 * dt));
   const prevStroke = strokePh - dt * (1.5 + 4.2 * moveK);
   animChibi(chibi, dt, { move: moveK * (1 - swimK) * lerp(1, 0.8, clamp(depth / SWIM_IN, 0, 1)), attack: -1, cast: 0, work: 0 });
   swimPose(chibi, swimK, moveK, strokePh, t);
+  fall.k = lerp(fall.k, fall.on ? 1 : 0, 1 - Math.exp(-14 * dt)); fall.sqT += dt;
+  fallPose(chibi, fall.k, fall.sq * Math.exp(-9 * fall.sqT) * Math.cos(fall.sqT * 14), t); // 落地：压扁后阻尼弹回
   chibi.root.updateMatrixWorld(true);
 
   // ---------- 特效 ----------

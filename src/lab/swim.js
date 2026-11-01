@@ -144,7 +144,7 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { const 
 /** kind: 'step' 涉水脚步 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
 export function waterSound(kind, vol = 1) {
   const a = AC; if (!a || a.state !== 'running') return;
-  const P = { step: [0.16, 900, 380, 0.22], stroke: [0.22, 700, 300, 0.2], enter: [0.35, 1300, 400, 0.45], plunge: [0.6, 1100, 260, 0.6], exit: [0.3, 900, 350, 0.3] }[kind];
+  const P = { step: [0.16, 900, 380, 0.22], stroke: [0.22, 700, 300, 0.2], enter: [0.35, 1300, 400, 0.45], plunge: [0.6, 1100, 260, 0.6], exit: [0.3, 900, 350, 0.3], land: [0.22, 420, 130, 0.5] }[kind];
   const [len, f0, f1, g] = P, t = a.currentTime, r = 0.85 + Math.random() * 0.3;
   const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = r;
   const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1.2;
@@ -153,6 +153,12 @@ export function waterSound(kind, vol = 1) {
   src.connect(lp).connect(env).connect(master);
   src.start(t, Math.random() * 0.5, len + 0.05);
   // 入水 / 下深水：再加一声低沉的"咕咚"
+  if (kind === 'land') { // 落地：低沉的闷响（不要高频）
+    const o = a.createOscillator(), og = a.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.16);
+    og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(0.3 * vol, t + 0.008); og.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    o.connect(og).connect(master); o.start(t); o.stop(t + 0.22);
+  }
   if (kind === 'plunge' || kind === 'enter') {
     const o = a.createOscillator(), og = a.createGain(); o.type = 'sine';
     o.frequency.setValueAtTime(kind === 'plunge' ? 210 : 260, t); o.frequency.exponentialRampToValueAtTime(80, t + 0.18);
@@ -189,4 +195,20 @@ export function swimPose(c, k, sp, ph, t) {
     const kick = Math.sin(ph * 2.2 + i * Math.PI) * 0.4 * sp + Math.sin(t * 3 + i * Math.PI) * 0.45 * (1 - sp);
     L.rotation.x = lerp(L.rotation.x, kick - 0.1 * sp, k);
   });
+}
+
+// ---------- 坠落姿势 ----------
+// k = 在空中的程度 0..1。双臂向上张开乱挥、腿蹬踏（"慌张下坠"），身体被拉长；
+// 落地时 squash（0..1）压扁再弹回，压扁和拉伸体积守恒（横向反向缩放）。
+export function fallPose(c, k, squash, t) {
+  const sy = 1 + 0.1 * k - 0.3 * squash, sxz = 1 / Math.sqrt(Math.max(sy, 0.5));
+  c.root.scale.set(sxz, sy, sxz);
+  if (k <= 0.001) return;
+  c.arms.forEach((A, i) => {
+    _qw.copy(A.sh.quaternion);
+    _qa.setFromEuler(_e.set(-0.4 + Math.sin(t * 17 + i * 2) * 0.35, 0, A.s * (2.35 + Math.sin(t * 15 + i) * 0.25)));
+    A.sh.quaternion.copy(_qw.slerp(_qa, k));
+    A.el.rotation.x = lerp(A.el.rotation.x, -0.5, k);
+  });
+  c.legs.forEach((L, i) => { L.rotation.x = lerp(L.rotation.x, -0.5 + Math.sin(t * 14 + i * Math.PI) * 0.4, k); });
 }
