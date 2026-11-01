@@ -962,7 +962,7 @@ function applyWet() {
 }
 const footW = (i) => chibi.legs[i].localToWorld(_wv.set(0, -0.48, 0.06));
 // 调试用（控制台 / 自动截图）：labDebug.chibi、labDebug.depthAt(x, z)
-window.labDebug = { get fall() { return fall; }, get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, hAt: (x, z) => hAtCur(x, z), depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
+window.labDebug = { get ponds() { const T = BIOMES[S.biome].terrace, d = window.labDebug.depthAt; return T && (T.ponds || []).map((q) => ({ x: +q.x.toFixed(1), z: +q.z.toFixed(1), r: +q.r.toFixed(1), depth: +d(q.x, q.z).toFixed(2) })); }, get fall() { return fall; }, get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, hAt: (x, z) => hAtCur(x, z), depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
 function walk(dt, t) {
   if (!chibi || !chibi.root.visible) return;
   let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);

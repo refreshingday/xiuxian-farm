@@ -40,7 +40,7 @@ function sampleLine(pts, F, d = 0.08) {
   return out;
 }
 export function makeTerrace(o) {
-  const T = { ...o, stairs: [], pools: [], falls: [] };
+  const T = { ...o, stairs: [], pools: [], falls: [], ponds: [] };
   // 连接方式（每条路一种）：
   //   stairs 石阶 / logs 木桩台阶：路上是连续坡，穿过 k+0.5 级处摆一段（朝上坡、按进深拉伸）
   //   trail 土路：只有坡，不摆东西（之字形绕上去坡就缓）
@@ -80,6 +80,13 @@ export function makeTerrace(o) {
       if (k < k0) {
         flush();
         T.falls.push({ x: p.x, z: p.z, rot: Math.atan2(p.dx, p.dz), w: 1.2, top: waterAt(k0), bottom: k === 0 ? -0.12 : waterAt(k) });
+        // 环境规则：每挂瀑布脚下必有一个小水潭（ENVIRONMENT.md）。潭心在瀑布下游 1.3 米，地面挖一个浅盆；
+        // 最低一级靠全岛水面淹出来，高一级的另加一块水面
+        // 潭大小看情况：落差越高、溪越宽 → 潭越大（1.5~3.4 米）
+        const drop = Math.max(0, waterAt(k0) - (k === 0 ? -0.12 : waterAt(k))), R = clamp(1.5 + drop * 0.55 + (o.pondBonus || 0), 1.5, 3.4);
+        const pd = { x: p.x + p.dx * R * 0.85, z: p.z + p.dz * R * 0.85, r: R };
+        T.ponds.push(pd);
+        if (k >= 1) T.pools.push({ x: pd.x, z: pd.z, r: pd.r, level: waterAt(k) });
         k0 = k;
       }
       cur.push(p);
@@ -109,6 +116,8 @@ export function terraceAt(T, x, z) {
   if (T.erode) m = Math.max(m, T.erode(x, z));
   if (m > 0) lv += (Fc - lv) * m;
   if (T.stream) { sd = polyDist(x, z, T.stream); if (sd < 1.7) chan = smooth(1.7, 0.35, sd) * (lv < 0.6 ? 0.75 : 0.4); } // 宽而缓的河床：岸坡渐变，不再陡切
+  // 瀑布脚下的小水潭：挖浅盆，边缘平缓过渡
+  for (const q of T.ponds || []) { const d = Math.hypot(x - q.x, z - q.z); if (d < q.r + 1.0) chan = Math.max(chan, smooth(q.r + 1.0, q.r * 0.35, d) * 0.7); }
   return { lv, F, pd, sd, chan };
 }
 
