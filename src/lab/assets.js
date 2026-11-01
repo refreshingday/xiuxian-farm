@@ -131,9 +131,9 @@ function palm(v, seed) {
     for (let i = 0; i < NF; i++) {
       const a = i / NF * TAU + r() * 0.25, len = 2.0 + r() * 0.6, up = i % 3 === 0 ? 0.35 : 0, spine = [];
       for (let s = 0; s <= 14; s++) { const t = s / 14; spine.push([top[0] + Math.cos(a) * t * len, top[1] + Math.sin(t * 2) * (0.45 + up) - t * t * 1.15, top[2] + Math.sin(a) * t * len]); }
-      k.add(G.tube(spine, 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'leaf' });
-      k.add(frondGeo(spine, len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'plant' });
-      k.add(frondGeo(spine.map(([x, y, z]) => [x, y - 0.03, z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'plant' });
+      k.add(G.tube(spine, 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'palmf' });
+      k.add(frondGeo(spine, len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'palmf' });
+      k.add(frondGeo(spine.map(([x, y, z]) => [x, y - 0.03, z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'palmf' });
     }
     for (let i = 0; i < 4; i++) k.add(G.sph(0.15, 7, 6), grad('#7a5a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 1.6) * 0.2, top[1] - 0.18, top[2] + Math.sin(i * 1.6) * 0.2] });
   }
@@ -1208,10 +1208,10 @@ function palmLush(v, seed) {
     const a = i / NF * TAU + r() * 0.25, len = 2.0 + r() * 0.6, up = i % 3 === 0 ? 0.35 : 0;
     const spine = [];
     for (let s = 0; s <= 14; s++) { const t = s / 14; spine.push([Math.cos(a) * t * len, Math.sin(t * 2) * (0.45 + up) - t * t * 1.15, Math.sin(a) * t * len]); }
-    k.add(G.tube(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'leaf' });
-    k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'plant' });
+    k.add(G.tube(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'palmf' });
+    k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'palmf' });
     // 参考画风：叶子下面垫一片稍宽的深色叶，露出来的一圈就是描边
-    if (STYLE.frondInk) k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y - 0.03, top[2] + z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'plant' });
+    if (STYLE.frondInk) k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y - 0.03, top[2] + z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'palmf' });
   }
   for (let i = 0; i < 4; i++) k.add(G.sph(0.15, 7, 6), grad('#7a5a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 1.6) * 0.2, top[1] - 0.18, top[2] + Math.sin(i * 1.6) * 0.2] });
   return k.build();
