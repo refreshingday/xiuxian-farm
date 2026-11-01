@@ -88,6 +88,14 @@ export function makeTerrace(o) {
   }
   return T;
 }
+function smoothPoly(P, n) { // Catmull-Rom 细分
+  const o = [];
+  for (let i = 0; i < P.length - 1; i++) {
+    const a = P[Math.max(i - 1, 0)], b = P[i], c = P[i + 1], d = P[Math.min(i + 2, P.length - 1)];
+    for (let j = 0; j < n; j++) { const t = j / n, t2 = t * t, t3 = t2 * t; o.push([0, 1].map((k) => 0.5 * (2 * b[k] + (-a[k] + c[k]) * t + (2 * a[k] - 5 * b[k] + 4 * c[k] - d[k]) * t2 + (-a[k] + 3 * b[k] - 3 * c[k] + d[k]) * t3))); }
+  }
+  o.push(P[P.length - 1]); return o;
+}
 const HALF = { stairs: [1.1, 1.5], logs: [1.0, 1.5], trail: [1.1, 2.2] }; // 路半宽：内沿、外沿（土路边缘更软）
 export function terraceAt(T, x, z) {
   const F = T.F(x, z), Fc = clamp(F, 0, LEVELS - 1);
@@ -100,7 +108,7 @@ export function terraceAt(T, x, z) {
   // 塌方：崖在几处被冲成缓坡，自然连通上下两级（噪声决定位置，溪边不塌）
   if (T.erode) m = Math.max(m, T.erode(x, z));
   if (m > 0) lv += (Fc - lv) * m;
-  if (T.stream) { sd = polyDist(x, z, T.stream); if (sd < 0.95) chan = smooth(0.95, 0.5, sd) * (lv < 0.6 ? 1.1 : 0.5); }
+  if (T.stream) { sd = polyDist(x, z, T.stream); if (sd < 1.7) chan = smooth(1.7, 0.35, sd) * (lv < 0.6 ? 0.75 : 0.4); } // 宽而缓的河床：岸坡渐变，不再陡切
   return { lv, F, pd, sd, chan };
 }
 
@@ -128,8 +136,8 @@ const M_T = makeTerrace({
     { kind: 'logs', pts: [[11, 11.5], [14.5, 14.5]] },                         // 东南小丘
   ],
   erode: (x, z) => smooth(0.7, 0.76, fbm(x * 0.09 + 3, z * 0.09, 44, 2)) * smooth(2.5, 4, Math.hypot(x - 8, z + 9)),
-  // 蜿蜒的溪：几道 S 弯（原来四个点连成近乎一条直线）
-  stream: [[2, -21], [5, -19.2], [8, -17], [7.2, -14], [4.6, -12.2], [4.8, -9.6], [8, -8.2], [11.2, -6.4], [11.4, -3], [8.8, -0.4], [8.4, 2.6], [10.6, 5.2]],
+  // 长溪：只加一道平滑的弯（Catmull-Rom 平滑），不再折来折去
+  stream: smoothPoly([[2, -21], [4.6, -15.5], [9, -10], [9.2, -3.5], [10.5, 4]], 6),
 });
 // 赤枫林：西北一座三级大山（溪水跌进池塘），东边两级缓丘（之字土路），西南一座五级叠石塔（木梯）
 const A_T = makeTerrace({

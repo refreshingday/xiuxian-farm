@@ -987,9 +987,7 @@ function walk(dt, t) {
     const sp = 5 * mag * slow * surge * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
     // 不走出小岛；岩浆只能踩到边上；断崖（坡度 >~50°）走不上去也跳不下去，梯子处可以爬
     const lavaEdge = W && W.mode === 'lava' ? W.level - 0.3 : -99;
-    // 溪岸 / 水边是陡坎：脚下或前面 0.7 米内有水时放宽坡度，能直接蹚进去、爬上岸
-    const nearWater = [[0, 0], [0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7]].some(([ox, oz]) => waterLvl(b, nx + ox, nz + oz, hAtCur(nx + ox, nz + oz)) > -90 || waterLvl(b, P.x + ox, P.z + oz, hAtCur(P.x + ox, P.z + oz)) > -90);
-    const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25) / (nearWater ? 2.6 : 1);
+    const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25);
     const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r);
     if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder)) {
       const dx = nx - P.x, dz = nz - P.z;
