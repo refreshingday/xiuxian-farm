@@ -136,6 +136,7 @@ await loadTextures({
   roof_tiles: { norm: 0.88, rep: 0.5 }, wood_planks: { norm: 0.88, rep: 0.5 }, tilled_soil: { norm: 0.9 },
   cliff_rock: { norm: 0.9 }, foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 },
   leaf_cards: { norm: 0.9, key: true }, grass_blades: { norm: 0.9, key: true }, blossom_cards: { norm: 0.9, key: true },
+  stone_carved: { norm: 0.9 }, cloth_canvas: { norm: 0.96 }, // 门派建筑：石砖台基 / 粉墙（sectkit TX）
 });
 configureVillage(await loadVillageData().then((d) => (g.villageData = d)));
 // 世界地图数据：坊市 / 宗门所在的地方要先空出来、铺石板（区块生成时就不长树）
@@ -977,6 +978,8 @@ function startPlay() {
       if (mode === 'quest') gui.dialog({ narrate: true, lines: ['你背着包袱，走了三天山路。', '远远地，已经能望见青竹村的炊烟。', '就在这时，路边的林子里传来一阵低吼——'], onClose: () => quests.accept('s1', 'story') });
       else skipTutorial();
     };
+    // 默认跳过新手：灵根随机一种，不弹选择；作弊面板勾「开局带新手任务」才让玩家自己选
+    if (mode !== 'quest') { const e = '金木水火土'[Math.floor(Math.random() * 5)]; pickRoot(e); g.toast(`测灵石亮起——你是${e}灵根（${ROOT_LIFE[e]}）`, 4); return; }
     gui.dialog({ narrate: true, line: '测灵石上亮起一道光——你的灵根是？', info: '五行相克：金克木、木克土、土克水、水克火、火克金（克制 ×1.5）。每种灵根还带一个生活被动。',
       choices: ['金', '木', '水', '火', '土'].map((e) => ({ label: `${e}（${ROOT_LIFE[e]}）`, fn: () => pickRoot(e) })) });
   }

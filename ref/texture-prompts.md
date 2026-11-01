@@ -139,3 +139,12 @@ straight-on orthographic view of coarse woven linen canvas cloth for banners, sa
 ```
 straight-on orthographic view of worn dark iron metal plates for a mine cart, broken swords and shields: dark steel grey (#4a4c52 to #7a7c84) with scattered orange-brown rust patches (#8a4a28), scratches, tiny rivets and edge wear.
 ```
+
+## 20. plaster_wall.png — 粉墙（门派殿宇 / 院墙）
+```
+straight-on orthographic view of a traditional Chinese whitewashed lime-plaster wall for xianxia sect halls and courtyard walls: smooth off-white plaster (#e8e6e0 to #f6f4ee) with very soft uneven trowel marks, faint hairline cracks, a few small chipped spots showing grey under-layer, very subtle water stains near the bottom, no bricks, no pattern, designed to be tinted by colour.
+```
+## 21. lacquer_wood.png — 漆木（殿柱 / 额枋 / 牌坊）
+```
+straight-on orthographic view of lacquered wooden pillar and beam surface for Chinese temple architecture: vertical wood grain under a glossy lacquer coat, slightly worn lacquer on edges revealing lighter wood, a few fine cracks in the lacquer, neutral mid-tone reddish-grey (#8a6a5a to #b08a78) so it can be tinted blue or red by colour, no carvings.
+```

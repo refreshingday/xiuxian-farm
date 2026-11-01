@@ -1,15 +1,34 @@
 // 门派建筑零件：台基、殿（歇山 / 庑殿顶，翘角）、楼阁、塔、牌坊、院墙、幡、匾。全部在本地坐标里画，正面朝 +z。
 // 参考画风着色（toon ref：三阶色阶、冷暗暖亮），和村子一致。
 import * as THREE from 'three';
-import { toon, glow, mesh, at, canvasTex, boxUV } from './util.js';
+import { toon, glow, mesh, at, canvasTex, boxUV, PNG } from './util.js';
 
+// 贴图（Codex 生成，assets/textures/）：tx 写贴图名，带「或」的按顺序取第一张已加载的
+// 青瓦 roof_tiles · 石砖 stone_carved · 粉墙 plaster_wall|cloth_canvas · 木 lacquer_wood|wood_planks
+export const TX = { roof: 'roof_tiles', stone: 'stone_carved|stone_plaza', wall: 'plaster_wall|cloth_canvas', wood: 'lacquer_wood|wood_planks' };
+export function texOf(names) {
+  for (const n of names.split('|')) { const t = PNG[n]; if (t) { t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; } }
+  return null;
+}
 const _mc = new Map();
-export const M = (c, o = {}) => { const k = c + JSON.stringify(o); if (!_mc.has(k)) _mc.set(k, toon(c, { occ: true, ref: true, ...o })); return _mc.get(k); };
+export const M = (c, o = {}) => {
+  const { tx, ...rest } = o, k = c + (tx || '') + JSON.stringify(rest);
+  if (!_mc.has(k)) _mc.set(k, toon(c, { occ: true, ref: true, ...rest, map: tx ? texOf(tx) : null }));
+  return _mc.get(k);
+};
+// 圆柱 UV：u 绕一圈 = 周长，v = 高；swap 让木纹竖着走
+export function cylUV(geo, r, h, k = 1, swap = true) {
+  const uv = geo.attributes.uv, C = Math.PI * 2 * r;
+  for (let i = 0; i < uv.count; i++) { const u = uv.getX(i) * C * k, v = uv.getY(i) * h * k; if (swap) uv.setXY(i, v, u); else uv.setXY(i, u, v); }
+  return geo;
+}
+const col = (r0, r1, h, m, seg = 10) => mesh(cylUV(new THREE.CylinderGeometry(r0, r1, h, seg), r1, h, 0.6).translate(0, h / 2, 0), m);
+const box = (w, h, d, m, k = 0.5) => mesh(boxUV(new THREE.BoxGeometry(w, h, d), w, h, d, k), m);
 export const shade = (hex, k) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
 
 // 屋顶：底边 w×d，屋脊长 w-d*k（k=1 就是攒尖），高 rise。四面坡 + 檐板 + 屋脊 + 四角起翘
 export function roof(w, d, rise, color, o = {}) {
-  const G = new THREE.Group(), tile = M(color, o.map ? { map: o.map } : {}), dark = M(o.ridge || shade(color, 0.55));
+  const G = new THREE.Group(), tile = M(color, { tx: o.tx || TX.roof }), dark = M(o.ridge || shade(color, 0.55));
   const hx = w / 2, hz = d / 2, rx = Math.max(0, hx - hz * (o.k ?? 0.9)), rz = o.pyramid ? 0 : 0.06;
   const v = [[-hx, 0, hz], [hx, 0, hz], [rx, rise, rz], [-rx, rise, rz], [hx, 0, -hz], [-hx, 0, -hz], [-rx, rise, -rz], [rx, rise, -rz]];
   const quads = [[0, 1, 2, 3], [4, 5, 6, 7], [1, 4, 7, 2], [5, 0, 3, 6]];
@@ -18,7 +37,12 @@ export function roof(w, d, rise, color, o = {}) {
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   const p = geo.attributes.position;
   geo.computeVertexNormals();
-  const uv = []; for (let i = 0; i < p.count; i++) uv.push(p.getX(i) * 0.5, p.getZ(i) * 0.5 + p.getY(i) * 0.5);
+  // 瓦垄顺着坡往下：前后坡 u 沿 x，左右坡 u 沿 z；v = 离檐口的坡长
+  const uv = [], K = 0.4;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), side = Math.floor(i / 6) >= 2;
+    uv.push((side ? z : x) * K, (side ? hx - Math.abs(x) : hz - Math.abs(z)) * K * 0.8 + y * K);
+  }
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   G.add(mesh(geo, tile));
   G.add(at(mesh(new THREE.BoxGeometry(w + 0.1, 0.12, d + 0.1), dark), 0, 0, 0));        // 檐板
@@ -58,11 +82,11 @@ export function scroll(text, w, h, o = {}) {
 
 // 台基 + 正面台阶
 export function podium(w, d, h, color = '#a8a29a', o = {}) {
-  const G = new THREE.Group(), m = M(color, o.map ? { map: o.map } : {});
-  G.add(mesh(boxUV(new THREE.BoxGeometry(w, h, d), w, h, d, 1.4).translate(0, h / 2, 0), m, { recv: true }));
+  const G = new THREE.Group(), m = M(color, { tx: o.tx || TX.stone });
+  G.add(mesh(boxUV(new THREE.BoxGeometry(w, h, d), w, h, d, 0.45).translate(0, h / 2, 0), m, { recv: true }));
   G.add(mesh(new THREE.BoxGeometry(w + 0.16, 0.1, d + 0.16).translate(0, h, 0), M(shade(color, 0.8)), { recv: true }));
   const n = Math.max(1, Math.round(h / 0.22)), sw = o.stairW ?? Math.min(3.2, w * 0.4);
-  for (let i = 0; i < n; i++) G.add(mesh(new THREE.BoxGeometry(sw, h * (i + 1) / n, 0.42).translate(0, h * (i + 1) / n / 2, d / 2 + 0.21 + (n - 1 - i) * 0.42), m, { recv: true }));
+  for (let i = 0; i < n; i++) G.add(mesh(boxUV(new THREE.BoxGeometry(sw, h * (i + 1) / n, 0.42), sw, h * (i + 1) / n, 0.42, 0.45).translate(0, h * (i + 1) / n / 2, d / 2 + 0.21 + (n - 1 - i) * 0.42), m, { recv: true }));
   if (o.rail) for (const sx of [-1, 1]) G.add(at(mesh(new THREE.BoxGeometry(0.2, 0.5, d), M(o.rail)), sx * (w / 2 - 0.1), h + 0.25, 0));
   return G;
 }
@@ -70,14 +94,16 @@ export function podium(w, d, h, color = '#a8a29a', o = {}) {
 // 殿：o = { w, d, h, wall, col, roof, tiers, sign, base, open(四面开敞=亭/廊) }
 export function hall(o) {
   const G = new THREE.Group(), w = o.w, d = o.d, h = o.h ?? 2.8, base = o.base ?? 0.6;
-  const wallM = M(o.wall || '#ece2cc'), colM = M(o.col || '#a83a2a'), beamM = M(o.beam || shade(o.col || '#a83a2a', 0.65));
+  const wallM = M(o.wall || '#ece2cc', { tx: TX.wall }), colM = M(o.col || '#a83a2a', { tx: TX.wood }), beamM = M(o.beam || shade(o.col || '#a83a2a', 0.65), { tx: TX.wood });
   if (base > 0) G.add(podium(w + 1.6, d + 1.6, base, o.baseC || '#a8a29a', { stairW: o.stairW }));
   const y0 = base;
   if (!o.open) {
-    G.add(mesh(new THREE.BoxGeometry(w - 0.8, h, d - 0.9).translate(0, y0 + h / 2, -0.25), wallM, { recv: true }));
+    G.add(mesh(boxUV(new THREE.BoxGeometry(w - 0.8, h, d - 0.9), w - 0.8, h, d - 0.9, 0.35).translate(0, y0 + h / 2, -0.25), wallM, { recv: true }));
+    // 墙脚一圈石砖裙
+    G.add(at(box(w - 0.7, 0.5, d - 0.8, M('#9a958c', { tx: TX.stone }), 0.45), 0, y0 + 0.25, -0.25));
     // 正面：门 + 两边格窗
     const doorW = Math.min(1.8, w * 0.22);
-    G.add(at(mesh(new THREE.BoxGeometry(doorW, h * 0.78, 0.1), M(o.door || '#5a2a1a')), 0, y0 + h * 0.39, d / 2 - 0.68));
+    G.add(at(box(doorW, h * 0.78, 0.1, M(o.door || '#5a2a1a', { tx: TX.wood }), 0.6), 0, y0 + h * 0.39, d / 2 - 0.68));
     const lat = latticeTex(o.lattice || '#7a3a22');
     for (const sx of [-1, 1]) for (let k = 1; k <= Math.floor((w - 0.8 - doorW) / 2 / 1.6); k++) {
       const wn = mesh(new THREE.PlaneGeometry(1.2, h * 0.55), toon('#ffffff', { map: lat }), { cast: false });
@@ -88,16 +114,16 @@ export function hall(o) {
   const nc = Math.max(2, Math.round(w / 2.2) + 1);
   for (let i = 0; i < nc; i++) {
     const x = -w / 2 + 0.25 + i * (w - 0.5) / (nc - 1);
-    for (const z of o.open ? [d / 2 - 0.25, -d / 2 + 0.25] : [d / 2 - 0.25]) G.add(at(mesh(new THREE.CylinderGeometry(0.17, 0.2, h, 10).translate(0, h / 2, 0), colM), x, y0, z));
+    for (const z of o.open ? [d / 2 - 0.25, -d / 2 + 0.25] : [d / 2 - 0.25]) G.add(at(col(0.17, 0.2, h, colM), x, y0, z));
   }
-  if (o.open) for (const z of [-1, 1]) for (const x of [-1, 1]) G.add(at(mesh(new THREE.CylinderGeometry(0.17, 0.2, h, 10).translate(0, h / 2, 0), colM), x * (w / 2 - 0.25), y0, z * (d / 2 - 0.25)));
-  G.add(at(mesh(new THREE.BoxGeometry(w + 0.1, 0.36, d + 0.1), beamM), 0, y0 + h + 0.12, 0)); // 额枋
+  if (o.open) for (const z of [-1, 1]) for (const x of [-1, 1]) G.add(at(col(0.17, 0.2, h, colM), x * (w / 2 - 0.25), y0, z * (d / 2 - 0.25)));
+  G.add(at(box(w + 0.1, 0.36, d + 0.1, beamM, 0.6), 0, y0 + h + 0.12, 0)); // 额枋
   const tiers = o.tiers || 1, rc = o.roof || '#3f4552';
   let ry = y0 + h + 0.3;
   const R1 = roof(w + 1.8, d + 1.8, o.rise ?? d * 0.42, rc, { ridge: o.ridge, k: o.k, pyramid: o.pyramid, knob: o.knob });
   if (tiers === 2) { // 重檐：下层一圈短檐，上面再起一层
     const low = roof(w + 1.8, d + 1.8, 0.7, rc, { ridge: o.ridge, k: 0.2 }); low.position.y = ry; G.add(low);
-    G.add(at(mesh(new THREE.BoxGeometry(w - 0.6, 1.0, d - 0.6).translate(0, 0.5, 0), wallM), 0, ry + 0.3, 0));
+    G.add(at(box(w - 0.6, 1.0, d - 0.6, wallM, 0.35), 0, ry + 0.8, 0));
     const R2 = roof(w + 0.4, d + 0.4, o.rise ?? d * 0.4, rc, { ridge: o.ridge, k: o.k, pyramid: o.pyramid, knob: o.knob }); R2.position.y = ry + 1.25; G.add(R2);
   } else { R1.position.y = ry; G.add(R1); }
   if (o.sign) { const s = plaque(o.sign, Math.min(3.2, w * 0.36), 0.8, o.signC); s.position.set(0, y0 + h - 0.35, d / 2 + 0.02); G.add(s); }
@@ -117,28 +143,28 @@ export function tower(o) {
   const G = new THREE.Group(), n = o.levels || 3, base = o.base ?? 0.6;
   if (base > 0) G.add(podium(o.w + 1.4, o.d + 1.4, base, o.baseC || '#a8a29a'));
   let y = base, w = o.w, d = o.d;
-  const wallM = M(o.wall || '#ece2cc'), colM = M(o.col || '#a83a2a'), lat = latticeTex(o.lattice || '#7a3a22');
+  const wallM = M(o.wall || '#ece2cc', { tx: TX.wall }), colM = M(o.col || '#a83a2a', { tx: TX.wood }), lat = latticeTex(o.lattice || '#7a3a22');
   for (let i = 0; i < n; i++) {
     const h = i === 0 ? (o.h ?? 2.6) : (o.h ?? 2.6) * 0.8;
-    G.add(at(mesh(new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0), wallM, { recv: true }), 0, y, 0));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) G.add(at(mesh(new THREE.CylinderGeometry(0.15, 0.17, h, 8).translate(0, h / 2, 0), colM), sx * (w / 2 + 0.05), y, sz * (d / 2 + 0.05)));
+    G.add(at(mesh(boxUV(new THREE.BoxGeometry(w, h, d), w, h, d, 0.35).translate(0, h / 2, 0), wallM, { recv: true }), 0, y, 0));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) G.add(at(col(0.15, 0.17, h, colM, 8), sx * (w / 2 + 0.05), y, sz * (d / 2 + 0.05)));
     for (const [rx, rz, ry] of [[0, d / 2 + 0.01, 0], [0, -d / 2 - 0.01, Math.PI], [w / 2 + 0.01, 0, Math.PI / 2], [-w / 2 - 0.01, 0, -Math.PI / 2]]) {
       const len = Math.abs(ry) === Math.PI / 2 ? d : w;
       const wn = mesh(new THREE.PlaneGeometry(Math.min(2.2, len * 0.6), h * 0.5), toon('#ffffff', { map: lat }), { cast: false });
       wn.position.set(rx, y + h * 0.55, rz); wn.rotation.y = ry; G.add(wn);
     }
-    if (i === 0 && o.door !== false) G.add(at(mesh(new THREE.BoxGeometry(1.2, h * 0.75, 0.08), M('#5a2a1a')), 0, y + h * 0.375, d / 2 + 0.03));
+    if (i === 0 && o.door !== false) G.add(at(box(1.2, h * 0.75, 0.08, M('#5a2a1a', { tx: TX.wood }), 0.6), 0, y + h * 0.375, d / 2 + 0.03));
     y += h;
     const last = i === n - 1;
     const R = roof(w + 1.6, d + 1.6, last ? (o.rise ?? Math.max(w, d) * 0.45) : 0.6, o.roof || '#3f4552', { ridge: o.ridge, k: last ? (o.k ?? 1) : 0.15, pyramid: last && (o.k ?? 1) >= 0.99, knob: o.knob });
     R.position.y = y + 0.1; G.add(R);
     if (!last) { // 平座栏杆
-      G.add(at(mesh(new THREE.BoxGeometry(w + 0.6, 0.3, d + 0.6), M(shade(o.col || '#a83a2a', 0.7))), 0, y + 0.75, 0));
+      G.add(at(box(w + 0.6, 0.3, d + 0.6, M(shade(o.col || '#a83a2a', 0.7), { tx: TX.wood }), 0.6), 0, y + 0.75, 0));
       y += 0.85; w *= o.shrink ?? 0.86; d *= o.shrink ?? 0.86;
     }
   }
   if (o.sign) { const s = plaque(o.sign, Math.min(2.6, o.w * 0.55), 0.7, o.signC); s.position.set(0, base + (o.h ?? 2.6) - 0.35, o.d / 2 + 0.05); G.add(s); }
-  G.userData.top = y;
+  G.userData.top = y; G.userData.foot = [o.w + 1.4, o.d + 1.4];
   return G;
 }
 
@@ -146,7 +172,7 @@ export function tower(o) {
 export function pagoda(o) {
   const G = new THREE.Group(), n = o.levels || 5, seg = o.seg || 8;
   let r = o.r || 2.2, y = 0;
-  const bodyM = M(o.body || '#d8c8a8'), roofM = M(o.roof || '#5a4a3a'), trim = M(o.trim || shade(o.roof || '#5a4a3a', 0.7));
+  const bodyM = M(o.body || '#d8c8a8', { tx: o.bodyTx || TX.stone }), roofM = M(o.roof || '#5a4a3a', { tx: TX.roof }), trim = M(o.trim || shade(o.roof || '#5a4a3a', 0.7));
   G.add(mesh(new THREE.CylinderGeometry(r + 0.7, r + 0.9, 0.7, seg).translate(0, 0.35, 0), M(o.baseC || '#a8a29a'), { recv: true }));
   y = 0.7;
   for (let i = 0; i < n; i++) {
@@ -172,15 +198,15 @@ export function pagoda(o) {
 // 牌坊：三间四柱（o.bays=1 就是两柱）
 export function paifang(name, o = {}) {
   const G = new THREE.Group(), w = o.w || 7, h = o.h || 4.6, bays = o.bays || 3;
-  const colM = M(o.col || '#a83a2a'), beam = M(o.beam || shade(o.col || '#a83a2a', 0.7));
+  const colM = M(o.col || '#a83a2a', { tx: TX.wood }), beam = M(o.beam || shade(o.col || '#a83a2a', 0.7), { tx: TX.wood });
   const xs = bays === 3 ? [-w / 2, -w / 6, w / 6, w / 2] : [-w / 2, w / 2];
   xs.forEach((x, i) => {
     const hh = bays === 3 && (i === 0 || i === 3) ? h * 0.78 : h;
-    G.add(at(mesh(new THREE.CylinderGeometry(0.22, 0.26, hh, 10).translate(0, hh / 2, 0), colM), x, 0, 0));
-    G.add(at(mesh(new THREE.BoxGeometry(0.75, 0.7, 0.75).translate(0, 0.35, 0), M(o.stone || '#a8a29a')), x, 0, 0)); // 夹杆石
+    G.add(at(col(0.22, 0.26, hh, colM), x, 0, 0));
+    G.add(at(box(0.75, 0.7, 0.75, M(o.stone || '#a8a29a', { tx: TX.stone }), 0.45), x, 0.35, 0)); // 夹杆石
   });
-  G.add(at(mesh(new THREE.BoxGeometry(w + 0.6, 0.4, 0.45), beam), 0, h - 0.2, 0));
-  G.add(at(mesh(new THREE.BoxGeometry((bays === 3 ? w / 3 : w) + 0.2, 0.3, 0.4), beam), 0, h - 1.25, 0));
+  G.add(at(box(w + 0.6, 0.4, 0.45, beam, 0.6), 0, h - 0.2, 0));
+  G.add(at(box((bays === 3 ? w / 3 : w) + 0.2, 0.3, 0.4, beam, 0.6), 0, h - 1.25, 0));
   const R = roof(bays === 3 ? w / 3 + 1.4 : w + 1.4, 1.5, 0.75, o.roof || '#3f4552', { ridge: o.ridge, k: 0.3 }); R.position.y = h; G.add(R);
   if (bays === 3) for (const sx of [-1, 1]) { const r2 = roof(w / 3 + 0.8, 1.3, 0.6, o.roof || '#3f4552', { ridge: o.ridge, k: 0.3 }); r2.position.set(sx * w / 3, h * 0.78, 0); G.add(r2); G.add(at(mesh(new THREE.BoxGeometry(w / 3, 0.3, 0.4), beam), sx * w / 3, h * 0.78 - 0.15, 0)); }
   const p = plaque(name, Math.min(2.8, (bays === 3 ? w / 3 : w) * 0.9), 0.72, o.signC); p.position.set(0, h - 0.72, 0.24); G.add(p);
@@ -192,9 +218,9 @@ export function paifang(name, o = {}) {
 // 院墙一段：沿 x，长 len
 export function wallSeg(len, o = {}) {
   const G = new THREE.Group(), h = o.h || 2.2, t = o.t || 0.5;
-  G.add(mesh(boxUV(new THREE.BoxGeometry(len, 0.5, t + 0.2), len, 0.5, t + 0.2, 1.4).translate(0, 0.25, 0), M(o.base || '#9c978f'), { recv: true }));
-  G.add(mesh(new THREE.BoxGeometry(len, h - 0.5, t).translate(0, 0.5 + (h - 0.5) / 2, 0), M(o.wall || '#ece5d3'), { recv: true }));
-  const cap = M(o.cap || '#3f4552');
+  G.add(mesh(boxUV(new THREE.BoxGeometry(len, 0.6, t + 0.2), len, 0.6, t + 0.2, 0.45).translate(0, 0.3, 0), M(o.base || '#9c978f', { tx: TX.stone }), { recv: true }));
+  G.add(mesh(boxUV(new THREE.BoxGeometry(len, h - 0.5, t), len, h - 0.5, t, 0.35).translate(0, 0.5 + (h - 0.5) / 2, 0), M(o.wall || '#ece5d3', { tx: TX.wall }), { recv: true }));
+  const cap = M(o.cap || '#3f4552', { tx: TX.roof });
   for (const s of [-1, 1]) { const sl = mesh(new THREE.BoxGeometry(len + 0.2, 0.1, t * 0.9).rotateX(s * 0.5), cap); sl.position.set(0, h + 0.1, -s * t * 0.3); G.add(sl); }
   G.add(at(mesh(new THREE.BoxGeometry(len + 0.2, 0.12, 0.14), cap), 0, h + 0.25, 0));
   return G;
