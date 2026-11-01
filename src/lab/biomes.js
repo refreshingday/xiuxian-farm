@@ -579,7 +579,7 @@ export const BIOMES = [
       { id: 'dryShrub', n: 8, k: ['sand'], s: [0.35, 0.55], gap: 1.6 },
       { id: 'desertGrass', n: 70, k: ['sand', 'oasis'], s: [0.7, 1.2], gap: 0.5 },
     ],
-    catalog: ['pillar', 'ruinWall', 'statue', 'cactus', 'sandRock', 'dryShrub', 'desertGrass', 'jar', 'vein'],
+    catalog: ['palm', 'pillar', 'ruinWall', 'statue', 'cactus', 'sandRock', 'dryShrub', 'desertGrass', 'jar', 'vein'],
   },
   // ================================================================ 古战场
   {

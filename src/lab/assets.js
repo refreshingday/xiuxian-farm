@@ -119,30 +119,23 @@ function bamboo(v, seed) {
   }
   return k.build();
 }
-// 椰树 / 棕榈
+// 椰树 / 棕榈（参考图风格）：粗环纹弯曲树干 + 一圈宽大的深锯齿羽叶（带深色描边）+ 椰子
 function palm(v, seed) {
   const k = new Kit(), r = rnd(seed + v);
   const trunks = v === 2 ? [[0.3, 0.9, -0.2], [-0.25, 0.7, 0.15]] : [[0, v === 1 ? 0.2 : 1.3, 0]];
   for (const [ox, bend, oz] of trunks) {
-    const H = 4 + r() * 1.2, top = [ox + bend, H, oz];
-    const pts = [[ox, 0, oz], [ox + bend * 0.15, H * 0.35, oz], [ox + bend * 0.5, H * 0.7, oz], top];
-    // 树干环纹
-    k.add(G.tube(pts, 0.2, 0.13, 7), (g) => paint(g, (p, n, out) => out.set('#a07a4e').multiplyScalar((Math.floor(p.y * 3.2) % 2 ? 0.82 : 1.0) * (0.75 + n.y * 0.1 + 0.25))));
-    for (let i = 0; i < 8; i++) {
-      const a = i / 8 * TAU + r() * 0.3, len = 1.7 + r() * 0.5, f = new Kit();
-      // 叶：一串小叶沿下垂弧线
-      const frond = [];
-      for (let s = 0; s <= 6; s++) {
-        const t = s / 6, d = t * len, y = Math.sin(t * 2.2) * 0.55 - t * t * 0.9;
-        frond.push([d, y]);
-      }
-      for (let s = 1; s < frond.length; s++) {
-        const [d, y] = frond[s], w = 0.32 * Math.sin((s / 6) * Math.PI) + 0.08;
-        for (const sd of [-1, 1]) k.add(G.blade(0.05, w * 1.6, 0.05), grad('#4fa040', 0.7, 1.2), { at: [top[0] + Math.cos(a) * d, top[1] + y, top[2] + Math.sin(a) * d], rot: [sd * 1.2, -a + Math.PI / 2, 0.6 * sd], kind: 'plant' });
-      }
-      k.add(G.tube(frond.map(([d, y]) => [top[0] + Math.cos(a) * d, top[1] + y, top[2] + Math.sin(a) * d]), 0.035, 0.012, 4), grad('#5c8a34', 0.8, 1.1), { kind: 'leaf' });
+    const H = 4 + r() * 1.2, a0 = r() * TAU, top = [ox + bend * Math.cos(a0 * 0.3), H, oz + bend * Math.sin(a0 * 0.3) * 0.4];
+    const pts = [[ox, 0, oz], [ox + (top[0] - ox) * 0.1, H * 0.35, oz + (top[2] - oz) * 0.1], [ox + (top[0] - ox) * 0.45, H * 0.72, oz + (top[2] - oz) * 0.45], top];
+    k.add(G.tube(pts, 0.25, 0.16, 8), (g) => paint(g, (p, n, out) => { const f = (p.y * 3.6) % 1; out.set('#b08458').multiplyScalar((f < 0.24 ? 0.64 : 0.92 + f * 0.1) * (0.82 + Math.max(0, n.x * 0.5 + n.z * 0.3) * 0.25)); }));
+    const NF = 11;
+    for (let i = 0; i < NF; i++) {
+      const a = i / NF * TAU + r() * 0.25, len = 2.0 + r() * 0.6, up = i % 3 === 0 ? 0.35 : 0, spine = [];
+      for (let s = 0; s <= 14; s++) { const t = s / 14; spine.push([top[0] + Math.cos(a) * t * len, top[1] + Math.sin(t * 2) * (0.45 + up) - t * t * 1.15, top[2] + Math.sin(a) * t * len]); }
+      k.add(G.tube(spine, 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'leaf' });
+      k.add(frondGeo(spine, len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'plant' });
+      k.add(frondGeo(spine.map(([x, y, z]) => [x, y - 0.03, z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'plant' });
     }
-    for (let i = 0; i < 3; i++) k.add(G.sph(0.12, 7, 6), grad('#6a4a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 2.1) * 0.17, top[1] - 0.15, top[2] + Math.sin(i * 2.1) * 0.17] });
+    for (let i = 0; i < 4; i++) k.add(G.sph(0.15, 7, 6), grad('#7a5a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 1.6) * 0.2, top[1] - 0.18, top[2] + Math.sin(i * 1.6) * 0.2] });
   }
   return k.build();
 }
@@ -1198,7 +1191,7 @@ export function frondGeo(spine, W, fold) {
   };
   const tri = (a, b, c) => pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
   for (let i = 0; i < N; i++) for (const sg of [-1, 1]) {
-    const V0 = edge(i, 0, sg, 0.4), T = edge(i, 0.85, sg, 1), V1 = edge(i + 1, 0, sg, 0.4);
+    const V0 = edge(i, 0, sg, 0.3), T = edge(i, 0.85, sg, 1), V1 = edge(i + 1, 0, sg, 0.3);
     tri(P[i], V0, T); tri(P[i], T, P[i + 1]); tri(P[i + 1], T, V1); // 双面材质，绕序无所谓
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
