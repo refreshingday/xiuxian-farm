@@ -259,8 +259,8 @@ function makeWater(W, hAt, area, masked = false) {
   const N = masked ? 64 : 192, data = new Uint8Array(N * N * 4), x0 = area.x - area.r, z0 = area.z - area.r, sz = area.r * 2;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = x0 + (i + 0.5) / N * sz, z = z0 + (j + 0.5) / N * sz, dep = W.level - hAt(x, z);
-    data[(j * N + i) * 4] = clamp(dep / 0.9, 0, 1) * 255;
-    data[(j * N + i) * 4 + 1] = dep < (masked ? 0.85 : 1.0) ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
+    data[(j * N + i) * 4] = clamp(dep / (area.deep ? 1.5 : 0.9), 0, 1) * 255;
+    data[(j * N + i) * 4 + 1] = dep < (masked ? (area.deep ? 2.2 : 0.85) : 2.2) ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
     // B/A：溪流流向 × 强度（离溪流中线 1.6 米内），水面沿着它滚动条纹
     const [fx, fz] = flowAt(x, z);
     data[(j * N + i) * 4 + 2] = (fx * 0.5 + 0.5) * 255; data[(j * N + i) * 4 + 3] = (fz * 0.5 + 0.5) * 255;
@@ -945,7 +945,7 @@ const sfx = (k, v) => { if (S.sound) waterSound(k, v); };
 // 这一点的水面高度（没有水 = -99）。台地上的高处水潭单独一层水面；岩浆不算水
 function waterLvl(b, x, z, h) {
   const W = b.water; if (!W || W.mode !== 'water') return -99;
-  for (const p of b.terrace?.pools || []) if (h < p.level && p.level - h < 0.85 && Math.hypot(x - p.x, z - p.z) < p.r) return p.level;
+  for (const p of b.terrace?.pools || []) if (h < p.level && p.level - h < (p.deep ? 2.2 : 0.85) && Math.hypot(x - p.x, z - p.z) < p.r) return p.level;
   return h < W.level ? W.level : -99;
 }
 let swimming = false, swimK = 0, strokePh = 0, wasDepth = 0, stepSign = 0, ringT = 0, foamT = 0, kickT = 0, dripT = 0, dripMax = 1, wet = 0, wetLow = 0;
