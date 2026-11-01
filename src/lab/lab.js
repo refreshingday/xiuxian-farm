@@ -12,7 +12,7 @@ import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } fro
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
 import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
-import { REF, getRefAsset } from './ref/index.js';
+import { REF, getRefAsset, REFU } from './ref/index.js';
 import { BIOMES, R } from './biomes.js';
 
 // ======================================================================
@@ -104,7 +104,7 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, ink: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, v: 2, bloomK: {}, bloomT: {},
+  outline: false, ink: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, v: 2, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
@@ -846,6 +846,7 @@ function applyToggles() {
   document.body.classList.toggle('noWalk', S.mode !== 'scene' || !S.chibi);
   root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认开）
   sun.castShadow = S.shadows;
+  REFU.grad.value = S.refgrad ? 1 : 0;
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
   if (chibi) chibi.root.visible = S.chibi && S.mode === 'scene';

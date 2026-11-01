@@ -32,10 +32,40 @@ const TINT = `
     outgoingLight *= mix(vec3(0.84, 0.9, 1.12), vec3(1.02, 1.0, 0.97), smoothstep(0.5, 0.95, rl));
   }
   #include <opaque_fragment>`;
-function refToon(key, extra) {
+// 渐变（层次感）：开关在实验场「渐变」按钮，0 = 关
+export const REFU = { grad: { value: 1 } };
+// 1) 叶簇自带的明暗 / 冷暖偏移（refTint 属性，没有这个属性的模型读到 0 = 不变）
+// 2) 接地渐变：模型最下面一截压暗偏冷，像有环境光遮蔽；越高越亮一点
+// 3) 色阶里面再叠一层柔和的天光渐变（朝上亮、朝下暗），不然每个色阶是一整块平色
+// 4) 一点暖色边缘光，把前后叠在一起的形体分开
+const GRAD_V = `
+  #include <begin_vertex>
+  vRefY = position.y;
+  vRefTint = refTint;`;
+const GRAD_COLOR = (aoH) => `#include <color_fragment>
+  {
+    float gk = uRefGrad;
+    diffuseColor.rgb *= 1.0 + vRefTint * gk;
+    vec3 ao = mix(vec3(0.66, 0.72, 0.86), vec3(1.0), smoothstep(-0.05, ${aoH.toFixed(2)}, vRefY));
+    diffuseColor.rgb *= mix(vec3(1.0), ao * mix(1.0, 1.08, smoothstep(${(aoH * 1.2).toFixed(2)}, 4.5, vRefY)), gk);
+  }`;
+const GRAD_LIGHT = (rimK) => `
+  {
+    vec3 nn = normalize(normal), upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    float sk = dot(nn, upV) * 0.5 + 0.5;
+    outgoingLight *= mix(1.0, mix(0.78, 1.12, sk), uRefGrad);
+    float rim = pow(1.0 - clamp(dot(nn, normalize(vViewPosition)), 0.0, 1.0), 3.0);
+    outgoingLight += diffuseColor.rgb * rim * ${rimK.toFixed(2)} * uRefGrad * vec3(1.0, 0.96, 0.82);
+  }`;
+// 薄片（椰叶、花草）侧着看时边缘光会整片发亮，所以不加
+function refToon(key, extra, aoH = 0.9, rimK = 0.28) {
   const m = new THREE.MeshToonMaterial({ color: '#ffffff', vertexColors: true, gradientMap: ramp() });
   m.onBeforeCompile = (s) => {
-    s.fragmentShader = s.fragmentShader.replace('#include <opaque_fragment>', TINT);
+    s.uniforms.uRefGrad = REFU.grad;
+    s.vertexShader = 'varying float vRefY;\nvarying vec3 vRefTint;\nattribute vec3 refTint;\n' + s.vertexShader.replace('#include <begin_vertex>', GRAD_V);
+    s.fragmentShader = 'uniform float uRefGrad;\nvarying float vRefY;\nvarying vec3 vRefTint;\n' + s.fragmentShader
+      .replace('#include <color_fragment>', GRAD_COLOR(aoH))
+      .replace('#include <opaque_fragment>', GRAD_LIGHT(rimK) + TINT);
     if (extra) extra(s);
   };
   m.customProgramCacheKey = () => 'ref' + key;
@@ -70,7 +100,7 @@ function refMats() {
   const solid = refToon('solid');
   const sway = chain(refToon('sway'), (s) => swayPatch(s, 1, 0.8), 'S');
   const clump = chain(refToon('clump'), (s) => swayPatch(s, 1, 0.8), 'C');
-  const plant = chain(refToon('plant'), (s) => swayPatch(s, 2.2, 0.02), 'P');
+  const plant = chain(refToon('plant', null, 0.35, 0), (s) => swayPatch(s, 2.2, 0.02), 'P');
   plant.side = THREE.DoubleSide;
   MATS = { solid, sway, leaf: sway, bloom: sway, pine: sway, clump, rock: rockMat(), plant };
   return MATS;
@@ -101,6 +131,19 @@ function inkOf(geo, k = 0.24) {
   const q = (v) => Math.round(v * 24) / 24;
   return '#' + new THREE.Color(q(col.r), q(col.g), q(col.b)).getHexString();
 }
+// 没有自带渐变的模型（房子、树干、椰叶、石头…）：按模型自己的高度做一层上暖亮、下冷暗
+// 叶子类更明显；很矮的东西（花草、贴地的）减弱，不然整个变暗
+function bboxTint(geo, kind) {
+  geo.computeBoundingBox();
+  const { min, max } = geo.boundingBox, H = max.y - min.y, p = geo.attributes.position, n = p.count;
+  const amt = (kind === 'solid' || kind === 'rock' ? 0.7 : 1) * Math.min(1, H / 0.6), t = new Float32Array(n * 3);
+  if (H > 0.01) for (let i = 0; i < n; i++) {
+    const w = ((p.getY(i) - min.y) / H) * 2 - 1;
+    const d = w > 0 ? [0.12 * w, 0.1 * w, -0.03 * w] : [0.22 * w, 0.16 * w, 0.04 * w];
+    t[i * 3] = d[0] * amt; t[i * 3 + 1] = d[1] * amt; t[i * 3 + 2] = d[2] * amt;
+  }
+  geo.setAttribute('refTint', new THREE.BufferAttribute(t, 3));
+}
 const SWAYK = new Set(['sway', 'leaf', 'bloom', 'pine', 'clump']);
 function restyle(grp, noInk) {
   const M = refMats(), list = [];
@@ -109,6 +152,7 @@ function restyle(grp, noInk) {
     const kind = m.userData.kind;
     for (const c of [...m.children]) if (c.userData.isLine) m.remove(c);
     m.material = M[kind];
+    if (!m.geometry.attributes.refTint) bboxTint(m.geometry, kind);
     if (kind === 'clump' || kind === 'rock') m.castShadow = true;
     if (kind === 'plant' || noInk) continue; // 薄片外扩不出轮廓：椰叶靠垫在下面的深色叶当描边
     const color = kind === 'clump' ? inkOf(m.geometry) : SWAYK.has(kind) ? inkOf(m.geometry, 0.3) : '#2a221c';
@@ -122,6 +166,7 @@ function restyle(grp, noInk) {
 // ---------- 叶簇 ----------
 // 一团叶簇 = 顶点 + 内圈 8 点 + 外缘 16 个锯齿 + 底点的封闭圆顶（48 个三角形）
 // c: 中心，ax: 朝向（圆顶的"上"），r: 半径，h: 高，o: { ringR, ringY, droop, elong, teeth }
+const TINT_TOP = [0.24, 0.2, -0.04], TINT_RING = [0.08, 0.08, 0.0], TINT_RIM = [-0.14, -0.11, -0.02], TINT_BOT = [-0.42, -0.34, -0.16];
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _t = new THREE.Vector3(), _n = new THREE.Vector3();
 function clump(out, c, ax, r, h, rnd, col, o = {}) {
   const Y = ax.clone().normalize(), X = new THREE.Vector3(1, 0, 0);
@@ -158,16 +203,26 @@ function clump(out, c, ax, r, h, rnd, col, o = {}) {
       out.ln.push(_t.x, _t.y, _t.z);
       const k = p === bot ? 0.78 : 1;
       out.col.push(col.r * k, col.g * k, col.b * k);
+      // 每团叶簇自己的渐变（以偏移量存，渐变开关关掉就是原来的平色）：顶上暖亮 → 锯齿边略暗 → 底下冷暗
+      const tt = p === top ? TINT_TOP : p === bot ? TINT_BOT : ring.includes(p) ? TINT_RING : TINT_RIM;
+      out.tint.push(tt[0], tt[1], tt[2]);
     }
   }
 }
-function clumpBuf() { return { pos: [], nor: [], ln: [], col: [], center: new THREE.Vector3(), R: 1 }; }
+// 整个树冠的渐变：高处的叶簇偏暖偏亮（向黄绿），低处 / 里面的偏冷偏暗（向蓝绿）
+function crownTint(b, n0, ht) {
+  const w = ht * 2 - 1; // -1 底 … 1 顶
+  const d = w > 0 ? [0.16 * w, 0.13 * w, -0.06 * w] : [0.3 * w, 0.2 * w, 0.04 * w];
+  for (let i = n0; i < b.tint.length; i += 3) { b.tint[i] += d[0]; b.tint[i + 1] += d[1]; b.tint[i + 2] += d[2]; }
+}
+function clumpBuf() { return { pos: [], nor: [], ln: [], col: [], tint: [], center: new THREE.Vector3(), R: 1 }; }
 function clumpGeo(b) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3));
   g.setAttribute('lineNormal', new THREE.Float32BufferAttribute(b.ln, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+  g.setAttribute('refTint', new THREE.Float32BufferAttribute(b.tint, 3));
   return g;
 }
 // 替换 foliage()：同样的参数（树冠球列表），改成一团团描边叶簇
@@ -192,7 +247,9 @@ export function clumpCrown(k, parts, color, accent, seed, o = {}) {
       c.copy(base).multiplyScalar((0.76 + 0.3 * ht) * (0.9 + r() * 0.2));
       if (acc && r() < (o.accentAmt ?? 0.08) * 3) c.lerp(acc, 0.7);
       const ax = d.clone().multiplyScalar(0.7).add(new THREE.Vector3(0, 0.6, 0));
+      const n0 = b.tint.length;
       clump(b, p, ax, rc, rc * (0.55 + r() * 0.15) * Math.max(0.6, sq), r, c);
+      crownTint(b, n0, ht);
     }
   }
   k.add(clumpGeo(b), null, { kind: 'clump', at: o.at });
@@ -222,7 +279,9 @@ function refFir(v, seed, o = {}) {
   for (let i = 0; i < tiers; i++) {
     const t = i / (tiers - 1), R = (o.W ?? 1.3) * (1 - t * 0.78) * (0.92 + r() * 0.14), y = H * (0.2 + t * 0.68);
     c.copy(base).multiplyScalar(0.8 + t * 0.35);
+    const n0 = b.tint.length;
     clump(b, new THREE.Vector3(0, y, 0), new THREE.Vector3(0, 1, 0), R, H * 0.26 * (1 - t * 0.3), r, c, { teeth: 24, ringR: 0.42, ringY: 0.6, droop: 0.28 });
+    crownTint(b, n0, t);
   }
   const tip = c.clone().multiplyScalar(1.05);
   clump(b, new THREE.Vector3(0, H * 0.93, 0), new THREE.Vector3(0, 1, 0), 0.2, H * 0.13, r, tip, { teeth: 8, ringR: 0.4, ringY: 0.5, droop: 0.1 });
