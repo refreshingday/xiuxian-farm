@@ -580,7 +580,7 @@ const SRC = {
 SRC.blender = { tag: 'Blender', strip: '#e4c9f2', get: (id) => (id === 'tree' && hasBlenderTree() ? { name: '阔叶树', n: 1 } : null), build: () => getBlenderTree() };
 const assetOf = (id, v) => (S.src === 'codex' && CODEX[id] ? getCodexAsset(id, v) : S.src === 'ref' && REF[id] ? getRefAsset(id, v) : getAsset(id, v));
 function buildCatalog(ids, mode = 'catalog') {
-  const srcs = mode === 'codex' ? ['codex'] : mode === 'ref' ? ['ref'] : mode === 'refcmp' ? ['claude', 'ref'] : mode === 'compare' || mode === 'allcmp' ? ['claude', 'codex'] : mode === 'blender' ? ['claude', 'blender'] : ['claude'];
+  const srcs = mode === 'codex' ? ['codex'] : mode === 'ref' ? ['ref'] : mode === 'refcmp' ? ['claude', 'ref'] : mode === 'compare' || mode === 'allcmp' ? ['claude', 'codex'] : mode === 'blender' ? ['claude', 'ref', 'blender'] : ['claude'];
   const rows = [];
   for (const id of ids) for (const sk of srcs) {
     const A = SRC[sk].get(id); if (!A) continue;
