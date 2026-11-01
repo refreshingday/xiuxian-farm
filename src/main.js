@@ -38,7 +38,7 @@ import { TouchControls } from './touch.js';
 import { DAY_START, dateOf, clockText, rollWeather } from './calendar.js';
 import { loadItems, Inventory, item, itemName } from './items.js';
 import { UI, btn, el } from './ui.js';
-import { Cheat } from './cheat.js';
+import { Cheat, startWithQuest } from './cheat.js';
 import { Life, near } from './life.js';
 import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
 
@@ -951,19 +951,30 @@ function newGame() {
   inv.money = 200; inv.add('can'); inv.add('seed_radish', 6); inv.add('lingcao', 3);
   g.weatherToday = 'clear'; weather.setDay(false);
   quests.newDay();
-  P.pos.set(31, 0, 16); P.yaw = -Math.PI / 2; focus.copy(P.pos);
-  g.intro = true;
+  g.intro = startWithQuest() ? 'quest' : 'skip';
+  if (g.intro === 'quest') P.pos.set(31, 0, 16), P.yaw = -Math.PI / 2;
+  else P.pos.set(0, 0, 4), P.yaw = 0;
+  focus.copy(P.pos);
+}
+// 跳过新手任务（默认）：s1–s5 记为完成，教学途中会拿到的种子、灵泉、丹方、狼王线索照给（修为不给），直接接主线「赤枫狼王」
+function skipTutorial() {
+  for (const id of ['s1', 's2', 's3', 's4', 's5']) {
+    const d = quests.defs[id]; quests.done.add(id);
+    for (const r of [d.startReward, d.reward]) if (r) quests.give({ ...r, xp: 0 });
+  }
+  quests.accept('s6', 'story');
 }
 function startPlay() {
   g.title = false; g.paused = false;
   document.getElementById('title').classList.add('hidden');
   gui.renderHotbar(inv);
   if (g.intro) {
-    g.intro = false;
+    const mode = g.intro; g.intro = false;
     // GDD：开局选一种五行灵根（凡品）
     const pickRoot = (e) => {
       P.roots = [{ e, grade: 0 }]; P.elem = e; realm.recalc(true);
-      gui.dialog({ narrate: true, lines: ['你背着包袱，走了三天山路。', '远远地，已经能望见青竹村的炊烟。', '就在这时，路边的林子里传来一阵低吼——'], onClose: () => quests.accept('s1', 'story') });
+      if (mode === 'quest') gui.dialog({ narrate: true, lines: ['你背着包袱，走了三天山路。', '远远地，已经能望见青竹村的炊烟。', '就在这时，路边的林子里传来一阵低吼——'], onClose: () => quests.accept('s1', 'story') });
+      else skipTutorial();
     };
     gui.dialog({ narrate: true, line: '测灵石上亮起一道光——你的灵根是？', info: '五行相克：金克木、木克土、土克水、水克火、火克金（克制 ×1.5）。每种灵根还带一个生活被动。',
       choices: ['金', '木', '水', '火', '土'].map((e) => ({ label: `${e}（${ROOT_LIFE[e]}）`, fn: () => pickRoot(e) })) });
