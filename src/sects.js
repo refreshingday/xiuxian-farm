@@ -58,9 +58,9 @@ export class Sects {
         : { skin: lk.skin || '#eac3a0', hair: lk.hair || '#2e1e18', hairStyle: Array.isArray(lk.hairStyle) ? lk.hairStyle[i % lk.hairStyle.length] : lk.hairStyle ?? 2, robe: lk.robe || robe, robe2: lk.robe2 || shade(robe, 0.6), belt: lk.belt || shade(robe, 0.4), pants: lk.pants, age: 'adult', sword: lk.sword ?? true });
       c.root.position.set(px, 0, pz); g.scene.add(c.root); return c;
     };
-    const elder = mk(x + A.elder[0], z + A.elder[1], true); elder.face = A.elder[2] ?? 0;
-    const disciples = A.disciples.map(([lx, lz, face, act], i) => ({ c: mk(x + lx, z + lz, false, i), t: i * 0.4, face, act, home: { x: x + lx, z: z + lz } }));
-    const s = { name: L.name, d, x, z, elder, disciples, site, yard: W(A.yard), lib: W(A.lib), front: W(A.front), lvl: Math.max(1, Math.floor(dangerFor(x, z))) };
+    const elder = mk(x + A.elder[0], z + A.elder[1], true); elder.face = A.elder[2] ?? 0; elder.root.rotation.y = elder.face;
+    const disciples = A.disciples.map(([lx, lz, face, act], i) => { const c = mk(x + lx, z + lz, false, i); c.root.rotation.y = face; return { c, t: i * 0.4, face, act, home: { x: x + lx, z: z + lz } }; });
+    const s = { name: L.name, d, x, z, elder, disciples, site, ruinFx: A.ruin, yard: W(A.yard), lib: W(A.lib), front: W(A.front), lvl: Math.max(1, Math.floor(dangerFor(x, z))) };
     TYPES['disciple_' + d.id] = { ...TYPES.bandit, name: `${L.name.replace(/\s.*$/, '')}弟子`, c: [robe, shade(robe, 0.5), '#ffe7a8'], drops: [], stones: null, xp: 20 };
     g.life.on((P) => { const dd = near(P, elder.root.position, 2.3); return dd !== false && { label: `${L.name} · 执事`, act: () => this.talk(s), d: dd - 0.4 }; });
     // 偷师：练武场边观摩、藏经阁里翻秘籍（藏经阁在大殿左边，门朝南）
@@ -376,6 +376,7 @@ export class Sects {
   ruin(s, quiet) {
     const g = this.g;
     this.crisis.state = 'ruined'; s.ruined = true;
+    s.ruinFx?.();
     for (const dsc of s.disciples) dsc.c.root.visible = false;
     s.elder.root.visible = false;
     if (this.member?.name === s.name) this.member = null;

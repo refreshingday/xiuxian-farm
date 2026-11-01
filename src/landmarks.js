@@ -57,7 +57,7 @@ export class Landmarks {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 70, 10, 1, true).translate(0, 35, 0), new THREE.MeshBasicMaterial({
         color: new THREE.Color(K.color).multiplyScalar(1.6), transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide, toneMapped: false,
       }));
-      m.position.set(L.x, 0, L.z); this.g.scene.add(m); this.beacons.push({ m, L });
+      m.position.set(pos.x, 0, pos.z); this.g.scene.add(m); this.beacons.push({ m, L });
     }
   }
   near(x, z, r = 40) { let best = null, bd = r; for (const L of this.list) { const d = Math.hypot(L.x - x, L.z - z); if (d < bd) { bd = d; best = L; } } return best; }

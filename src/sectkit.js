@@ -24,10 +24,10 @@ export function roof(w, d, rise, color, o = {}) {
   G.add(at(mesh(new THREE.BoxGeometry(w + 0.1, 0.12, d + 0.1), dark), 0, 0, 0));        // 檐板
   if (rx > 0.05) G.add(at(mesh(new THREE.BoxGeometry(rx * 2 + 0.4, 0.22, 0.26), dark), 0, rise + 0.06, 0)); // 正脊
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {            // 翘角
-    const h = mesh(new THREE.ConeGeometry(0.1 + w * 0.006, 0.7 + w * 0.02, 5), dark);
-    h.position.set(sx * (hx + 0.1), 0.18, sz * (hz + 0.1)); h.rotation.set(sz * 0.75, 0, -sx * 0.75); G.add(h);
+    const h = mesh(new THREE.ConeGeometry(0.07 + w * 0.003, 0.42 + w * 0.012, 5), dark);
+    h.position.set(sx * (hx + 0.05), 0.14, sz * (hz + 0.05)); h.rotation.set(sz * 0.55, 0, -sx * 0.55); G.add(h);
   }
-  if (rx > 0.05) for (const sx of [-1, 1]) { const c = mesh(new THREE.ConeGeometry(0.16, 0.7, 5), dark); c.position.set(sx * (rx + 0.2), rise + 0.4, 0); c.rotation.z = -sx * 0.5; G.add(c); } // 鸱吻
+  if (rx > 0.05) for (const sx of [-1, 1]) { const c = mesh(new THREE.ConeGeometry(0.13, 0.5, 5), dark); c.position.set(sx * (rx + 0.2), rise + 0.3, 0); c.rotation.z = -sx * 0.35; G.add(c); } // 鸱吻
   if (o.pyramid || rx <= 0.05) { // 宝顶
     G.add(at(mesh(new THREE.CylinderGeometry(0.08, 0.16, 0.5, 8), dark), 0, rise + 0.2, 0));
     G.add(at(mesh(new THREE.SphereGeometry(0.22, 10, 8), M(o.knob || '#d8b450')), 0, rise + 0.55, 0));
@@ -235,5 +235,21 @@ export function cauldron(r, color = '#6a5a3a', o = {}) {
   const fire = mesh(new THREE.ConeGeometry(r * 0.55, r * 0.6, 8).translate(0, r * 0.3, 0), glow(o.fire || '#ff7a2a', 3, true), { cast: false }); G.add(fire); G.userData.fire = fire;
   const top = mesh(new THREE.CircleGeometry(r * 0.78, 18).rotateX(-Math.PI / 2), glow(o.brew || '#ffb050', 1.6, true), { cast: false }); top.position.y = r * 1.5; G.add(top);
   G.userData.top = r * 1.6;
+  return G;
+}
+
+// 石狮（Q 版）：须弥座 + 蹲坐的身子 + 大脑袋 + 卷鬃；side=-1 是母狮（爪下幼狮），1 是公狮（爪下绣球）
+export function lion(side = 1, color = '#b8b2a6') {
+  const G = new THREE.Group(), m = M(color), d = M(shade(color, 0.72));
+  G.add(mesh(new THREE.BoxGeometry(1.1, 0.7, 1.4).translate(0, 0.35, 0), d, { recv: true }));
+  G.add(mesh(new THREE.BoxGeometry(1.25, 0.12, 1.55).translate(0, 0.76, 0), m));
+  G.add(at(mesh(new THREE.SphereGeometry(0.42, 12, 10).scale(1, 1.15, 1.25), m), 0, 1.25, -0.15));          // 身
+  for (const s of [-1, 1]) G.add(at(mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.6, 8), m), s * 0.22, 1.05, 0.3)); // 前腿
+  G.add(at(mesh(new THREE.SphereGeometry(0.42, 12, 10), m), 0, 1.9, 0.12));                                    // 头
+  for (let k = 0; k < 9; k++) { const a = (k / 9) * Math.PI * 2; G.add(at(mesh(new THREE.SphereGeometry(0.16, 8, 6), d), Math.cos(a) * 0.4, 1.95 + Math.sin(a) * 0.4, -0.05)); } // 鬃
+  G.add(at(mesh(new THREE.SphereGeometry(0.17, 10, 8).scale(1.2, 0.8, 1), m), 0, 1.78, 0.5));                 // 鼻吻
+  for (const s of [-1, 1]) G.add(at(mesh(new THREE.SphereGeometry(0.07, 8, 6), M('#2a2420')), s * 0.16, 2.0, 0.48)); // 眼
+  const toy = side > 0 ? mesh(new THREE.SphereGeometry(0.2, 10, 8), M('#c8a24a')) : mesh(new THREE.SphereGeometry(0.2, 10, 8).scale(1, 0.8, 1.2), m);
+  toy.position.set(side * 0.3, 0.98, 0.45); G.add(toy);
   return G;
 }
