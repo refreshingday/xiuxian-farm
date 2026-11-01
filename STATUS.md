@@ -108,6 +108,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - Codex 版 3D 素材 `src/lab/codex/*.js`（Codex CLI 按 `codex/SPEC.md` 建模 + 生成贴图 `assets/textures/codex/`）— 🟨 99/99 种已生成并能在实验场加载，待逐个看效果 — 2026-10-28 — 与 Claude 版严格分开：图鉴行带 Claude/Codex 标签和不同底板色；模式「图鉴 Codex」「对比」「全部对比」；「场景用的素材」可整岛切换
 
 ## 日志
+- 2026-11-01 — 实验场：修水面闪烁（z-fight）：深潭和同高度的水面不再叠两层，最低一级的潭只用全岛水面。
 - 2026-11-01 — 右下角版本号改成醒目样式（粗体 15px、金色字 + 深色底框）。
 - 2026-11-01 — 实验场：瀑布脚下的潭改成小而深（半径 1.2~2.4 米、水深约 1.1~1.4 米，能游泳）；水面遮罩对潭放宽到 2.2 米。
 - 2026-11-01 — 实验场：右下角版本号（src/version.js）补进 Artifact 镜像；CLAUDE.md 加规则：每次实验场提交后都要重新发布并打开 Artifact。

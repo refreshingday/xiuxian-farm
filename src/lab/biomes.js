@@ -86,7 +86,7 @@ export function makeTerrace(o) {
         const drop = Math.max(0, waterAt(k0) - (k === 0 ? -0.12 : waterAt(k))), R = clamp(1.2 + drop * 0.35 + (o.pondBonus || 0), 1.2, 2.4);
         const pd = { x: p.x + p.dx * R * 0.85, z: p.z + p.dz * R * 0.85, r: R };
         T.ponds.push(pd);
-        T.pools.push({ x: pd.x, z: pd.z, r: pd.r + 0.4, level: k >= 1 ? waterAt(k) : -0.12, deep: true });
+        if (k >= 1) T.pools.push({ x: pd.x, z: pd.z, r: pd.r + 0.4, level: waterAt(k), deep: true }); // 最低一级靠全岛水面，不再叠第二层同高水面（会 z-fight 闪烁）
         k0 = k;
       }
       cur.push(p);

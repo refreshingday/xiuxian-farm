@@ -238,10 +238,11 @@ function buildWater(b, hAt) {
   flowLine = b.terrace?.stream || null;
   makeWater(W, hAt, { x: 0, z: 0, r: R - 0.6 });
   // 台地上的高处水潭：同一种水，只是单独一层水面，用遮罩裁掉崖外部分
+  deepPools = (b.terrace?.pools || []).filter((p) => p.deep);
   for (const p of b.terrace?.pools || []) makeWater({ ...W, level: p.level }, hAt, p, true);
   for (const f of b.terrace?.falls || []) waterfall(f, W);
 }
-let flowLine = null;
+let flowLine = null, deepPools = [];
 function flowAt(x, z) {
   if (!flowLine) return [0, 0];
   let best = 9, fx = 0, fz = 0;
@@ -259,8 +260,10 @@ function makeWater(W, hAt, area, masked = false) {
   const N = masked ? 64 : 192, data = new Uint8Array(N * N * 4), x0 = area.x - area.r, z0 = area.z - area.r, sz = area.r * 2;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = x0 + (i + 0.5) / N * sz, z = z0 + (j + 0.5) / N * sz, dep = W.level - hAt(x, z);
+    // 同高度的深潭已经自己画了水面：这里挖掉，避免两层水叠在一起闪（z-fight）
+    const inDeep = masked && !area.deep && deepPools.some((q) => Math.abs(q.level - W.level) < 0.01 && Math.hypot(x - q.x, z - q.z) < q.r);
     data[(j * N + i) * 4] = clamp(dep / (area.deep ? 1.5 : 0.9), 0, 1) * 255;
-    data[(j * N + i) * 4 + 1] = dep < (masked ? (area.deep ? 2.2 : 0.85) : 2.2) ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
+    data[(j * N + i) * 4 + 1] = dep < (masked ? (area.deep ? 2.2 : 0.85) : 2.2) && !inDeep ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
     // B/A：溪流流向 × 强度（离溪流中线 1.6 米内），水面沿着它滚动条纹
     const [fx, fz] = flowAt(x, z);
     data[(j * N + i) * 4 + 2] = (fx * 0.5 + 0.5) * 255; data[(j * N + i) * 4 + 3] = (fz * 0.5 + 0.5) * 255;
