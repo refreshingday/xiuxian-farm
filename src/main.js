@@ -39,6 +39,7 @@ import { DAY_START, dateOf, clockText, rollWeather } from './calendar.js';
 import { loadItems, Inventory, item, itemName } from './items.js';
 import { UI, btn, el } from './ui.js';
 import { Cheat, startWithQuest } from './cheat.js';
+import { siteOf } from './sectsites.js';
 import { Life, near } from './life.js';
 import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
 
@@ -141,7 +142,7 @@ configureVillage(await loadVillageData().then((d) => (g.villageData = d)));
 g.mapData = await (await fetch('data/world_map.json')).json();
 configureClearings([
   ...g.mapData.hubs.map((h) => ({ ...polar(h.ang, h.dist), r: 26, plaza: 17 })),
-  ...g.mapData.sects.map((s) => ({ ...polar(s.ang, s.dist), r: 20, plaza: 9 })),
+  ...g.mapData.sects.map((s) => { const S = siteOf(s.name); return { ...polar(s.ang, s.dist), r: S.r, ground: S.ground }; }),
 ]);
 const world = new World(scene); g.world = world;
 const enemies = new Enemies(g); g.enemies = enemies;

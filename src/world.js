@@ -140,7 +140,10 @@ function groundSample(x, z, out) {
   const bd = Math.min(Math.hypot(x - BASIN.x, z - BASIN.z) - BASIN.r, segDist(x, z, ...STREAM) - 0.55);
   if (bd < 0.8 + (n - 0.5) * 0.5) { GS.kind = 2; GS.path = 1; }
   for (const [px, pz, , pr] of PEAKS) if (Math.hypot(x - px, z - pz) < pr + 0.9 + (n - 0.5) * 0.8) { GS.kind = 4; GS.path = 1; mix3(out, out, [96, 112, 84], 0.7); }
-  for (const c of CLEARINGS) if (c.plaza && Math.abs(x - c.x) < c.plaza + (n - 0.5) && Math.abs(z - c.z) < c.plaza * 0.75 + (n - 0.5)) { GS.kind = 1; GS.path = 1; }
+  for (const c of CLEARINGS) {
+    if (c.ground) { if (Math.abs(x - c.x) < c.r && Math.abs(z - c.z) < c.r) { const k = c.ground(x - c.x, z - c.z, n - 0.5); if (k) { GS.kind = k; GS.path = 1; } } }
+    else if (c.plaza && Math.abs(x - c.x) < c.plaza + (n - 0.5) && Math.abs(z - c.z) < c.plaza * 0.75 + (n - 0.5)) { GS.kind = 1; GS.path = 1; }
+  }
   const F = FARM;
   if (x > F.x0 - 0.5 && x < F.x0 + F.cols * F.size + 0.5 && z > F.z0 - 0.5 && z < F.z0 + F.rows * F.size + 0.5) { GS.kind = 3; GS.path = 1; }
   const mine = 1 - smooth(MINE_R - 1, MINE_R + 5, dm + (n - 0.5) * 4);
@@ -596,6 +599,12 @@ export class World {
   }
   addCircle(x, z, r) { const c = { x, z, r, off: false }; this._cells(x - r, z - r, x + r, z + r, (b) => b.c.push(c)); return c; }
   // 参考画风素材的墨线（树、竹、石）：跟设置里的「描边」走，默认关
+  // 参考画风素材（lab 的 ref）：克隆 + 季节着色 + 墨线跟描边设置走
+  ref(id, v, x, z, s = 1, r = 0) {
+    const o = getRefAsset(id, v)?.clone(); if (!o) return null;
+    seasonRef(o); o.traverse((c) => { if (c.userData.isLine) { (this.refInk ||= []).push(c); c.visible = !!this.inkOn; } });
+    o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = r; this.scene.add(o); return o;
+  }
   setInk(on) { this.inkOn = on; for (const c of this.refInk || []) c.visible = on; }
   // 冬天池塘、小潭结冰：能走上去，荷叶、白沫收起
   setIce(on) {
