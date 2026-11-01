@@ -32,11 +32,11 @@ export class Landmarks {
     const mine = this.list.find((L) => L.name === '玄晶矿洞'); if (mine) mine.found = true; // 原型已经建好的矿洞，开局就知道
     this.beacons = [];
     const hide = this.list.find((L) => L.name === '血魔宫'); if (hide) hide.hidden = true; // GDD：入口隐藏
-    for (const L of this.list) if (L.name !== '玄晶矿洞' && !L.hidden) this.build(L);
+    for (const L of this.list) if (L.name !== '玄晶矿洞' && !L.hidden && L.kind !== 'sect') this.build(L); // 宗门的石碑由 sects.js 按各派布局摆
     this.lastEdge = 0;
   }
   // 石碑（名字竖着写）+ 光柱
-  build(L) {
+  build(L, pos = L) {
     const g = new THREE.Group(), K = KIND[L.kind];
     const tex = canvasTex(96, 320, (c, w, h) => {
       c.fillStyle = '#8a8a84'; c.fillRect(0, 0, w, h);
@@ -50,9 +50,9 @@ export class Landmarks {
     g.add(slab);
     g.add(mesh(new THREE.BoxGeometry(1.1, 0.25, 0.45).translate(0, 3.1, 0), toon('#6a6a64', { occ: true })));
     addOutline(g, outlineMat('#2b1d14', 0.03));
-    g.position.set(L.x, 0, L.z); g.rotation.y = Math.atan2(-L.x, -L.z); // 碑面朝村子
+    g.position.set(pos.x, 0, pos.z); g.rotation.y = pos === L ? Math.atan2(-L.x, -L.z) : 0; // 碑面朝村子（宗门的朝镜头）
     this.g.scene.add(g);
-    this.g.world.addCircle(L.x, L.z, 0.9);
+    this.g.world.addCircle(pos.x, pos.z, 0.9);
     if (L.kind !== 'mine') {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 70, 10, 1, true).translate(0, 35, 0), new THREE.MeshBasicMaterial({
         color: new THREE.Color(K.color).multiplyScalar(1.6), transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide, toneMapped: false,
