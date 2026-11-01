@@ -41,8 +41,29 @@ export const REFU = { grad: { value: 1 } };
 const GRAD_V = `
   #include <begin_vertex>
   vRefY = position.y;
-  vRefTint = refTint;`;
-const GRAD_COLOR = (aoH) => `#include <color_fragment>
+  vRefTint = refTint;
+  #ifdef USE_INSTANCING
+  vRefOrg = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  #else
+  vRefOrg = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  #endif`;
+// 每棵树（按它摆放的位置）一个随机的绿：偏黄绿 / 偏蓝绿、深浅、浓淡都不同，挤在一起也分得开
+const VARY = `
+  {
+    vec2 q = floor(vRefOrg.xz * 7.0) + 0.5;
+    float r1 = fract(sin(dot(q, vec2(12.9898, 78.233))) * 43758.5453);
+    float r2 = fract(sin(dot(q, vec2(39.3468, 11.135))) * 24634.6345);
+    float r3 = fract(sin(dot(q, vec2(73.156, 52.235))) * 31871.2319);
+    vec3 c = diffuseColor.rgb;
+    vec3 hc = r1 < 0.5 ? c * vec3(0.74, 0.96, 1.16) : c * vec3(1.18, 1.05, 0.66);
+    c = mix(c, hc, abs(r1 - 0.5) * 2.0 * 0.85);
+    c *= 0.78 + r2 * 0.4;
+    float l = dot(c, vec3(0.3, 0.59, 0.11));
+    c = mix(vec3(l), c, 0.78 + r3 * 0.45);
+    diffuseColor.rgb = mix(diffuseColor.rgb, c, uRefGrad);
+  }`;
+const GRAD_COLOR = (aoH, vary) => `#include <color_fragment>
+  ${vary ? VARY : ''}
   {
     float gk = uRefGrad;
     diffuseColor.rgb *= 1.0 + vRefTint * gk;
@@ -58,13 +79,13 @@ const GRAD_LIGHT = (rimK) => `
     outgoingLight += diffuseColor.rgb * rim * ${rimK.toFixed(2)} * uRefGrad * vec3(1.0, 0.96, 0.82);
   }`;
 // 薄片（椰叶、花草）侧着看时边缘光会整片发亮，所以不加
-function refToon(key, extra, aoH = 0.9, rimK = 0.28) {
+function refToon(key, extra, aoH = 0.9, rimK = 0.28, vary = false) {
   const m = new THREE.MeshToonMaterial({ color: '#ffffff', vertexColors: true, gradientMap: ramp() });
   m.onBeforeCompile = (s) => {
     s.uniforms.uRefGrad = REFU.grad;
-    s.vertexShader = 'varying float vRefY;\nvarying vec3 vRefTint;\nattribute vec3 refTint;\n' + s.vertexShader.replace('#include <begin_vertex>', GRAD_V);
-    s.fragmentShader = 'uniform float uRefGrad;\nvarying float vRefY;\nvarying vec3 vRefTint;\n' + s.fragmentShader
-      .replace('#include <color_fragment>', GRAD_COLOR(aoH))
+    s.vertexShader = 'varying float vRefY;\nvarying vec3 vRefTint, vRefOrg;\nattribute vec3 refTint;\n' + s.vertexShader.replace('#include <begin_vertex>', GRAD_V);
+    s.fragmentShader = 'uniform float uRefGrad;\nvarying float vRefY;\nvarying vec3 vRefTint, vRefOrg;\n' + s.fragmentShader
+      .replace('#include <color_fragment>', GRAD_COLOR(aoH, vary))
       .replace('#include <opaque_fragment>', GRAD_LIGHT(rimK) + TINT);
     if (extra) extra(s);
   };
@@ -99,7 +120,7 @@ function refMats() {
   if (MATS) return MATS;
   const solid = refToon('solid');
   const sway = chain(refToon('sway'), (s) => swayPatch(s, 1, 0.8), 'S');
-  const clump = chain(refToon('clump'), (s) => swayPatch(s, 1, 0.8), 'C');
+  const clump = chain(refToon('clump', null, 0.9, 0.28, true), (s) => swayPatch(s, 1, 0.8), 'C');
   const plant = chain(refToon('plant', null, 0.35, 0), (s) => swayPatch(s, 2.2, 0.02), 'P');
   plant.side = THREE.DoubleSide;
   MATS = { solid, sway, leaf: sway, bloom: sway, pine: sway, clump, rock: rockMat(), plant };

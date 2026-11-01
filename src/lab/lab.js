@@ -104,12 +104,13 @@ scene.add(sky);
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, ink: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, v: 2, bloomK: {}, bloomT: {},
+  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, v: 3, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
   if ((saved.v || 1) < 2) delete saved.outline; // v2：描边默认关闭，旧存档里的描边开关作废
-  Object.assign(S, saved, { v: 2 });
+  if ((saved.v || 1) < 3) delete saved.ink; // v3：参考画风的墨线也默认关闭
+  Object.assign(S, saved, { v: 3 });
 } catch { /* 无痕模式等 */ }
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
 
@@ -844,7 +845,7 @@ function updateLights(time) {
 // ---------- 开关 ----------
 function applyToggles() {
   document.body.classList.toggle('noWalk', S.mode !== 'scene' || !S.chibi);
-  root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认开）
+  root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认关）
   sun.castShadow = S.shadows;
   REFU.grad.value = S.refgrad ? 1 : 0;
   bloom.enabled = S.bloom; grade.enabled = S.grade;
@@ -857,7 +858,7 @@ function applyToggles() {
 // ======================================================================
 // UI
 // ======================================================================
-// 「描边」按钮：看参考画风素材时管它的墨线（默认开），否则管原版描边（默认关）
+// 「描边」按钮：看参考画风素材时管它的墨线，否则管原版描边（都默认关）
 const lineKey = () => (S.mode === 'ref' || S.mode === 'refcmp' || (S.mode === 'scene' && S.src === 'ref') ? 'ink' : 'outline');
 function ui() {
   document.querySelectorAll('#biomes button').forEach((b, i) => b.classList.toggle('on', i === S.biome));
