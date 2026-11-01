@@ -40,7 +40,7 @@ function sampleLine(pts, F, d = 0.08) {
   return out;
 }
 export function makeTerrace(o) {
-  const T = { ...o, stairs: [], pools: [], falls: [] };
+  const T = { ...o, stairs: [], pools: [], falls: [], ponds: [] };
   // 连接方式（每条路一种）：
   //   stairs 石阶 / logs 木桩台阶：路上是连续坡，穿过 k+0.5 级处摆一段（朝上坡、按进深拉伸）
   //   trail 土路：只有坡，不摆东西（之字形绕上去坡就缓）
@@ -80,6 +80,13 @@ export function makeTerrace(o) {
       if (k < k0) {
         flush();
         T.falls.push({ x: p.x, z: p.z, rot: Math.atan2(p.dx, p.dz), w: 1.2, top: waterAt(k0), bottom: k === 0 ? -0.12 : waterAt(k) });
+        // 环境规则：每挂瀑布脚下必有一个小水潭（ENVIRONMENT.md）。潭心在瀑布下游 1.3 米，地面挖一个浅盆；
+        // 最低一级靠全岛水面淹出来，高一级的另加一块水面
+        // 潭小而深（能游泳）；落差越高潭略大（1.2~2.4 米）
+        const drop = Math.max(0, waterAt(k0) - (k === 0 ? -0.12 : waterAt(k))), R = clamp(1.2 + drop * 0.35 + (o.pondBonus || 0), 1.2, 2.4);
+        const pd = { x: p.x + p.dx * R * 0.85, z: p.z + p.dz * R * 0.85, r: R };
+        T.ponds.push(pd);
+        if (k >= 1) T.pools.push({ x: pd.x, z: pd.z, r: pd.r + 0.4, level: waterAt(k), deep: true }); // 最低一级靠全岛水面，不再叠第二层同高水面（会 z-fight 闪烁）
         k0 = k;
       }
       cur.push(p);
@@ -87,6 +94,14 @@ export function makeTerrace(o) {
     flush();
   }
   return T;
+}
+function smoothPoly(P, n) { // Catmull-Rom 细分
+  const o = [];
+  for (let i = 0; i < P.length - 1; i++) {
+    const a = P[Math.max(i - 1, 0)], b = P[i], c = P[i + 1], d = P[Math.min(i + 2, P.length - 1)];
+    for (let j = 0; j < n; j++) { const t = j / n, t2 = t * t, t3 = t2 * t; o.push([0, 1].map((k) => 0.5 * (2 * b[k] + (-a[k] + c[k]) * t + (2 * a[k] - 5 * b[k] + 4 * c[k] - d[k]) * t2 + (-a[k] + 3 * b[k] - 3 * c[k] + d[k]) * t3))); }
+  }
+  o.push(P[P.length - 1]); return o;
 }
 const HALF = { stairs: [1.1, 1.5], logs: [1.0, 1.5], trail: [1.1, 2.2] }; // 路半宽：内沿、外沿（土路边缘更软）
 export function terraceAt(T, x, z) {
@@ -100,7 +115,9 @@ export function terraceAt(T, x, z) {
   // 塌方：崖在几处被冲成缓坡，自然连通上下两级（噪声决定位置，溪边不塌）
   if (T.erode) m = Math.max(m, T.erode(x, z));
   if (m > 0) lv += (Fc - lv) * m;
-  if (T.stream) { sd = polyDist(x, z, T.stream); if (sd < 0.95) chan = smooth(0.95, 0.5, sd) * (lv < 0.6 ? 1.1 : 0.5); }
+  if (T.stream) { sd = polyDist(x, z, T.stream); if (sd < 1.7) chan = smooth(1.7, 0.35, sd) * (lv < 0.6 ? 0.75 : 0.4); } // 宽而缓的河床：岸坡渐变，不再陡切
+  // 瀑布脚下的小水潭：挖浅盆，边缘平缓过渡
+  for (const q of T.ponds || []) { const d = Math.hypot(x - q.x, z - q.z); if (d < q.r + 0.9) chan = Math.max(chan, smooth(q.r + 0.9, q.r * 0.3, d) * 1.55); }
   return { lv, F, pd, sd, chan };
 }
 
@@ -128,7 +145,8 @@ const M_T = makeTerrace({
     { kind: 'logs', pts: [[11, 11.5], [14.5, 14.5]] },                         // 东南小丘
   ],
   erode: (x, z) => smooth(0.7, 0.76, fbm(x * 0.09 + 3, z * 0.09, 44, 2)) * smooth(2.5, 4, Math.hypot(x - 8, z + 9)),
-  stream: [[2, -21], [5.5, -14.5], [8.5, -8], [10, 4]],
+  // 长溪：只加一道平滑的弯（Catmull-Rom 平滑），不再折来折去
+  stream: smoothPoly([[2, -21], [4.6, -15.5], [9, -10], [9.2, -3.5], [10.5, 4]], 6),
 });
 // 赤枫林：西北一座三级大山（溪水跌进池塘），东边两级缓丘（之字土路），西南一座五级叠石塔（木梯）
 const A_T = makeTerrace({
@@ -168,7 +186,7 @@ export const BIOMES = [
   // ================================================================ 春野
   {
     id: 'meadow', name: '青竹村', sub: '新手村 · 四级后山 · 石阶 / 之字土路 / 木梯 / 木桩台阶 · 梯级瀑布', gdd: true,
-    terrace: { rock: '#9a948a', pools: M_T.pools, falls: M_T.falls, ladders: M_T.ladders, stream: M_T.stream },
+    terrace: { rock: '#9a948a', pools: M_T.pools, falls: M_T.falls, ponds: M_T.ponds, ladders: M_T.ladders, stream: M_T.stream },
     terrain(x, z) {
       const t = terraceAt(M_T, x, z);
       const pond = Math.hypot(x - 10, z - 7) - 3.6 - (vnoise(x * 0.5, z * 0.5, 2) - 0.5) * 1.4;
@@ -176,10 +194,18 @@ export const BIOMES = [
       if (pond < 0) h = Math.max(-1.2, pond * 0.45);
       const path = Math.min(wavyPath(x, z, 3, 0.15, 1), t.pd - 0.2);
       const farm = x > -14 && x < -4 && z > 3 && z < 11;
-      return { h: farm ? 0.02 : h, k: pond < 0.6 || t.sd < 0.95 ? 'sand' : farm ? 'till' : path < 1.2 ? 'dirt' : 'grass', path, lv: t.lv };
+      return { h: farm ? 0.02 : h, k: pond < 0.6 || t.sd < 0.95 ? 'sand' : farm ? 'till' : path < 1.2 ? 'dirt' : 'grass', path, lv: t.lv, sd: t.sd, pond };
     },
     color(x, z, t) {
       const n = vnoise(x * 6, z * 6, 1);
+      if (t.k === 'dirt' || t.k === 'sand' || t.k === 'grass') {
+        // 草 / 土路 / 沙滩之间用连续权重混色，不再按 k 硬切（边界不出现锯齿）
+        const g = grassy([118, 188, 66], [88, 158, 50], [170, 208, 80], x, z, 1);
+        const dirt = mix([218, 172, 108], [190, 140, 84], vnoise(x * 1.2, z * 1.2, 4) * 0.7 + n * 0.2), sand = mix([226, 204, 146], [200, 176, 120], n * 0.5);
+        let c = mix(g, [210, 180, 110], smooth(2.4, 1.2, t.path) * 0.5);
+        c = mix(c, dirt, smooth(1.5, 0.9, t.path));
+        return mix(c, sand, Math.max(smooth(1.3, 0.6, t.sd), smooth(0.9, 0.2, t.pond)));
+      }
       if (t.k === 'dirt') return mix([218, 172, 108], [190, 140, 84], vnoise(x * 1.2, z * 1.2, 4) * 0.7 + n * 0.2);
       if (t.k === 'sand') return mix([226, 204, 146], [200, 176, 120], n * 0.5);
       if (t.k === 'till') return ((Math.floor(z * 2.4) & 1) ? [110, 76, 50] : [128, 88, 58]).map((v) => v * (0.94 + n * 0.1));
@@ -299,7 +325,7 @@ export const BIOMES = [
   // ================================================================ 赤枫林
   {
     id: 'autumn', name: '赤枫林', sub: '赤枫狼王领地 · 三级山 · 五级叠石塔（木梯）· 之字土路 · 瀑布', gdd: true,
-    terrace: { rock: '#a08a70', pools: A_T.pools, falls: A_T.falls, ladders: A_T.ladders, stream: A_T.stream },
+    terrace: { rock: '#a08a70', pools: A_T.pools, falls: A_T.falls, ponds: A_T.ponds, ladders: A_T.ladders, stream: A_T.stream },
     terrain(x, z) {
       const t = terraceAt(A_T, x, z);
       let h = (n2(x, z, 4, 0.08) - 0.5) * 0.25 + LH * t.lv - t.chan;
@@ -553,7 +579,7 @@ export const BIOMES = [
       { id: 'dryShrub', n: 8, k: ['sand'], s: [0.35, 0.55], gap: 1.6 },
       { id: 'desertGrass', n: 70, k: ['sand', 'oasis'], s: [0.7, 1.2], gap: 0.5 },
     ],
-    catalog: ['pillar', 'ruinWall', 'statue', 'cactus', 'sandRock', 'dryShrub', 'desertGrass', 'jar', 'vein'],
+    catalog: ['palm', 'pillar', 'ruinWall', 'statue', 'cactus', 'sandRock', 'dryShrub', 'desertGrass', 'jar', 'vein'],
   },
   // ================================================================ 古战场
   {
@@ -674,7 +700,7 @@ export const BIOMES = [
   // ================================================================ 珊瑚湾（风格试验）
   {
     id: 'reef', name: '珊瑚湾', sub: '风格试验 · 参考图 · 珊瑚浅湾 · 长栈桥 · 断吊桥 · 灰岩瀑布 · 鱼群',
-    terrace: { rock: '#a4a8aa', pools: RF_T.pools, falls: RF_T.falls, ladders: RF_T.ladders, stream: RF_T.stream },
+    terrace: { rock: '#a4a8aa', pools: RF_T.pools, falls: RF_T.falls, ponds: RF_T.ponds, ladders: RF_T.ladders, stream: RF_T.stream },
     terrain(x, z) {
       const t = terraceAt(RF_T, x, z), s = reefShore(x, z);
       let h = LH * t.lv + (n2(x, z, 6, 0.08) - 0.5) * 0.2 - t.chan;

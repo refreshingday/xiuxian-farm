@@ -58,7 +58,11 @@ const BROAD = [
   { t: [[0, 0, 0], [0.05, 0.6, 0], [0, 1.15, 0]], r: 0.09, c: [[0, 1.4, 0, 0.5], [0.3, 1.25, 0.1, 0.36], [-0.25, 1.3, -0.15, 0.38], [0, 1.75, 0, 0.35]] },
 ];
 function broadTree(v, leaf, accent, seed, o = {}) {
-  const T = BROAD[v % BROAD.length], k = new Kit();
+  const T0 = BROAD[v % BROAD.length], k = new Kit();
+  // 树整体放大 35%；冠团彼此拉开（偏移 ×1.3、半径 ×0.86），团与团之间留缝，影子才落得到叶子上
+  const S = 1.35, sc = (q) => q.map((x) => x * S), top0 = T0.t[T0.t.length - 1];
+  const T = { r: T0.r * S, t: T0.t.map(sc), branch: T0.branch && T0.branch.map(sc),
+    c: T0.c.map(([x, y, z, rr]) => [(top0[0] + (x - top0[0]) * 1.3) * S, (top0[1] + (y - top0[1]) * 1.3) * S, (top0[2] + (z - top0[2]) * 1.3) * S, rr * S * 0.86]) };
   trunk(k, T.t, T.r, T.r * 0.55, o.bark);
   if (T.branch) k.add(G.tube(T.branch, T.r * 0.7, T.r * 0.35, 6), grad(o.bark || '#7a5236', 0.6, 1));
   // 冠下可见的几根小枝
@@ -80,7 +84,7 @@ function broadTree(v, leaf, accent, seed, o = {}) {
 // 松树：层层圆锥（可带雪）
 function pine(v, color, seed, snow = false) {
   const k = new Kit(), r = rnd(seed + v);
-  const tiers = [4, 5, 3, 6][v % 4], H = [3.2, 4.2, 2.4, 5][v % 4], W = [1.25, 1.35, 1.1, 1.2][v % 4];
+  const tiers = [4, 5, 3, 6][v % 4], H = [3.2, 4.2, 2.4, 5][v % 4] * 1.35, W = [1.25, 1.35, 1.1, 1.2][v % 4] * 1.35;
   k.add(G.cyl(0.12, 0.18, H * 0.4), grad('#6a4630', 0.6, 1));
   for (let i = 0; i < tiers; i++) {
     const t = i / tiers, y = H * (0.18 + t * 0.62), rr = W * (1 - t * 0.72) * (0.9 + r() * 0.2);
@@ -115,30 +119,23 @@ function bamboo(v, seed) {
   }
   return k.build();
 }
-// 椰树 / 棕榈
+// 椰树 / 棕榈（参考图风格）：粗环纹弯曲树干 + 一圈宽大的深锯齿羽叶（带深色描边）+ 椰子
 function palm(v, seed) {
   const k = new Kit(), r = rnd(seed + v);
   const trunks = v === 2 ? [[0.3, 0.9, -0.2], [-0.25, 0.7, 0.15]] : [[0, v === 1 ? 0.2 : 1.3, 0]];
   for (const [ox, bend, oz] of trunks) {
-    const H = 4 + r() * 1.2, top = [ox + bend, H, oz];
-    const pts = [[ox, 0, oz], [ox + bend * 0.15, H * 0.35, oz], [ox + bend * 0.5, H * 0.7, oz], top];
-    // 树干环纹
-    k.add(G.tube(pts, 0.2, 0.13, 7), (g) => paint(g, (p, n, out) => out.set('#a07a4e').multiplyScalar((Math.floor(p.y * 3.2) % 2 ? 0.82 : 1.0) * (0.75 + n.y * 0.1 + 0.25))));
-    for (let i = 0; i < 8; i++) {
-      const a = i / 8 * TAU + r() * 0.3, len = 1.7 + r() * 0.5, f = new Kit();
-      // 叶：一串小叶沿下垂弧线
-      const frond = [];
-      for (let s = 0; s <= 6; s++) {
-        const t = s / 6, d = t * len, y = Math.sin(t * 2.2) * 0.55 - t * t * 0.9;
-        frond.push([d, y]);
-      }
-      for (let s = 1; s < frond.length; s++) {
-        const [d, y] = frond[s], w = 0.32 * Math.sin((s / 6) * Math.PI) + 0.08;
-        for (const sd of [-1, 1]) k.add(G.blade(0.05, w * 1.6, 0.05), grad('#4fa040', 0.7, 1.2), { at: [top[0] + Math.cos(a) * d, top[1] + y, top[2] + Math.sin(a) * d], rot: [sd * 1.2, -a + Math.PI / 2, 0.6 * sd], kind: 'plant' });
-      }
-      k.add(G.tube(frond.map(([d, y]) => [top[0] + Math.cos(a) * d, top[1] + y, top[2] + Math.sin(a) * d]), 0.035, 0.012, 4), grad('#5c8a34', 0.8, 1.1), { kind: 'leaf' });
+    const H = 4 + r() * 1.2, a0 = r() * TAU, top = [ox + bend * Math.cos(a0 * 0.3), H, oz + bend * Math.sin(a0 * 0.3) * 0.4];
+    const pts = [[ox, 0, oz], [ox + (top[0] - ox) * 0.1, H * 0.35, oz + (top[2] - oz) * 0.1], [ox + (top[0] - ox) * 0.45, H * 0.72, oz + (top[2] - oz) * 0.45], top];
+    k.add(G.tube(pts, 0.25, 0.16, 8), (g) => paint(g, (p, n, out) => { const f = (p.y * 3.6) % 1; out.set('#b08458').multiplyScalar((f < 0.24 ? 0.64 : 0.92 + f * 0.1) * (0.82 + Math.max(0, n.x * 0.5 + n.z * 0.3) * 0.25)); }));
+    const NF = 11;
+    for (let i = 0; i < NF; i++) {
+      const a = i / NF * TAU + r() * 0.25, len = 2.0 + r() * 0.6, up = i % 3 === 0 ? 0.35 : 0, spine = [];
+      for (let s = 0; s <= 14; s++) { const t = s / 14; spine.push([top[0] + Math.cos(a) * t * len, top[1] + Math.sin(t * 2) * (0.45 + up) - t * t * 1.15, top[2] + Math.sin(a) * t * len]); }
+      k.add(G.tube(spine, 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'palmf' });
+      k.add(frondGeo(spine, len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'palmf' });
+      k.add(frondGeo(spine.map(([x, y, z]) => [x, y - 0.03, z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'palmf' });
     }
-    for (let i = 0; i < 3; i++) k.add(G.sph(0.12, 7, 6), grad('#6a4a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 2.1) * 0.17, top[1] - 0.15, top[2] + Math.sin(i * 2.1) * 0.17] });
+    for (let i = 0; i < 4; i++) k.add(G.sph(0.15, 7, 6), grad('#7a5a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 1.6) * 0.2, top[1] - 0.18, top[2] + Math.sin(i * 1.6) * 0.2] });
   }
   return k.build();
 }
@@ -377,8 +374,15 @@ function stump(v, seed) {
     }
   } else { // 倒木（可空心）
     const L = v === 1 ? 2.2 : 1.6;
-    k.add(new THREE.CylinderGeometry(0.3, 0.34, L, 10, 1, v === 2).rotateZ(Math.PI / 2), ring, { at: [0, 0.3, 0] });
-    if (v === 2) k.add(new THREE.CylinderGeometry(0.22, 0.25, L, 10, 1, true).rotateZ(Math.PI / 2).scale(1, 1, 1), grad('#3a2618'), { at: [0, 0.3, 0] });
+    const flip = (g) => { const f = g.clone(), ix = f.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } const nm = f.attributes.normal; for (let i = 0; i < nm.array.length; i++) nm.array[i] *= -1; return f; };
+    const outer = new THREE.CylinderGeometry(0.3, 0.34, L, 10, 1, v === 2).rotateZ(Math.PI / 2);
+    k.add(outer, ring, { at: [0, 0.3, 0] });
+    if (v === 2) { // 空心：外壁内侧（背面）也要画出来，否则从上往下看会穿帮
+      k.add(flip(outer), grad('#4a3020'), { at: [0, 0.3, 0] });
+      const inner = new THREE.CylinderGeometry(0.22, 0.25, L, 10, 1, true).rotateZ(Math.PI / 2);
+      k.add(inner, grad('#3a2618'), { at: [0, 0.3, 0] });
+      k.add(flip(inner), grad('#3a2618'), { at: [0, 0.3, 0] });
+    }
     for (const s of [-1, 1]) k.add(new THREE.CircleGeometry(v === 2 ? 0.02 : 0.31, 10).rotateY(s * Math.PI / 2), ring, { at: [s * L / 2, 0.3, 0] });
     k.add(G.tube([[0.2, 0.5, 0], [0.4, 0.8, 0.1], [0.45, 1.0, 0.25]], 0.06, 0.03, 5), grad('#7a5236'));
     for (let i = 0; i < 4; i++) k.add(G.sph(0.08 + r() * 0.05, 6, 4), grad('#5fae3e', 0.8, 1.2), { at: [(r() - 0.5) * L * 0.8, 0.58, (r() - 0.5) * 0.2], s: [1.4, 0.5, 1.1] });
@@ -1187,7 +1191,7 @@ export function frondGeo(spine, W, fold) {
   };
   const tri = (a, b, c) => pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
   for (let i = 0; i < N; i++) for (const sg of [-1, 1]) {
-    const V0 = edge(i, 0, sg, 0.4), T = edge(i, 0.85, sg, 1), V1 = edge(i + 1, 0, sg, 0.4);
+    const V0 = edge(i, 0, sg, 0.3), T = edge(i, 0.85, sg, 1), V1 = edge(i + 1, 0, sg, 0.3);
     tri(P[i], V0, T); tri(P[i], T, P[i + 1]); tri(P[i + 1], T, V1); // 双面材质，绕序无所谓
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
@@ -1204,10 +1208,10 @@ function palmLush(v, seed) {
     const a = i / NF * TAU + r() * 0.25, len = 2.0 + r() * 0.6, up = i % 3 === 0 ? 0.35 : 0;
     const spine = [];
     for (let s = 0; s <= 14; s++) { const t = s / 14; spine.push([Math.cos(a) * t * len, Math.sin(t * 2) * (0.45 + up) - t * t * 1.15, Math.sin(a) * t * len]); }
-    k.add(G.tube(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'leaf' });
-    k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'plant' });
+    k.add(G.tube(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), 0.04, 0.015, 4), grad('#5a8a30', 0.8, 1.1), { kind: 'palmf' });
+    k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y, top[2] + z]), len * 0.24, 0.42), grad(['#4f9a38', '#5aa83e', '#68b444'][i % 3], 0.7, 1.15), { kind: 'palmf' });
     // 参考画风：叶子下面垫一片稍宽的深色叶，露出来的一圈就是描边
-    if (STYLE.frondInk) k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y - 0.03, top[2] + z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'plant' });
+    if (STYLE.frondInk) k.add(frondGeo(spine.map(([x, y, z]) => [top[0] + x, top[1] + y - 0.03, top[2] + z]), len * 0.24 * 1.14, 0.42), grad('#1d3316', 1, 1, 0), { kind: 'palmf' });
   }
   for (let i = 0; i < 4; i++) k.add(G.sph(0.15, 7, 6), grad('#7a5a2a', 0.7, 1.1), { at: [top[0] + Math.cos(i * 1.6) * 0.2, top[1] - 0.18, top[2] + Math.sin(i * 1.6) * 0.2] });
   return k.build();

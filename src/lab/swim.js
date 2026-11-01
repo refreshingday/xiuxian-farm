@@ -20,14 +20,15 @@ const ringVS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projecti
 const ringFS = `uniform float uT, uOp, uSeed; uniform vec3 uCol; varying vec2 vUv;
   void main() {
     vec2 p = vUv * 2.0 - 1.0; float d = length(p);
-    float w = mix(0.16, 0.05, uT);
-    float a = 1.0 - smoothstep(w * 0.55, w, abs(d - (1.0 - w)));
+    // 软边：高斯式的剖面（中间最实、两边慢慢淡出去），不是一条硬边的线；圈越扩越细
+    float w = mix(0.17, 0.06, uT), c = 1.0 - w * 1.7, e = (d - c) / (w * 0.8);
+    float a = exp(-e * e * 1.6) * (1.0 - smoothstep(0.9, 1.0, d));
     // 沿圆周固定的断口花纹：越到后面断得越多
     float ang = atan(p.y, p.x);
     float n = 0.5 + 0.25 * sin(ang * 5.0 + uSeed) + 0.25 * sin(ang * 3.0 - uSeed * 1.7);
-    a *= smoothstep(uT * 1.05 - 0.12, uT * 1.05 + 0.02, n);
-    a *= uOp * (1.0 - uT * uT);
-    if (a < 0.01) discard;
+    a *= smoothstep(uT * 1.05 - 0.32, uT * 1.05 + 0.1, n); // 断口也是慢慢淡掉的，不是一刀切
+    a *= uOp * 0.8 * (1.0 - uT * uT);
+    if (a < 0.008) discard;
     gl_FragColor = vec4(uCol, a);
   }`;
 
@@ -143,20 +144,22 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { const 
 /** kind: 'step' 涉水脚步 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
 export function waterSound(kind, vol = 1) {
   const a = AC; if (!a || a.state !== 'running') return;
-  const P = { step: [0.16, 900, 380, 0.22], stroke: [0.22, 700, 300, 0.2], enter: [0.35, 1300, 400, 0.45], plunge: [0.6, 1100, 260, 0.6], exit: [0.3, 900, 350, 0.3] }[kind];
-  const [len, f0, f1, g] = P, t = a.currentTime, r = 0.85 + Math.random() * 0.3;
-  const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = r;
-  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1.2;
-  lp.frequency.setValueAtTime(f0 * r, t); lp.frequency.exponentialRampToValueAtTime(f1, t + len);
-  const env = a.createGain(); env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(g * vol, t + 0.015); env.gain.exponentialRampToValueAtTime(0.001, t + len);
-  src.connect(lp).connect(env).connect(master);
-  src.start(t, Math.random() * 0.5, len + 0.05);
-  // 入水 / 下深水：再加一声低沉的"咕咚"
-  if (kind === 'plunge' || kind === 'enter') {
-    const o = a.createOscillator(), og = a.createGain(); o.type = 'sine';
-    o.frequency.setValueAtTime(kind === 'plunge' ? 210 : 260, t); o.frequency.exponentialRampToValueAtTime(80, t + 0.18);
-    og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(0.18 * vol, t + 0.01); og.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-    o.connect(og).connect(master); o.start(t); o.stop(t + 0.25);
+  // 全部用低通噪声（Q 很低，不共振）——不用正弦音高、不用高频，免得听起来像敲金属
+  const P = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], enter: [0.38, 900, 260, 0.4], plunge: [0.7, 800, 200, 0.55], exit: [0.3, 750, 300, 0.28], land: [0.2, 260, 90, 0.7] }[kind];
+  const [len, f0, f1, g] = P, t = a.currentTime, r = 0.88 + Math.random() * 0.24;
+  const layer = (len2, fa, fb, gain, attack = 0.02, off = 0) => {
+    const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = r;
+    const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.25;
+    lp.frequency.setValueAtTime(fa * r, t + off); lp.frequency.exponentialRampToValueAtTime(fb, t + off + len2);
+    const env = a.createGain(); env.gain.setValueAtTime(0, t + off); env.gain.linearRampToValueAtTime(gain * vol, t + off + attack); env.gain.exponentialRampToValueAtTime(0.001, t + off + len2);
+    src.connect(lp).connect(env).connect(master);
+    src.start(t + off, Math.random() * 0.5, len2 + 0.05);
+  };
+  layer(len, f0, f1, g);
+  if (kind === 'enter' || kind === 'plunge') { // 水花入水：再叠一层更低更慢的"噗"，和几声小气泡（也是低通噪声）
+    layer(len * 1.3, 320, 110, g * 0.9, 0.05);
+    const n = kind === 'plunge' ? 4 : 2;
+    for (let k = 0; k < n; k++) layer(0.07, 420 + Math.random() * 150, 200, g * 0.22, 0.01, 0.1 + k * 0.07 + Math.random() * 0.05);
   }
 }
 
@@ -188,4 +191,20 @@ export function swimPose(c, k, sp, ph, t) {
     const kick = Math.sin(ph * 2.2 + i * Math.PI) * 0.4 * sp + Math.sin(t * 3 + i * Math.PI) * 0.45 * (1 - sp);
     L.rotation.x = lerp(L.rotation.x, kick - 0.1 * sp, k);
   });
+}
+
+// ---------- 坠落姿势 ----------
+// k = 在空中的程度 0..1。双臂向上张开乱挥、腿蹬踏（"慌张下坠"），身体被拉长；
+// 落地时 squash（0..1）压扁再弹回，压扁和拉伸体积守恒（横向反向缩放）。
+export function fallPose(c, k, squash, t) {
+  const sy = 1 + 0.1 * k - 0.3 * squash, sxz = 1 / Math.sqrt(Math.max(sy, 0.5));
+  c.root.scale.set(sxz, sy, sxz);
+  if (k <= 0.001) return;
+  c.arms.forEach((A, i) => {
+    _qw.copy(A.sh.quaternion);
+    _qa.setFromEuler(_e.set(-0.4 + Math.sin(t * 17 + i * 2) * 0.35, 0, A.s * (2.35 + Math.sin(t * 15 + i) * 0.25)));
+    A.sh.quaternion.copy(_qw.slerp(_qa, k));
+    A.el.rotation.x = lerp(A.el.rotation.x, -0.5, k);
+  });
+  c.legs.forEach((L, i) => { L.rotation.x = lerp(L.rotation.x, -0.5 + Math.sin(t * 14 + i * Math.PI) * 0.4, k); });
 }

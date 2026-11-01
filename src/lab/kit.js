@@ -58,6 +58,9 @@ export function mats() {
   const bloom = chain(toon('#ffffff', { vc: true, leaf: true, unique: true, leafTex: PNG.peach_foliage || PNG.foliage }), (s) => swayPatch(s, 1, 0.8), 'swayB');
   const plant = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 2.2, 0.02), 'swayP');
   plant.side = THREE.DoubleSide;
+  // 椰树叶：叶片 / 叶轴 / 描边同一种摆动，且只从树冠高度以上才开始摆，叶子和树冠不会分家
+  const palmf = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 0.5, 2.5), 'swayPF');
+  palmf.side = THREE.DoubleSide;
   // 发光物只吃一部分雾：洞穴里雾几乎是黑的，全吃雾的话远处的灯 / 晶石就暗到不发光，只有走近才亮
   const lightFog = (m) => { m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', '#ifdef USE_FOG\n float fogF = smoothstep(fogNear, fogFar, vFogDepth) * 0.3;\n gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogF);\n#endif'); }; m.customProgramCacheKey = () => 'lightFog'; return m; };
   const glowM = lightFog(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) }));
@@ -82,8 +85,8 @@ export function mats() {
   }, 'card');
   card.side = THREE.DoubleSide; card.alphaTest = 0.5;
   MATS = {
-    solid, leaf, bloom, plant, glow: glowM, gem, ice, foli, sway, pine, card,
-    line: { solid: lineMat('#2b1d14', 0.03), sway: lineMat('#2b1d14', 0.03, [1, 0.8]), pine: lineMat('#14281c', 0.04, [1, 0.8]), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), ice: lineMat('#1a2a44', 0.025), gem: lineMat('#1a1428', 0.02) },
+    solid, leaf, bloom, plant, palmf, glow: glowM, gem, ice, foli, sway, pine, card,
+    line: { solid: lineMat('#2b1d14', 0.03), sway: lineMat('#2b1d14', 0.03, [1, 0.8]), pine: lineMat('#14281c', 0.04, [1, 0.8]), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), palmf: lineMat('#1d2e14', 0.018, [0.5, 2.5]), ice: lineMat('#1a2a44', 0.025), gem: lineMat('#1a1428', 0.02) },
   };
   return MATS;
 }

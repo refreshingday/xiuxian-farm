@@ -8,7 +8,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, PNG, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
 import { createChibi, animChibi } from '../chibi.js';
 import { TouchControls } from '../touch.js';
-import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './swim.js';
+import { createWaterFx, swimPose, fallPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './swim.js';
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
 import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
@@ -158,6 +158,14 @@ function buildIsland(b) {
   top.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   top.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   top.setIndex(idx); top.computeVertexNormals();
+  // 法线改用 ±2 格的中心差分（比逐三角形的法线平滑）：断崖边的岩壁 / 草地过渡不再出现一格一格的锯齿
+  { const nm = top.attributes.normal.array, K = 2;
+    for (let j = 0; j <= HN; j++) for (let i = 0; i <= HN; i++) {
+      const i0 = Math.max(0, i - K), i1 = Math.min(HN, i + K), j0 = Math.max(0, j - K), j1 = Math.min(HN, j + K), k = j * W1 + i;
+      const gx = (H[j * W1 + i1] - H[j * W1 + i0]) / ((i1 - i0) * cs), gz = (H[j1 * W1 + i] - H[j0 * W1 + i]) / ((j1 - j0) * cs), l = Math.hypot(gx, 1, gz);
+      nm[k * 3] = -gx / l; nm[k * 3 + 1] = 1 / l; nm[k * 3 + 2] = -gz / l;
+    }
+    top.attributes.normal.needsUpdate = true; }
   // 地面颜色贴图（线性过滤，平滑）：每单位约 10 像素；烘进环境光遮蔽（坡脚、崖底变暗）和高处提亮
   const N = 512, AO_R = 0.8, dirs = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [Math.cos(k / 8 * Math.PI * 2) * AO_R, Math.sin(k / 8 * Math.PI * 2) * AO_R]);
   const tex = canvasTex(N, N, (ctx) => {
@@ -238,10 +246,11 @@ function buildWater(b, hAt) {
   flowLine = b.terrace?.stream || null;
   makeWater(W, hAt, { x: 0, z: 0, r: R - 0.6 });
   // 台地上的高处水潭：同一种水，只是单独一层水面，用遮罩裁掉崖外部分
+  deepPools = (b.terrace?.pools || []).filter((p) => p.deep);
   for (const p of b.terrace?.pools || []) makeWater({ ...W, level: p.level }, hAt, p, true);
   for (const f of b.terrace?.falls || []) waterfall(f, W);
 }
-let flowLine = null;
+let flowLine = null, deepPools = [];
 function flowAt(x, z) {
   if (!flowLine) return [0, 0];
   let best = 9, fx = 0, fz = 0;
@@ -259,8 +268,10 @@ function makeWater(W, hAt, area, masked = false) {
   const N = masked ? 64 : 192, data = new Uint8Array(N * N * 4), x0 = area.x - area.r, z0 = area.z - area.r, sz = area.r * 2;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = x0 + (i + 0.5) / N * sz, z = z0 + (j + 0.5) / N * sz, dep = W.level - hAt(x, z);
-    data[(j * N + i) * 4] = clamp(dep / 0.9, 0, 1) * 255;
-    data[(j * N + i) * 4 + 1] = dep < (masked ? 0.85 : 1.0) ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
+    // 同高度的深潭已经自己画了水面：这里挖掉，避免两层水叠在一起闪（z-fight）
+    const inDeep = masked && !area.deep && deepPools.some((q) => Math.abs(q.level - W.level) < 0.01 && Math.hypot(x - q.x, z - q.z) < q.r);
+    data[(j * N + i) * 4] = clamp(dep / (area.deep ? 1.5 : 0.9), 0, 1) * 255;
+    data[(j * N + i) * 4 + 1] = dep < (masked ? (area.deep ? 2.2 : 0.85) : 2.2) && !inDeep ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
     // B/A：溪流流向 × 强度（离溪流中线 1.6 米内），水面沿着它滚动条纹
     const [fx, fz] = flowAt(x, z);
     data[(j * N + i) * 4 + 2] = (fx * 0.5 + 0.5) * 255; data[(j * N + i) * 4 + 3] = (fz * 0.5 + 0.5) * 255;
@@ -308,7 +319,7 @@ function makeWater(W, hAt, area, masked = false) {
           // 2) 卡通焦散线（风之杖式）：扰动后的 Voronoi 边，两层叠加
           vec2 v1 = cell(q * 0.75 * uCaus - drift), v2 = cell(q * 1.3 * uCaus + drift.yx * 0.7 + 3.1);
           float caus = max(smoothstep(0.09, 0.0, v1.y - v1.x), smoothstep(0.06, 0.0, v2.y - v2.x) * 0.6);
-          c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * mix(0.42, 0.22, smoothstep(0.2, 0.9, d)));
+          c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * 0.5 * mix(0.42, 0.22, smoothstep(0.2, 0.9, d))); // 水面的白线（焦散）半透明：原来的 50%
           // 波光点点
           c += step(0.975, vn(q * 3.0 + vec2(uTime * 0.9, -uTime * 0.7))) * 0.4;
           // 3) 溪流：沿流向滚动的白色水纹
@@ -940,11 +951,12 @@ const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3
 let walkYaw = 0, moveK = 0;
 // ---------- 下水：能走进水里，水深了就游 ----------
 const waterFx = createWaterFx(scene);
+const fall = { on: false, vy: 0, top: 0, k: 0, sq: 0, sqT: 9 };
 const sfx = (k, v) => { if (S.sound) waterSound(k, v); };
 // 这一点的水面高度（没有水 = -99）。台地上的高处水潭单独一层水面；岩浆不算水
 function waterLvl(b, x, z, h) {
   const W = b.water; if (!W || W.mode !== 'water') return -99;
-  for (const p of b.terrace?.pools || []) if (h < p.level && p.level - h < 0.85 && Math.hypot(x - p.x, z - p.z) < p.r) return p.level;
+  for (const p of b.terrace?.pools || []) if (h < p.level && p.level - h < (p.deep ? 2.2 : 0.85) && Math.hypot(x - p.x, z - p.z) < p.r) return p.level;
   return h < W.level ? W.level : -99;
 }
 let swimming = false, swimK = 0, strokePh = 0, wasDepth = 0, stepSign = 0, ringT = 0, foamT = 0, kickT = 0, dripT = 0, dripMax = 1, wet = 0, wetLow = 0;
@@ -961,7 +973,7 @@ function applyWet() {
 }
 const footW = (i) => chibi.legs[i].localToWorld(_wv.set(0, -0.48, 0.06));
 // 调试用（控制台 / 自动截图）：labDebug.chibi、labDebug.depthAt(x, z)
-window.labDebug = { get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
+window.labDebug = { get ponds() { const T = BIOMES[S.biome].terrace, d = window.labDebug.depthAt; return T && (T.ponds || []).map((q) => ({ x: +q.x.toFixed(1), z: +q.z.toFixed(1), r: +q.r.toFixed(1), depth: +d(q.x, q.z).toFixed(2) })); }, get fall() { return fall; }, get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, hAt: (x, z) => hAtCur(x, z), depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
 function walk(dt, t) {
   if (!chibi || !chibi.root.visible) return;
   let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
@@ -988,8 +1000,10 @@ function walk(dt, t) {
     // 不走出小岛；岩浆只能踩到边上；断崖（坡度 >~50°）走不上去也跳不下去，梯子处可以爬
     const lavaEdge = W && W.mode === 'lava' ? W.level - 0.3 : -99;
     const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25);
+    const downFall = (b.terrace?.falls || []).some((f) => Math.hypot(nx - f.x, nz - f.z) < 1.5); // 瀑布口：可以顺着水流跳下去（只许往下，不许爬上去）
     const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r);
-    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder)) {
+    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder || (downFall && eff(nx + _d.x * 0.25, nz + _d.z * 0.25) < eff(P.x, P.z)))) {
+      if (slope >= 1.2 && !onLadder && !fall.on && !swimming) { fall.on = true; fall.vy = 0.6; fall.top = P.y; } // 从瀑布口 / 断崖边踏空：进入自由落体
       const dx = nx - P.x, dz = nz - P.z;
       P.x = nx; P.z = nz;
       camera.position.x += dx; camera.position.z += dz;
@@ -1006,12 +1020,25 @@ function walk(dt, t) {
   let y = ice ? Math.max(h, W.level) : h;
   if (swimming) y = Math.max(h - 0.6, wl - 0.55 - lerp(0.45, 0.12, moveK) + Math.sin(t * 2.2) * 0.035); // 踩水时身子直、低一点；游起来身子平（浅水里脚陷进湖底也看不见）
   const dy0 = P.y;
-  P.y = depth > 0.02 || swimK > 0.02 ? lerp(P.y, y, 1 - Math.exp(-10 * dt)) : y;
+  // 高度平滑追：从岸上走进溪里不再一下子掉下去，上岸也不是瞬移（平地小起伏几乎无延迟）
+  if (fall.on) { // 自由落体：重力加速，落到地面 / 水面才结束
+    fall.vy += 19 * dt; P.y -= fall.vy * dt;
+    if (P.y <= y + 0.02 || y > P.y) {
+      const hgt = fall.top - y; fall.on = false; P.y = y;
+      if (hgt > 0.5) {
+        const imp = clamp(hgt / 4, 0.25, 1); fall.sq = imp; fall.sqT = 0;
+        if (depth > 0.03 || swimming) { waterFx.splash(P.x, wl, P.z, 10 + Math.round(imp * 24), 2.4 + imp * 2, 1.0 + imp * 0.6, 0.05, null); waterFx.ring(P.x, wl, P.z, 0.25, 1.8 + imp, 1.3); waterFx.ring(P.x, wl, P.z, 0.15, 1.1, 1.0, 0.7); sfx('plunge', 0.6 + imp * 0.5); }
+        else sfx('land', 0.5 + imp * 0.6);
+      }
+    }
+  } else P.y = Math.abs(y - P.y) < 0.05 ? y : lerp(P.y, y, 1 - Math.exp(-(depth > 0.02 || swimK > 0.02 ? 10 : 16) * dt));
   const dy = P.y - dy0; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
   chibi.root.rotation.y += Math.atan2(Math.sin(walkYaw - chibi.root.rotation.y), Math.cos(walkYaw - chibi.root.rotation.y)) * (1 - Math.exp(-12 * dt));
   const prevStroke = strokePh - dt * (1.5 + 4.2 * moveK);
   animChibi(chibi, dt, { move: moveK * (1 - swimK) * lerp(1, 0.8, clamp(depth / SWIM_IN, 0, 1)), attack: -1, cast: 0, work: 0 });
   swimPose(chibi, swimK, moveK, strokePh, t);
+  fall.k = lerp(fall.k, fall.on ? 1 : 0, 1 - Math.exp(-14 * dt)); fall.sqT += dt;
+  fallPose(chibi, fall.k, fall.sq * Math.exp(-9 * fall.sqT) * Math.cos(fall.sqT * 14), t); // 落地：压扁后阻尼弹回
   chibi.root.updateMatrixWorld(true);
 
   // ---------- 特效 ----------
