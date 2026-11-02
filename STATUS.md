@@ -116,6 +116,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 松树不用贴图 — 🟩 — 2026-11-01 — 用户看过贴 foliage 的松树，纯色更好看；`M.pine` 保持 `leafPlain`，别加回去（只保留季节 / 积雪）
 
 ## 日志
+- 2026-11-03 — 角色查看器：修行走 / 奔跑（膝盖弯曲相位反了、身体起伏反了、脚没跟着摆平）
 - 2026-11-03 — 角色查看器：Mixamo 模型的手改成握拳（hero_fist.js）
 - 2026-11-03 — 角色查看器：8 个程序动画改用 Mixamo 骨架驱动
 - 2026-11-03 — 角色查看器接入 Mixamo FBX（Standing Idle）；vendor 加 FBXLoader

@@ -119,6 +119,7 @@ function legs(p, o) {
     const up = o['up' + s] ?? 0, knee = o['knee' + s] ?? 0, out = o['out' + s] ?? 0;
     p.rot['l' + s + '1'] = [-up, 0, (s === 'P' ? -1 : 1) * out];
     p.rot['l' + s + '2'] = [knee, 0, 0];
+    p.rot['l' + s + '3'] = [(up - knee) * (o.flat ?? 0.8) + (o['toe' + s] ?? 0), 0, 0];
   }
 }
 const ANIMS = {
@@ -137,12 +138,13 @@ const ANIMS = {
   walk: {
     name: '行走', fn(t) {
       const p = rest(), w = t * 6.5, s = S(w), c = C(w);
-      p.y = -Math.abs(c) * 0.022;
-      p.rot.spine = [0.04, 0.12 * s, 0]; p.rot.chest = [0, -0.1 * s, 0]; p.rot.head = [-0.03, 0.08 * s, 0];
-      p.rot.pony = [0.25 + 0.3 * Math.abs(c) * 0, 0, 0.2 * s];
+      p.y = -0.03 * Math.abs(s); // 双脚张开最低，腿并拢最高
+      p.rot.spine = [0.05, 0.1 * s, 0.03 * c]; p.rot.chest = [0, -0.1 * s, 0]; p.rot.head = [-0.05, 0.06 * s, 0];
       p.rot.pony = [0.15 + 0.25 * C(w * 2), 0, 0.15 * s];
-      legs(p, { upP: 0.55 * s, upN: -0.55 * s, kneeP: Math.max(0, -C(w + 0.9)) * 0.7 + 0.05, kneeN: Math.max(0, C(w + 0.9)) * 0.7 + 0.05 });
-      arms(p, { hangP: 1.15, hangN: 1.15, fwdP: -0.5 * s, fwdN: 0.5 * s, bendP: 0.3 + 0.3 * Math.max(0, -s), bendN: 0.3 + 0.3 * Math.max(0, s) });
+      // 髋前摆 s>0；膝盖在向前摆腿（c>0）时弯，落地前伸直；脚尖蹬地时稍抬脚跟
+      const knee = k => Math.max(0, k) * 0.9 + 0.08;
+      legs(p, { upP: 0.5 * s, upN: -0.5 * s, kneeP: knee(C(w - 0.3)), kneeN: knee(-C(w - 0.3)), toeP: Math.max(0, -s) * 0.3, toeN: Math.max(0, s) * 0.3 });
+      arms(p, { hangP: 1.15, hangN: 1.15, fwdP: -0.4 * s, fwdN: 0.4 * s, bendP: 0.35 + 0.35 * Math.max(0, -s), bendN: 0.35 + 0.35 * Math.max(0, s) });
       return p;
     },
   },
@@ -152,7 +154,7 @@ const ANIMS = {
       p.y = Math.abs(S(w)) * 0.05;
       p.rot.spine = [0.22, 0.2 * s, 0]; p.rot.chest = [0.1, -0.2 * s, 0]; p.rot.head = [-0.2, 0.1 * s, 0];
       p.rot.pony = [0.7 + 0.2 * C(w * 2), 0, 0.2 * s];
-      legs(p, { upP: 0.95 * s, upN: -0.95 * s, kneeP: Math.max(0, -C(w + 0.7)) * 1.5 + 0.1, kneeN: Math.max(0, C(w + 0.7)) * 1.5 + 0.1 });
+      legs(p, { upP: 0.95 * s, upN: -0.95 * s, kneeP: Math.max(0, C(w - 0.5)) * 1.6 + 0.15, kneeN: Math.max(0, -C(w - 0.5)) * 1.6 + 0.15, toeP: Math.max(0, -s) * 0.4, toeN: Math.max(0, s) * 0.4 });
       arms(p, { hangP: 1.2, hangN: 1.2, fwdP: -0.9 * s, fwdN: 0.9 * s, bendP: 1.2, bendN: 1.2 });
       return p;
     },
@@ -236,7 +238,7 @@ try {
 
 // 用 Mixamo 骨架跑上面的程序动画：把我的 13 根骨的旋转（世界对齐坐标系）换算成 Mixamo 骨骼的局部旋转，
 // 蒙皮用 Mixamo 自带权重，袖子 / 衣摆比自动绑的好。没有马尾骨，马尾不摆。
-const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lN1: 'RightUpLeg', lN2: 'RightLeg' };
+const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lP3: 'LeftFoot', lN3: 'RightFoot', lN1: 'RightUpLeg', lN2: 'RightLeg' };
 const mxDrive = [];
 let hipsRest = null;
 if (mxModel) {
@@ -268,11 +270,11 @@ const allNames = () => [...names, ...(mxMixer ? MX_CLIPS.map(c => 'mx:' + c[1]) 
 const eul = new THREE.Euler();
 function apply(target, k) {
   state.y = lerp(state.y, target.y, k);
-  for (const n in bones) {
+  for (const n of new Set([...Object.keys(bones), ...Object.keys(target.rot), ...Object.keys(state.rot)])) {
     const tg = target.rot[n] || [0, 0, 0];
     const cu = state.rot[n] || (state.rot[n] = [0, 0, 0]);
     for (let i = 0; i < 3; i++) cu[i] = lerp(cu[i], tg[i], k);
-    bones[n].rotation.set(cu[0], cu[1], cu[2], 'XYZ');
+    bones[n]?.rotation.set(cu[0], cu[1], cu[2], 'XYZ');
   }
   bones.root.position.y = 0.42 + state.y;
   if (mxDrive.length) driveMixamo();
