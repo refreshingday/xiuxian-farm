@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { makeFists } from './hero_fist.js';
+import { attackList, attackPose } from './hero_attack.js';
 import { parseOBJ } from './hero_obj.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -167,19 +168,6 @@ const ANIMS = {
       return p;
     },
   },
-  punch: {
-    name: '出拳', fn(t) {
-      const p = rest(), u = t * 0.9;
-      const hit = kf(u, [[0, 0], [0.25, -0.4], [0.38, 1], [0.55, 1], [0.8, 0], [1, 0]]); // 出拳进度
-      const turn = kf(u, [[0, 0], [0.25, -0.3], [0.38, 0.35], [0.55, 0.35], [0.8, 0], [1, 0]]);
-      p.y = -0.03;
-      p.rot.spine = [0.06, turn, 0]; p.rot.chest = [0.04, turn * 0.8, 0]; p.rot.head = [-0.05, -turn * 0.5, 0];
-      p.rot.pony = [0.2 - 0.3 * hit, 0, 0.2 * turn];
-      legs(p, { upP: 0.35, upN: -0.45, kneeP: 0.45, kneeN: 0.35, outP: 0.25, outN: 0.25 });
-      arms(p, { hangP: lerp(0.9, -0.05, hit), yawP: lerp(0.9, 1.55, hit), bendP: lerp(2.2, 0.05, hit), hangN: 0.5, yawN: 0.6, bendN: 1.9, fwdN: 0 });
-      return p;
-    },
-  },
   cast: {
     name: '掐诀', fn(t) {
       const p = rest(), b = S(t * 2);
@@ -277,17 +265,6 @@ const ANIMS = {
       p.rot.spine = [-0.1, 0, 0]; p.rot.head = [-0.2, 0, 0]; p.rot.pony = [-1.1, 0, 0.2 * S(t * 12)];
       legs(p, { upP: 0.25 + 0.35 * S(t * 14), upN: 0.25 - 0.35 * S(t * 14), kneeP: 0.5, kneeN: 0.5, outP: 0.1, outN: 0.1 });
       arms(p, { hangP: -1.15 + 0.25 * S(t * 15), hangN: -1.15 + 0.25 * S(t * 15 + 1.5), bendP: 0.5, bendN: 0.5 });
-      return p;
-    },
-  },
-  slash: {
-    name: '挥砍', fn(t) {
-      const p = rest(), u = (t * 1.1) % 1, w = kf(u, [[0, 0], [0.35, 1], [0.45, 1], [0.6, 0], [1, 0]]);
-      p.y = -0.08;
-      p.rot.root = [0, 0.3, 0]; p.rot.spine = [0.12 * (1 - w) + 0.05, -0.45 * w + 0.35 * (1 - w), 0]; p.rot.chest = [0, -0.2 * w + 0.2 * (1 - w), 0]; p.rot.head = [-0.08, -0.2 * (1 - w), 0];
-      p.rot.pony = [0.6 * (1 - w) - 0.2, 0, 0.3 * (1 - w)];
-      legs(p, { upP: 0.55, upN: -0.35, kneeP: 0.4, kneeN: 0.3, outP: 0.2, outN: 0.2 });
-      arms(p, { hangP: 1.5, fwdP: lerp(0.55, 3.0, w), bendP: lerp(0.15, 0.7, w), hangN: 0.6, yawN: 0.6, bendN: 1.8 });
       return p;
     },
   },
@@ -427,27 +404,29 @@ if (mxModel) {
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
 function driveMixamo() {
   for (const d of mxDrive) {
-    const c = state.rot[d.mine] || [0, 0, 0];
-    _q.setFromEuler(_e.set(c[0], c[1], c[2], 'XYZ'));
-    d.b.quaternion.copy(d.wpInv).multiply(_q).multiply(d.wp).multiply(d.rest);
+    const q = state.q[d.mine]; if (!q) continue;
+    d.b.quaternion.copy(d.wpInv).multiply(q).multiply(d.wp).multiply(d.rest);
   }
   hipsRest.b.position.copy(hipsRest.pos).addScaledVector(hipsRest.perM, state.y);
 }
 
 // ---------- 播放 ----------
 let cur = 'idle', speed = 1, clock = 0;
-const state = { y: 0, rot: {} };
+const state = { y: 0, q: {} }; // q：每根骨的当前旋转（四元数，相对「世界对齐」的静止姿态）
 const names = Object.keys(ANIMS);
 const loadedMx = () => MX_CLIPS.filter(c => mxClips[c[1]]);
 const allNames = () => [...names, ...(mxMixer ? loadedMx().map(c => 'mx:' + c[1]) : [])];
 const eul = new THREE.Euler();
+const _tq = new THREE.Quaternion(), _id = new THREE.Quaternion();
+// 姿态 = { y, rot: {骨: 欧拉}, q: {骨: 四元数} }。k<1 平滑过渡，k=1 直接到位（攻击要和招式时间严格对齐，不能有延迟）
 function apply(target, k) {
-  state.y = lerp(state.y, target.y, k);
-  for (const n of new Set([...Object.keys(bones), ...Object.keys(target.rot), ...Object.keys(state.rot)])) {
-    const tg = target.rot[n] || [0, 0, 0];
-    const cu = state.rot[n] || (state.rot[n] = [0, 0, 0]);
-    for (let i = 0; i < 3; i++) cu[i] = lerp(cu[i], tg[i], k);
-    bones[n]?.rotation.set(cu[0], cu[1], cu[2], 'XYZ');
+  state.y = k >= 1 ? target.y : lerp(state.y, target.y, k);
+  const keys = new Set([...Object.keys(bones), ...Object.keys(target.rot), ...Object.keys(target.q || {}), ...Object.keys(state.q)]);
+  for (const n of keys) {
+    const tq = target.q?.[n] || (target.rot[n] ? _tq.setFromEuler(_e.set(target.rot[n][0], target.rot[n][1], target.rot[n][2], 'XYZ')) : _id);
+    const cu = state.q[n] || (state.q[n] = new THREE.Quaternion());
+    if (k >= 1) cu.copy(tq); else cu.slerp(tq, k);
+    bones[n]?.quaternion.copy(cu);
   }
   bones.root.position.y = 0.42 + state.y;
   if (mxDrive.length) driveMixamo();
@@ -457,6 +436,7 @@ function setAnim(n) {
   frozen = false;
   cur = n;
   const isMx = n.startsWith('mx:'), useMx = isMx || mxDrive.length > 0;
+  atk.t = 0; tl.style.display = tlTxt.style.display = atkMap[n] ? 'block' : 'none'; if (atkMap[n]) showTimeline(atkMap[n]);
   hero.visible = !useMx; mxRoot.visible = useMx; skelHelper.visible = !useMx && opts.skel; if (mxHelper) mxHelper.visible = useMx && opts.skel;
   if (isMx && mxMixer) {
     const clip = mxClips[n.slice(3)];
@@ -474,6 +454,27 @@ if (mxMixer) for (const [label, f] of loadedMx()) {
   const b = document.createElement('button'); b.textContent = 'Mixamo·' + label; b.dataset.n = 'mx:' + f;
   b.onclick = () => setAnim('mx:' + f); animsEl.append(b);
 }
+// ---- 攻击：主游戏的招式表 + 主游戏自己的姿势代码，时间轴和游戏一致 ----
+const ATKS = attackList(), atkMap = Object.fromEntries(ATKS.map(a => [a.id, a]));
+const ui = document.getElementById('ui');
+const atkEl = document.createElement('div'); atkEl.className = 'row'; atkEl.id = 'atks'; ui.append(atkEl);
+let lastKit = '';
+for (const a of ATKS) {
+  if (a.kit !== lastKit) { lastKit = a.kit; const h = document.createElement('span'); h.textContent = a.kit + '：'; h.style.cssText = 'font-size:12px;opacity:.7;align-self:center;margin-left:6px'; atkEl.append(h); }
+  const b = document.createElement('button'); b.textContent = a.label + (a.skill ? '·技' : ''); b.dataset.n = a.id;
+  b.onclick = () => setAnim(a.id); atkEl.append(b);
+}
+const tl = document.createElement('div');
+tl.style.cssText = 'position:relative;width:420px;height:16px;background:rgba(14,22,24,.7);border:1px solid rgba(214,182,112,.4);border-radius:3px;display:none';
+tl.innerHTML = '<div id="tlfill" style="position:absolute;left:0;top:0;bottom:0;background:rgba(232,194,90,.45)"></div><div id="tlmarks"></div>';
+const tlTxt = document.createElement('div'); tlTxt.style.cssText = 'font:12px monospace;opacity:.85;display:none';
+ui.append(tl, tlTxt);
+const atk = { t: 0 };
+function showTimeline(a) {
+  const m = a.m, mk = (x, c, h = '100%') => `<div style="position:absolute;left:${x / m.dur * 100}%;top:0;height:${h};width:2px;background:${c}"></div>`;
+  tl.querySelector('#tlmarks').innerHTML = m.hits.map(h => mk(h.t, '#ff6a5a')).join('') + mk(m.cancel, '#6ae0ff');
+  tl.style.display = tlTxt.style.display = 'block';
+}
 const optsEl = document.getElementById('opts');
 const opts = { spin: false, skel: false, wire: false };
 function toggle(label, key, fn) {
@@ -489,15 +490,29 @@ sp.onclick = () => { speed = speed >= 2 ? 0.25 : speed * 2; sp.textContent = '�
 optsEl.append(sp);
 addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); setAnim(allNames()[(allNames().indexOf(cur) + 1) % allNames().length]); } });
 setAnim('idle');
-const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:'))) setAnim(q);
+const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:') || atkMap[q])) setAnim(q);
 
-window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; frozen = true; } };
+window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (!frozen) clock += dt * speed;
-  if (cur.startsWith('mx:')) { if (!frozen) mxMixer.update(dt * speed); } else apply(ANIMS[cur].fn(clock), 1 - Math.exp(-14 * dt));
+  if (cur.startsWith('mx:')) { if (!frozen) mxMixer.update(dt * speed); }
+  else if (atkMap[cur]) {
+    const m = atkMap[cur].m;
+    if (!frozen) atk.t += dt * speed;
+    if (atk.t > m.dur + 0.6) atk.t = 0; // 出完招停 0.6 秒再重放
+    const p = atk.t <= m.dur ? attackPose(m, atk.t, dt * speed) : null;
+    apply(p || ANIMS.idle.fn(clock), p ? 1 : 1 - Math.exp(-14 * dt));
+    if (p && p.legs) { // 腿：和普通姿势一样走 legs()，保证脚掌跟着摆平
+      const q = { rot: {} }; legs(q, { upN: p.legs.upN, upP: p.legs.upP, kneeN: Math.max(0, p.legs.upN) * 0.5, kneeP: Math.max(0, p.legs.upP) * 0.5 });
+      for (const n in q.rot) { _tq.setFromEuler(_e.set(...q.rot[n], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq); }
+      if (mxDrive.length) driveMixamo();
+    }
+    document.getElementById('tlfill').style.width = Math.min(1, atk.t / m.dur) * 100 + '%';
+    tlTxt.textContent = `${atkMap[cur].kit}·${m.name}  ${atk.t.toFixed(2)} / ${m.dur.toFixed(2)}s   出手 ${m.hits.map(h => h.t.toFixed(2)).join(' ')}s   可衔接 ${m.cancel.toFixed(2)}s`;
+  } else apply(ANIMS[cur].fn(clock), 1 - Math.exp(-14 * dt));
   if (opts.spin) { hero.rotation.y += dt * 0.6; mxRoot.rotation.y = hero.rotation.y; }
   mesh.material.wireframe = opts.wire; mxModel?.traverse(o => { if (o.isMesh) o.material.wireframe = opts.wire; });
   mxHelper?.visible && (mxModel.updateMatrixWorld(true), mxHelper.userData.update());
