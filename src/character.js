@@ -221,16 +221,42 @@ const ANIMS = {
 const MX_CLIPS = [['待机', 'idle.fbx']];
 const mxRoot = new THREE.Group(); mxRoot.visible = false; scene.add(mxRoot);
 const mxClips = {};
-let mxMixer = null, mxAction = null;
+let mxMixer = null, mxAction = null, mxModel = null;
 try {
   const loader = new FBXLoader(), base = 'assets/models/chibi_wuxia/anim/';
   const first = await loader.loadAsync(base + MX_CLIPS[0][1]);
   first.traverse(o => { if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }); o.frustumCulled = false; } });
   first.scale.setScalar(1.6 / 0.9995); // FBX 里身高约 1.0，统一成 1.6
-  mxRoot.add(first); mxMixer = new THREE.AnimationMixer(first);
+  mxModel = first; mxRoot.add(first); mxMixer = new THREE.AnimationMixer(first);
   mxClips[MX_CLIPS[0][1]] = first.animations[0];
   for (const [, f] of MX_CLIPS.slice(1)) mxClips[f] = (await loader.loadAsync(base + f)).animations[0];
 } catch (e) { console.warn('Mixamo FBX 加载失败', e); }
+
+// 用 Mixamo 骨架跑上面的程序动画：把我的 13 根骨的旋转（世界对齐坐标系）换算成 Mixamo 骨骼的局部旋转，
+// 蒙皮用 Mixamo 自带权重，袖子 / 衣摆比自动绑的好。没有马尾骨，马尾不摆。
+const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lN1: 'RightUpLeg', lN2: 'RightLeg' };
+const mxDrive = [];
+let hipsRest = null;
+if (mxModel) {
+  mxModel.updateMatrixWorld(true);
+  const find = k => mxModel.getObjectByName('mixamorig' + k) || mxModel.getObjectByName('mixamorig:' + k);
+  for (const [mine, k] of Object.entries(MXMAP)) {
+    const b = find(k); if (!b) continue;
+    const wp = new THREE.Quaternion(); b.parent.getWorldQuaternion(wp);
+    mxDrive.push({ mine, b, rest: b.quaternion.clone(), wp, wpInv: wp.clone().invert() });
+  }
+  const hips = find('Hips'), w0 = hips.getWorldPosition(new THREE.Vector3());
+  hipsRest = { b: hips, pos: hips.position.clone(), perM: hips.parent.worldToLocal(w0.clone().setY(w0.y + 1)).sub(hips.position) };
+}
+const _q = new THREE.Quaternion(), _e = new THREE.Euler();
+function driveMixamo() {
+  for (const d of mxDrive) {
+    const c = state.rot[d.mine] || [0, 0, 0];
+    _q.setFromEuler(_e.set(c[0], c[1], c[2], 'XYZ'));
+    d.b.quaternion.copy(d.wpInv).multiply(_q).multiply(d.wp).multiply(d.rest);
+  }
+  hipsRest.b.position.copy(hipsRest.pos).addScaledVector(hipsRest.perM, state.y);
+}
 
 // ---------- 播放 ----------
 let cur = 'idle', speed = 1, clock = 0;
@@ -247,11 +273,12 @@ function apply(target, k) {
     bones[n].rotation.set(cu[0], cu[1], cu[2], 'XYZ');
   }
   bones.root.position.y = 0.42 + state.y;
+  if (mxDrive.length) driveMixamo();
 }
 function setAnim(n) {
   cur = n;
-  const isMx = n.startsWith('mx:');
-  hero.visible = !isMx; mxRoot.visible = isMx; skelHelper.visible = !isMx && opts.skel;
+  const isMx = n.startsWith('mx:'), useMx = isMx || mxDrive.length > 0;
+  hero.visible = !useMx; mxRoot.visible = useMx; skelHelper.visible = !useMx && opts.skel;
   if (isMx && mxMixer) {
     const clip = mxClips[n.slice(3)];
     const next = mxMixer.clipAction(clip);
@@ -276,7 +303,7 @@ function toggle(label, key, fn) {
   optsEl.append(b);
 }
 toggle('自动旋转', 'spin');
-toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !cur.startsWith('mx:'); });
+toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !mxRoot.visible; });
 toggle('线框', 'wire', v => { mesh.material.wireframe = v; });
 const sp = document.createElement('button'); sp.textContent = '速度 ×1';
 sp.onclick = () => { speed = speed >= 2 ? 0.25 : speed * 2; sp.textContent = '速度 ×' + speed; };
@@ -293,6 +320,7 @@ renderer.setAnimationLoop(now => {
   clock += dt * speed;
   if (cur.startsWith('mx:')) mxMixer.update(dt * speed); else apply(ANIMS[cur].fn(clock), 1 - Math.exp(-14 * dt));
   if (opts.spin) { hero.rotation.y += dt * 0.6; mxRoot.rotation.y = hero.rotation.y; }
+  mesh.material.wireframe = opts.wire; mxModel?.traverse(o => { if (o.isMesh) o.material.wireframe = opts.wire; });
   ctl.update();
   renderer.render(scene, cam);
 });
