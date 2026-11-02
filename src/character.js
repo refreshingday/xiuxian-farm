@@ -387,6 +387,27 @@ try {
   }));
 } catch (e) { console.warn('Mixamo FBX 加载失败', e); }
 
+// Mixamo 骨架的可视化（穿透网格显示，方便看骨头）
+const mxHelper = mxModel ? (() => {
+  const bs = []; mxModel.traverse(o => { if (o.isBone) bs.push(o); });
+  const lines = bs.filter(b => b.parent?.isBone), g = new THREE.BufferGeometry(), pg = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lines.length * 6), 3));
+  pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bs.length * 3), 3));
+  const top = { depthTest: false, transparent: true };
+  const L = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x40ffd0, ...top }));
+  const P = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xffe060, size: 7, sizeAttenuation: false, ...top }));
+  const grp = new THREE.Group(); grp.add(L, P); grp.visible = false; grp.renderOrder = 999; L.renderOrder = P.renderOrder = 999;
+  L.frustumCulled = P.frustumCulled = false;
+  const v = new THREE.Vector3();
+  grp.userData.update = () => {
+    const lp = g.attributes.position, pp = pg.attributes.position;
+    lines.forEach((b, i) => { b.parent.getWorldPosition(v); lp.setXYZ(i * 2, v.x, v.y, v.z); b.getWorldPosition(v); lp.setXYZ(i * 2 + 1, v.x, v.y, v.z); });
+    bs.forEach((b, i) => { b.getWorldPosition(v); pp.setXYZ(i, v.x, v.y, v.z); });
+    lp.needsUpdate = pp.needsUpdate = true;
+  };
+  scene.add(grp); return grp;
+})() : null;
+
 // 用 Mixamo 骨架跑上面的程序动画：把我的 13 根骨的旋转（世界对齐坐标系）换算成 Mixamo 骨骼的局部旋转，
 // 蒙皮用 Mixamo 自带权重，袖子 / 衣摆比自动绑的好。没有马尾骨，马尾不摆。
 const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lP3: 'LeftFoot', lN3: 'RightFoot', lN1: 'RightUpLeg', lN2: 'RightLeg' };
@@ -431,10 +452,12 @@ function apply(target, k) {
   bones.root.position.y = 0.42 + state.y;
   if (mxDrive.length) driveMixamo();
 }
+let frozen = false; // 只给截图调试用（__hero.seek），点任何按钮都会解冻
 function setAnim(n) {
+  frozen = false;
   cur = n;
   const isMx = n.startsWith('mx:'), useMx = isMx || mxDrive.length > 0;
-  hero.visible = !useMx; mxRoot.visible = useMx; skelHelper.visible = !useMx && opts.skel;
+  hero.visible = !useMx; mxRoot.visible = useMx; skelHelper.visible = !useMx && opts.skel; if (mxHelper) mxHelper.visible = useMx && opts.skel;
   if (isMx && mxMixer) {
     const clip = mxClips[n.slice(3)];
     const next = mxMixer.clipAction(clip);
@@ -459,7 +482,7 @@ function toggle(label, key, fn) {
   optsEl.append(b);
 }
 toggle('自动旋转', 'spin');
-toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !mxRoot.visible; });
+toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !mxRoot.visible; if (mxHelper) mxHelper.visible = v && mxRoot.visible; });
 toggle('线框', 'wire', v => { mesh.material.wireframe = v; });
 const sp = document.createElement('button'); sp.textContent = '速度 ×1';
 sp.onclick = () => { speed = speed >= 2 ? 0.25 : speed * 2; sp.textContent = '速度 ×' + speed; };
@@ -468,15 +491,16 @@ addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault();
 setAnim('idle');
 const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:'))) setAnim(q);
 
-window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; speed = 0; } };
+window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; frozen = true; } };
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  clock += dt * speed;
-  if (cur.startsWith('mx:')) mxMixer.update(dt * speed); else apply(ANIMS[cur].fn(clock), 1 - Math.exp(-14 * dt));
+  if (!frozen) clock += dt * speed;
+  if (cur.startsWith('mx:')) { if (!frozen) mxMixer.update(dt * speed); } else apply(ANIMS[cur].fn(clock), 1 - Math.exp(-14 * dt));
   if (opts.spin) { hero.rotation.y += dt * 0.6; mxRoot.rotation.y = hero.rotation.y; }
   mesh.material.wireframe = opts.wire; mxModel?.traverse(o => { if (o.isMesh) o.material.wireframe = opts.wire; });
+  mxHelper?.visible && (mxModel.updateMatrixWorld(true), mxHelper.userData.update());
   ctl.update();
   renderer.render(scene, cam);
 });
