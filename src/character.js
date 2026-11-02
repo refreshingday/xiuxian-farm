@@ -217,6 +217,152 @@ const ANIMS = {
       return p;
     },
   },
+  // ===== 游戏里缺的动作（程序化）=====
+  hit: {
+    name: '受击', fn(t) {
+      const p = rest(), u = t % 1.1 / 1.1, k = kf(u, [[0, 0], [0.1, 1], [0.45, 0.45], [1, 0]]);
+      p.y = -0.05 * k;
+      p.rot.root = [-0.28 * k, 0, 0.12 * k]; p.rot.spine = [-0.25 * k, 0, 0]; p.rot.chest = [-0.15 * k, 0.2 * k, 0]; p.rot.head = [-0.45 * k, 0.3 * k, 0];
+      p.rot.pony = [0.9 * k, 0, 0.3 * k];
+      legs(p, { upP: 0.35 * k, upN: -0.25 * k, kneeP: 0.35 * k, kneeN: 0.2 * k });
+      arms(p, { hangP: 1.1 - 0.7 * k, hangN: 1.1 - 0.7 * k, fwdP: -0.4 * k, fwdN: -0.4 * k, bendP: 0.3 + 0.5 * k, bendN: 0.3 + 0.5 * k });
+      return p;
+    },
+  },
+  death: {
+    name: '死亡', fn(t) {
+      const p = rest(), u = (t * 0.3) % 1, k = kf(u, [[0, 0], [0.12, 0.2], [0.4, 1], [1, 1]]), st = kf(u, [[0, 0], [0.12, 1], [0.4, 0], [1, 0]]);
+      p.y = -0.28 * k;
+      p.rot.root = [-1.55 * k - 0.15 * st, 0, 0.12 * k]; p.rot.spine = [-0.2 * st, 0, 0]; p.rot.head = [0.15 * k - 0.4 * st, 0.4 * k, 0.3 * k];
+      p.rot.pony = [0.5 * st, 0, 0];
+      legs(p, { upP: 0.2 * st, upN: -0.1 * st, kneeP: 0.1 + 0.3 * st, kneeN: 0.1, outP: 0.22 * k, outN: 0.15 * k });
+      arms(p, { hangP: 1.1 - 0.75 * k, hangN: 1.1 - 0.6 * k, fwdP: 0.3 * st, fwdN: 0.3 * st, bendP: 0.2, bendN: 0.3 });
+      return p;
+    },
+  },
+  sleep: {
+    name: '睡觉', fn(t) {
+      const p = rest(), b = S(t * 1.2);
+      p.y = -0.28 + 0.004 * b;
+      p.rot.root = [-1.55, 0, 0]; p.rot.chest = [0.03 * b, 0, 0]; p.rot.head = [0.1, 0.35, 0.15];
+      legs(p, { outP: 0.1, outN: 0.1, kneeP: 0.05, kneeN: 0.05 });
+      arms(p, { hangP: 0.95, hangN: 0.95, yawP: 0.75, yawN: 0.75, bendP: 1.9, bendN: 1.9 });
+      return p;
+    },
+  },
+  meditate: {
+    name: '入定', fn(t) {
+      const p = ANIMS.sit.fn(t), b = S(t * 1.3);
+      p.y = -0.27 + 0.005 * b;
+      p.rot.chest = [0.015 * b, 0, 0]; p.rot.head = [0.08, 0.05 * S(t * 0.4), 0];
+      // 双手合十于胸前
+      arms(p, { hangP: 0.15, hangN: 0.15, yawP: 1.15, yawN: 1.15, bendP: 2.3, bendN: 2.3, fwdP: 0.1 * b, fwdN: 0.1 * b });
+      return p;
+    },
+  },
+  dodge: {
+    name: '闪避', fn(t) {
+      const p = rest(), u = (t * 1.1) % 1, k = kf(u, [[0, 0], [0.15, 1], [0.55, 1], [0.8, 0], [1, 0]]);
+      p.y = -0.2 * k;
+      p.rot.root = [0.3 * k, 0.5 * k, 0]; p.rot.spine = [0.5 * k, 0, 0]; p.rot.head = [-0.4 * k, 0, 0];
+      p.rot.pony = [0.8 * k, 0, 0];
+      legs(p, { upP: 0.9 * k, upN: 0.5 * k, kneeP: 1.4 * k, kneeN: 1.0 * k, outP: 0.2 * k, outN: 0.2 * k });
+      arms(p, { hangP: 0.7, hangN: 0.7, yawP: 0.9 * k, yawN: 0.9 * k, bendP: 2.0 * k, bendN: 2.0 * k, fwdP: 0.3 * k, fwdN: 0.3 * k });
+      return p;
+    },
+  },
+  fall: {
+    name: '下坠', fn(t) {
+      const p = rest();
+      p.rot.spine = [-0.1, 0, 0]; p.rot.head = [-0.2, 0, 0]; p.rot.pony = [-1.1, 0, 0.2 * S(t * 12)];
+      legs(p, { upP: 0.25 + 0.35 * S(t * 14), upN: 0.25 - 0.35 * S(t * 14), kneeP: 0.5, kneeN: 0.5, outP: 0.1, outN: 0.1 });
+      arms(p, { hangP: -1.15 + 0.25 * S(t * 15), hangN: -1.15 + 0.25 * S(t * 15 + 1.5), bendP: 0.5, bendN: 0.5 });
+      return p;
+    },
+  },
+  slash: {
+    name: '挥砍', fn(t) {
+      const p = rest(), u = (t * 1.1) % 1, w = kf(u, [[0, 0], [0.35, 1], [0.45, 1], [0.6, 0], [1, 0]]);
+      p.y = -0.08;
+      p.rot.root = [0, 0.3, 0]; p.rot.spine = [0.12 * (1 - w) + 0.05, -0.45 * w + 0.35 * (1 - w), 0]; p.rot.chest = [0, -0.2 * w + 0.2 * (1 - w), 0]; p.rot.head = [-0.08, -0.2 * (1 - w), 0];
+      p.rot.pony = [0.6 * (1 - w) - 0.2, 0, 0.3 * (1 - w)];
+      legs(p, { upP: 0.55, upN: -0.35, kneeP: 0.4, kneeN: 0.3, outP: 0.2, outN: 0.2 });
+      arms(p, { hangP: 1.5, fwdP: lerp(0.55, 3.0, w), bendP: lerp(0.15, 0.7, w), hangN: 0.6, yawN: 0.6, bendN: 1.8 });
+      return p;
+    },
+  },
+  drink: {
+    name: '喝水', fn(t) {
+      const p = ANIMS.idle.fn(t), u = (t * 0.5) % 1, k = kf(u, [[0, 0], [0.2, 1], [0.7, 1], [0.85, 0], [1, 0]]);
+      p.rot.head = [-0.3 * k, 0, 0]; p.rot.spine = [-0.04 * k, 0, 0];
+      arms(p, { hangP: 1.3, hangN: 1.15, fwdP: 1.0 * k, bendP: lerp(0.3, 2.6, k), bendN: 0.3 });
+      return p;
+    },
+  },
+  pickup: {
+    name: '捡东西', fn(t) {
+      const p = rest(), u = (t * 0.6) % 1, k = kf(u, [[0, 0], [0.3, 1], [0.55, 1], [0.85, 0], [1, 0]]);
+      p.y = -0.1 * k;
+      p.rot.spine = [0.8 * k, 0, 0]; p.rot.chest = [0.2 * k, 0, 0]; p.rot.head = [-0.35 * k, 0, 0];
+      p.rot.pony = [0.9 * k, 0, 0];
+      legs(p, { upP: 0.75 * k, upN: 0.5 * k, kneeP: 0.9 * k, kneeN: 0.7 * k, outP: 0.1 * k, outN: 0.1 * k });
+      arms(p, { hangP: 1.4, hangN: 1.4, fwdP: 0.9 * k, fwdN: 0.5 * k, bendP: 0.4, bendN: 0.4 });
+      return p;
+    },
+  },
+  bow: {
+    name: '行礼', fn(t) {
+      const p = rest(), u = (t * 0.45) % 1, k = kf(u, [[0, 0], [0.25, 1], [0.6, 1], [0.85, 0], [1, 0]]);
+      p.rot.spine = [0.6 * k, 0, 0]; p.rot.chest = [0.2 * k, 0, 0]; p.rot.head = [0.15 * k, 0, 0];
+      p.rot.pony = [0.8 * k, 0, 0];
+      legs(p, {});
+      // 抱拳：双手在胸前相合
+      arms(p, { hangP: 0.2, hangN: 0.2, yawP: 1.1, yawN: 1.1, bendP: 2.3, bendN: 2.3, fwdP: 0.1, fwdN: 0.1 });
+      return p;
+    },
+  },
+  hammer: {
+    name: '锤打', fn(t) {
+      const p = rest(), u = (t * 1.0) % 1, w = kf(u, [[0, 0], [0.45, 1], [0.55, 1], [0.7, 0], [1, 0]]);
+      p.y = -0.04 - 0.06 * (1 - w);
+      p.rot.spine = [0.1 + 0.35 * (1 - w) - 0.1 * w, 0, 0]; p.rot.head = [-0.2 * (1 - w), 0, 0];
+      p.rot.pony = [0.4 * (1 - w) - 0.2, 0, 0];
+      legs(p, { upP: 0.3, upN: -0.2, kneeP: 0.35 * (1 - w) + 0.1, kneeN: 0.3 * (1 - w) + 0.1, outP: 0.15, outN: 0.15 });
+      arms(p, { hangP: 1.5, hangN: 1.5, fwdP: lerp(0.7, 2.9, w), fwdN: lerp(0.7, 2.9, w), yawP: 0.25, yawN: 0.25, bendP: lerp(0.3, 0.8, w), bendN: lerp(0.3, 0.8, w) });
+      return p;
+    },
+  },
+  fly: {
+    name: '御剑', fn(t) {
+      const p = rest(), b = S(t * 2.4);
+      p.y = -0.06 + 0.012 * b;
+      p.rot.root = [0, 0.7, 0]; p.rot.spine = [0.1, -0.5, 0]; p.rot.head = [-0.08, -0.3, 0.03 * b];
+      p.rot.pony = [0.9 + 0.1 * b, 0, 0.1 * S(t * 3)];
+      legs(p, { upP: 0.15, upN: -0.1, kneeP: 0.3, kneeN: 0.3, outP: 0.3, outN: 0.2 });
+      arms(p, { hangP: 0.6 + 0.04 * b, hangN: 0.9, fwdP: 0.2, bendP: 0.4, bendN: 0.4, yawP: 0.3 });
+      return p;
+    },
+  },
+  cheer: {
+    name: '欢呼', fn(t) {
+      const p = rest(), w = t * 7, h = Math.abs(S(w)) * 0.1;
+      p.y = h;
+      p.rot.spine = [-0.1, 0, 0]; p.rot.head = [-0.2, 0.15 * S(w / 2), 0]; p.rot.pony = [0.3 - h * 3, 0, 0];
+      legs(p, { kneeP: 0.3 * (1 - h * 8), kneeN: 0.3 * (1 - h * 8), outP: 0.1, outN: 0.1 });
+      arms(p, { hangP: -1.35 + 0.15 * S(w), hangN: -1.35 - 0.15 * S(w), bendP: 0.4, bendN: 0.4 });
+      return p;
+    },
+  },
+  swim: {
+    name: '踩水', fn(t) {
+      const p = rest(), w = t * 4;
+      p.y = -0.12 + 0.02 * S(w);
+      p.rot.spine = [0.15, 0, 0]; p.rot.head = [-0.15, 0, 0]; p.rot.pony = [0.4, 0, 0.1 * S(w)];
+      legs(p, { upP: 0.35 + 0.35 * S(w), upN: 0.35 - 0.35 * S(w), kneeP: 0.7 + 0.4 * S(w), kneeN: 0.7 - 0.4 * S(w), outP: 0.15, outN: 0.15 });
+      arms(p, { hangP: 0.85 + 0.3 * S(w + 1), hangN: 0.85 + 0.3 * S(w + 3), fwdP: 0.4 + 0.3 * S(w), fwdN: 0.4 - 0.3 * S(w), bendP: 0.9, bendN: 0.9 });
+      return p;
+    },
+  },
 };
 
 // ---------- Mixamo 版：同一个模型上传 Mixamo 自动绑骨后下载的 FBX（骨骼 + 动画），贴图用 hero_basecolor.jpg ----------
@@ -322,7 +468,7 @@ addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault();
 setAnim('idle');
 const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:'))) setAnim(q);
 
-window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl };
+window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; speed = 0; } };
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 let last = performance.now();
 renderer.setAnimationLoop(now => {

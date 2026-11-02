@@ -25,7 +25,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 矿场暗雾光照 — 🟨 — 2026-10-27 — 平地 + 光照假象，不做地下层
 
 ## 角色 / NPC (`chibi.js` `npc.js`)
-- 角色查看器 `character.html`（`src/character.js` `src/hero_obj.js`）：导入 Tripo 的 Q 版武侠主角模型（`assets/models/chibi_wuxia/`，静态 T-pose OBJ，无骨骼）；浏览器里自动绑骨 + 分区权重，程序化动画 待机/行走/奔跑/挥手/出拳/掐诀/跳跃/打坐，马尾带物理摆动 — 🟨 — 2026-11-03 — 还没接入主游戏；已接入 Mixamo 自动绑骨的 FBX（`anim/idle.fbx`，28 骨，贴图用 hero_basecolor.jpg），新动画 FBX 放 anim/ 并加进 MX_CLIPS；程序动画现在改由 Mixamo 骨架驱动（Mixamo 自带权重，袖子不糊；无马尾骨所以马尾不摆），旧自制骨架只在 FBX 加载失败时当后备；手改握拳（`src/hero_fist.js`，加载时按手/食指骨骼权重缩短并鼓圆，烘焙进网格前的运行时处理）
+- 角色查看器 `character.html`（`src/character.js` `src/hero_obj.js`）：导入 Tripo 的 Q 版武侠主角模型（`assets/models/chibi_wuxia/`，静态 T-pose OBJ，无骨骼）；浏览器里自动绑骨 + 分区权重，程序化动画 待机/行走/奔跑/挥手/出拳/掐诀/跳跃/打坐，马尾带物理摆动 — 🟨 — 2026-11-03 — 还没接入主游戏；已接入 Mixamo 自动绑骨的 FBX（`anim/idle.fbx`，28 骨，贴图用 hero_basecolor.jpg），新动画 FBX 放 anim/ 并加进 MX_CLIPS；程序动画现在改由 Mixamo 骨架驱动（Mixamo 自带权重，袖子不糊；无马尾骨所以马尾不摆），旧自制骨架只在 FBX 加载失败时当后备；手改握拳（`src/hero_fist.js`，加载时按手/食指骨骼权重缩短并鼓圆，烘焙进网格前的运行时处理）；补了游戏里缺的 14 个程序动画：受击/死亡/睡觉/入定/闪避/下坠/挥砍/喝水/捡东西/行礼/锤打/御剑/欢呼/踩水
 - 统一 Q 版骨架 + 动画 — 🟩 — 2026-10-27 — 所有人共用一套，只换部件/配色
 - 青竹村 21 位有名有姓的村民（`village.js` + `data/villagers.json`）：村长、退隐修士导师云鹤、铁匠、药师、商人、神秘流浪者等；每人有日程（在家 / 干活 / 茶摊 / 闲逛 / 出村）、喜好、好感（每天聊天 +10、送礼一次）、灵根（神识够才看得清）— 🟩 — 2026-10-30
 - 商店：钱记杂货（应季种子、灵石换钱）、苏氏药铺（灵草种子、丹药）、赵家铁铺（收矿石兽材）、云来茶摊；营业时间、好感折扣、同天卖超 20 个压价 — 🟩 — 2026-10-30
@@ -116,6 +116,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 松树不用贴图 — 🟩 — 2026-11-01 — 用户看过贴 foliage 的松树，纯色更好看；`M.pine` 保持 `leafPlain`，别加回去（只保留季节 / 积雪）
 
 ## 日志
+- 2026-11-03 — 角色查看器：补 14 个游戏缺的程序动画（受击、死亡、睡觉、入定、闪避、下坠、挥砍、喝水、捡东西、行礼、锤打、御剑、欢呼、踩水）
 - 2026-11-03 — 角色查看器：MX_CLIPS 预列 16 个 Mixamo 动画文件名（缺的自动跳过），下载一个放一个
 - 2026-11-03 — 角色查看器：修行走 / 奔跑（膝盖弯曲相位反了、身体起伏反了、脚没跟着摆平）
 - 2026-11-03 — 角色查看器：Mixamo 模型的手改成握拳（hero_fist.js）
