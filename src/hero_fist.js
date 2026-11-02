@@ -2,7 +2,7 @@
 // 沿前臂方向缩短、横向鼓圆，权重越高变形越多，腕口平滑过渡。直接改 geometry，只需在加载后调用一次。
 import * as THREE from 'three';
 
-export function makeFists(mesh, { shorten = 0.72, puff = 1.3 } = {}) {
+export function makeFists(mesh, { shorten = 0.62, puff = 1.6, round = 0.85, size = 1.35 } = {}) {
   const sk = mesh.skeleton, g = mesh.geometry;
   const pos = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
   sk.bones.forEach(b => b.updateMatrixWorld(true));
@@ -21,16 +21,24 @@ export function makeFists(mesh, { shorten = 0.72, puff = 1.3 } = {}) {
     }
     if (!wsum) continue;
     cen.multiplyScalar(1 / wsum);
-    const um = umax * 0.5;
+    const um = umax * 0.5, hc = ph.clone().add(cen).addScaledVector(axis, um);
+    // 第一遍：缩短 + 横向鼓大；第二遍：再往球面上推，让拳头更圆更大
+    const nvs = [], idxs = []; let rsum = 0, rn = 0;
     for (let i = 0; i < pos.count; i++) {
       if (w[i] < 0.01) continue;
       v.fromBufferAttribute(pos, i).sub(ph);
       const u = v.dot(axis), r = v.clone().addScaledVector(axis, -u).sub(cen);
-      const nu = um + (u - um) * shorten, nr = r.multiplyScalar(puff);
-      const nv = new THREE.Vector3().copy(cen).add(nr).addScaledVector(axis, nu).add(ph);
+      const nv = new THREE.Vector3().copy(cen).add(r.multiplyScalar(puff)).addScaledVector(axis, um + (u - um) * shorten).add(ph);
+      nvs.push(nv); idxs.push(i);
+      if (w[i] > 0.5) { rsum += nv.distanceTo(hc); rn++; }
+    }
+    const R = (rsum / rn) * size;
+    idxs.forEach((i, j) => {
+      const d = nvs[j].clone().sub(hc), len = d.length() || 1e-6;
+      const nv = hc.clone().addScaledVector(d, THREE.MathUtils.lerp(len, R, round) / len);
       v.fromBufferAttribute(pos, i).lerp(nv, w[i]);
       pos.setXYZ(i, v.x, v.y, v.z);
-    }
+    });
   }
   pos.needsUpdate = true; g.computeBoundingSphere();
 }
