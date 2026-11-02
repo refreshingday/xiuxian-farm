@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { makeFists } from './hero_fist.js';
 import { parseOBJ } from './hero_obj.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -226,6 +227,7 @@ try {
   const loader = new FBXLoader(), base = 'assets/models/chibi_wuxia/anim/';
   const first = await loader.loadAsync(base + MX_CLIPS[0][1]);
   first.traverse(o => { if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }); o.frustumCulled = false; } });
+  first.traverse(o => { if (o.isSkinnedMesh) makeFists(o); });
   first.scale.setScalar(1.6 / 0.9995); // FBX 里身高约 1.0，统一成 1.6
   mxModel = first; mxRoot.add(first); mxMixer = new THREE.AnimationMixer(first);
   mxClips[MX_CLIPS[0][1]] = first.animations[0];
