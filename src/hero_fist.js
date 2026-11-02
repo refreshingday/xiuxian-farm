@@ -2,7 +2,7 @@
 // 沿前臂方向缩短、横向鼓圆，权重越高变形越多，腕口平滑过渡。直接改 geometry，只需在加载后调用一次。
 import * as THREE from 'three';
 
-export function makeFists(mesh, { shorten = 0.62, puff = 1.6, round = 0.85, size = 1.35 } = {}) {
+export function makeFists(mesh, { shorten = 0.62, puff = 1.6, round = 0.8, size = 1.08 } = {}) {
   const sk = mesh.skeleton, g = mesh.geometry;
   const pos = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
   sk.bones.forEach(b => b.updateMatrixWorld(true));
