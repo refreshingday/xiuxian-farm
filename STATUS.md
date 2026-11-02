@@ -25,7 +25,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 矿场暗雾光照 — 🟨 — 2026-10-27 — 平地 + 光照假象，不做地下层
 
 ## 角色 / NPC (`chibi.js` `npc.js`)
-- 角色查看器 `character.html`（`src/character.js` `src/hero_obj.js`）：导入 Tripo 的 Q 版武侠主角模型（`assets/models/chibi_wuxia/`，静态 T-pose OBJ，无骨骼）；浏览器里自动绑骨 + 分区权重，程序化动画 待机/行走/奔跑/挥手/出拳/掐诀/跳跃/打坐，马尾带物理摆动 — 🟨 — 2026-11-03 — 还没接入主游戏；Mixamo 动画待用户上传模型后接入
+- 角色查看器 `character.html`（`src/character.js` `src/hero_obj.js`）：导入 Tripo 的 Q 版武侠主角模型（`assets/models/chibi_wuxia/`，静态 T-pose OBJ，无骨骼）；浏览器里自动绑骨 + 分区权重，程序化动画 待机/行走/奔跑/挥手/出拳/掐诀/跳跃/打坐，马尾带物理摆动 — 🟨 — 2026-11-03 — 还没接入主游戏；已接入 Mixamo 自动绑骨的 FBX（`anim/idle.fbx`，28 骨，贴图用 hero_basecolor.jpg），新动画 FBX 放 anim/ 并加进 MX_CLIPS
 - 统一 Q 版骨架 + 动画 — 🟩 — 2026-10-27 — 所有人共用一套，只换部件/配色
 - 青竹村 21 位有名有姓的村民（`village.js` + `data/villagers.json`）：村长、退隐修士导师云鹤、铁匠、药师、商人、神秘流浪者等；每人有日程（在家 / 干活 / 茶摊 / 闲逛 / 出村）、喜好、好感（每天聊天 +10、送礼一次）、灵根（神识够才看得清）— 🟩 — 2026-10-30
 - 商店：钱记杂货（应季种子、灵石换钱）、苏氏药铺（灵草种子、丹药）、赵家铁铺（收矿石兽材）、云来茶摊；营业时间、好感折扣、同天卖超 20 个压价 — 🟩 — 2026-10-30
@@ -116,6 +116,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 松树不用贴图 — 🟩 — 2026-11-01 — 用户看过贴 foliage 的松树，纯色更好看；`M.pine` 保持 `leafPlain`，别加回去（只保留季节 / 积雪）
 
 ## 日志
+- 2026-11-03 — 角色查看器接入 Mixamo FBX（Standing Idle）；vendor 加 FBXLoader
 - 2026-11-03 — 新增角色查看器 character.html：导入 Tripo 主角模型 + 自动绑骨 + 8 个程序化动画
 - 2026-11-01 — 主游戏：松树去掉贴图改纯色；村墙墙顶、村门和望楼屋顶用 roof_tiles 瓦片贴图（原来是纯色）
 - 2026-11-01 — 主游戏：野外加桃花林，用 blossom_cards 叶卡；按坐标哈希判定，原有树石位置不变

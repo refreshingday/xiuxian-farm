@@ -2,6 +2,7 @@
 // 在浏览器里按身体分区自动绑骨 + 权重，再用程序化动画驱动。
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { parseOBJ } from './hero_obj.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -215,10 +216,27 @@ const ANIMS = {
   },
 };
 
+// ---------- Mixamo 版：同一个模型上传 Mixamo 自动绑骨后下载的 FBX（骨骼 + 动画），贴图用 hero_basecolor.jpg ----------
+// 新下载的 Mixamo 动画 FBX 放进 assets/models/chibi_wuxia/anim/，在这里加一行 [显示名, 文件名]。
+const MX_CLIPS = [['待机', 'idle.fbx']];
+const mxRoot = new THREE.Group(); mxRoot.visible = false; scene.add(mxRoot);
+const mxClips = {};
+let mxMixer = null, mxAction = null;
+try {
+  const loader = new FBXLoader(), base = 'assets/models/chibi_wuxia/anim/';
+  const first = await loader.loadAsync(base + MX_CLIPS[0][1]);
+  first.traverse(o => { if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }); o.frustumCulled = false; } });
+  first.scale.setScalar(1.6 / 0.9995); // FBX 里身高约 1.0，统一成 1.6
+  mxRoot.add(first); mxMixer = new THREE.AnimationMixer(first);
+  mxClips[MX_CLIPS[0][1]] = first.animations[0];
+  for (const [, f] of MX_CLIPS.slice(1)) mxClips[f] = (await loader.loadAsync(base + f)).animations[0];
+} catch (e) { console.warn('Mixamo FBX 加载失败', e); }
+
 // ---------- 播放 ----------
 let cur = 'idle', speed = 1, clock = 0;
 const state = { y: 0, rot: {} };
 const names = Object.keys(ANIMS);
+const allNames = () => [...names, ...(mxMixer ? MX_CLIPS.map(c => 'mx:' + c[1]) : [])];
 const eul = new THREE.Euler();
 function apply(target, k) {
   state.y = lerp(state.y, target.y, k);
@@ -232,12 +250,23 @@ function apply(target, k) {
 }
 function setAnim(n) {
   cur = n;
+  const isMx = n.startsWith('mx:');
+  hero.visible = !isMx; mxRoot.visible = isMx; skelHelper.visible = !isMx && opts.skel;
+  if (isMx && mxMixer) {
+    const clip = mxClips[n.slice(3)];
+    const next = mxMixer.clipAction(clip);
+    if (mxAction !== next) { next.reset().play(); if (mxAction) mxAction.crossFadeTo(next, 0.25, false); mxAction = next; }
+  }
   document.querySelectorAll('#anims button').forEach(b => b.classList.toggle('on', b.dataset.n === n));
 }
 const animsEl = document.getElementById('anims');
 for (const n of names) {
   const b = document.createElement('button'); b.textContent = ANIMS[n].name; b.dataset.n = n;
   b.onclick = () => setAnim(n); animsEl.append(b);
+}
+if (mxMixer) for (const [label, f] of MX_CLIPS) {
+  const b = document.createElement('button'); b.textContent = 'Mixamo·' + label; b.dataset.n = 'mx:' + f;
+  b.onclick = () => setAnim('mx:' + f); animsEl.append(b);
 }
 const optsEl = document.getElementById('opts');
 const opts = { spin: false, skel: false, wire: false };
@@ -247,14 +276,14 @@ function toggle(label, key, fn) {
   optsEl.append(b);
 }
 toggle('自动旋转', 'spin');
-toggle('显示骨骼', 'skel', v => { skelHelper.visible = v; });
+toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !cur.startsWith('mx:'); });
 toggle('线框', 'wire', v => { mesh.material.wireframe = v; });
 const sp = document.createElement('button'); sp.textContent = '速度 ×1';
 sp.onclick = () => { speed = speed >= 2 ? 0.25 : speed * 2; sp.textContent = '速度 ×' + speed; };
 optsEl.append(sp);
-addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); setAnim(names[(names.indexOf(cur) + 1) % names.length]); } });
+addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); setAnim(allNames()[(allNames().indexOf(cur) + 1) % allNames().length]); } });
 setAnim('idle');
-const q = new URLSearchParams(location.search).get('anim'); if (q && ANIMS[q]) setAnim(q);
+const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:'))) setAnim(q);
 
 window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl };
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
@@ -262,8 +291,8 @@ let last = performance.now();
 renderer.setAnimationLoop(now => {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   clock += dt * speed;
-  apply(ANIMS[cur].fn(clock), 1 - Math.exp(-14 * dt));
-  if (opts.spin) hero.rotation.y += dt * 0.6;
+  if (cur.startsWith('mx:')) mxMixer.update(dt * speed); else apply(ANIMS[cur].fn(clock), 1 - Math.exp(-14 * dt));
+  if (opts.spin) { hero.rotation.y += dt * 0.6; mxRoot.rotation.y = hero.rotation.y; }
   ctl.update();
   renderer.render(scene, cam);
 });
