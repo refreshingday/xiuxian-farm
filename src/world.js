@@ -105,7 +105,38 @@ let PATHS = makePaths();
 let STALL = null;
 // 野外空地：坊市、宗门所在的地方不长树，中间铺石板（main 在 new World 之前登记）
 let CLEARINGS = [];
-export function configureClearings(list) { CLEARINGS = list; }
+// 宗门台地（src/terrace.js）：每个带 terrain 的空地登记一块高度区，高度先按 0.5 米网格烘成表（第一次查询时），
+// 地面网格、人物、撒草都从这张表取高度，彼此一致。区外 = 0（野外、村子都是平地）。
+const TG = 0.5;
+let TERRAINS = [];
+export function configureClearings(list) {
+  CLEARINGS = list;
+  TERRAINS = list.filter((c) => c.terrain).map((c) => {
+    const [a, b, cc, d] = c.terrain.bb, x0 = Math.floor((c.x + a) / TG) * TG, z0 = Math.floor((c.z + b) / TG) * TG;
+    return { cx: c.x, cz: c.z, T: c.terrain, x0, z0, x1: Math.ceil((c.x + cc) / TG) * TG, z1: Math.ceil((c.z + d) / TG) * TG, H: null };
+  });
+}
+function bakeTerrain(R) {
+  R.nx = Math.round((R.x1 - R.x0) / TG) + 1; R.nz = Math.round((R.z1 - R.z0) / TG) + 1; R.H = new Float32Array(R.nx * R.nz);
+  for (let j = 0; j < R.nz; j++) for (let i = 0; i < R.nx; i++) R.H[j * R.nx + i] = R.T.h(R.x0 + i * TG - R.cx, R.z0 + j * TG - R.cz);
+}
+const terrainAt = (x, z) => { for (const R of TERRAINS) if (x > R.x0 && x < R.x1 && z > R.z0 && z < R.z1) return R; return null; };
+// 地面高度（米）：游戏逻辑里的 y 都是「离地高度」，画的时候再加上它
+export function groundY(x, z) {
+  const R = terrainAt(x, z); if (!R) return 0;
+  if (!R.H) bakeTerrain(R);
+  const fx = (x - R.x0) / TG, fz = (z - R.z0) / TG, i = Math.min(R.nx - 2, Math.floor(fx)), j = Math.min(R.nz - 2, Math.floor(fz)), u = fx - i, v = fz - j, k = j * R.nx + i, H = R.H;
+  return (H[k] * (1 - u) + H[k + 1] * u) * (1 - v) + (H[k + R.nx] * (1 - u) + H[k + R.nx + 1] * u) * v;
+}
+// 能不能从 (x0,z0) 走到 (x1,z1)：断崖（坡度 > 1.2）走不上去也跳不下去（ENVIRONMENT.md 规则 3）
+export function stepOK(x0, z0, x1, z1) {
+  if (!TERRAINS.length || (!terrainAt(x0, z0) && !terrainAt(x1, z1))) return true;
+  const dx = x1 - x0, dz = z1 - z0, d = Math.hypot(dx, dz); if (d < 1e-6) return true;
+  const ux = dx / d, uz = dz / d;
+  return Math.abs(groundY(x1 + ux * 0.25, z1 + uz * 0.25) - groundY(x0, z0)) / (d + 0.25) < 1.2;
+}
+const chunkHasTerrain = (ox, oz) => TERRAINS.some((R) => ox < R.x1 && ox + CHUNK > R.x0 && oz < R.z1 && oz + CHUNK > R.z0);
+const terrainRock = (ox, oz) => TERRAINS.find((R) => ox < R.x1 && ox + CHUNK > R.x0 && oz < R.z1 && oz + CHUNK > R.z0)?.T.rock || '#9a948a';
 export const BOARD = { x: -4.5, z: -7 };
 export function configureVillage(data) {
   HOUSES = Object.entries(data.houses).map(([id, h]) => {
@@ -117,7 +148,7 @@ export function configureVillage(data) {
 }
 
 // 返回基础色到 out，并给出路面程度 path(0..1)、地面类型 kind
-const GS = { path: 0, kind: 0 };
+const GS = { path: 0, kind: 0, frost: 0 };
 function groundSample(x, z, out) {
   const dv = Math.hypot(x, z), dm = Math.hypot(x - MINE.x, z - MINE.y);
   const n = fbm(x * 0.08, z * 0.08, 3, 2);
@@ -132,7 +163,7 @@ function groundSample(x, z, out) {
   let rd = roadDist(x, z) - 0.5;
   for (const [ax, az, bx, bz] of PATHS) rd = Math.min(rd, segDist(x, z, ax, az, bx, bz) + 0.25);
   GS.path = 1 - smooth(0.9, 1.6, rd + (n - 0.5) * 0.9);
-  GS.kind = 0;
+  GS.kind = 0; GS.frost = 0;
   if (dv < 7.5 + (n - 0.5) * 1.5) { GS.kind = 1; GS.path = 1; }
   for (const g of GATES) if (Math.hypot(x - g.x, z - g.z) < 5 + (n - 0.5) * 1.2) { GS.kind = 1; GS.path = 1; } // 村门口铺石板
   const pd = pondDist(x, z);
@@ -141,7 +172,7 @@ function groundSample(x, z, out) {
   if (bd < 0.8 + (n - 0.5) * 0.5) { GS.kind = 2; GS.path = 1; }
   for (const [px, pz, , pr] of PEAKS) if (Math.hypot(x - px, z - pz) < pr + 0.9 + (n - 0.5) * 0.8) { GS.kind = 4; GS.path = 1; mix3(out, out, [96, 112, 84], 0.7); }
   for (const c of CLEARINGS) {
-    if (c.tint) { const e = Math.max(Math.abs(x - c.x), Math.abs(z - c.z)); if (e < c.r) mix3(out, out, c.tint, c.tintK * (1 - smooth(c.r - 14, c.r, e + (n - 0.5) * 6))); } // 门派地貌色（寒溪宗覆霜）
+    if (c.tint) { const e = Math.max(Math.abs(x - c.x), Math.abs(z - c.z)); if (e < c.r) { const k = c.tintK * (1 - smooth(c.r - 14, c.r, e + (n - 0.5) * 6)); GS.frost = Math.max(GS.frost, k); mix3(out, out, c.tint, k); } } // 门派地貌色（寒溪宗覆霜：草叶 / 无贴图地面直接混色，有贴图时着色器按 frost 盖霜）
     if (c.ground) { if (Math.abs(x - c.x) < c.r && Math.abs(z - c.z) < c.r) { const k = c.ground(x - c.x, z - c.z, n - 0.5); if (k) { GS.kind = k; GS.path = 1; } } }
     else if (c.plaza && Math.abs(x - c.x) < c.plaza + (n - 0.5) && Math.abs(z - c.z) < c.plaza * 0.75 + (n - 0.5)) { GS.kind = 1; GS.path = 1; }
   }
@@ -213,7 +244,7 @@ function groundMaps(ox, oz) {
     const x = ox + (i + 0.5) * CHUNK / N, z = oz + (j + 0.5) * CHUNK / N;
     groundSample(x, z, _b);
     const o = (j * N + i) * 4, k = GS.kind;
-    tint[o] = _b[0]; tint[o + 1] = _b[1]; tint[o + 2] = _b[2]; tint[o + 3] = 255;
+    tint[o] = _b[0]; tint[o + 1] = _b[1]; tint[o + 2] = _b[2]; tint[o + 3] = 255 - Math.round(GS.frost * 255); // a：覆霜量（255 = 无霜）
     mask[o] = (k === 0 || k === 2 || k === 3) ? GS.path * 255 : 0;            // 土路 / 沙 / 田边
     mask[o + 1] = k === 1 || k === 4 ? 255 : 0;                                // 石板 / 岩地
     mask[o + 2] = k === 2 ? 255 : k === 3 ? 0 : 128;                            // 土色：田边深 ← 128 → 沙浅
@@ -231,7 +262,7 @@ const GROUND_FRAG = `
   float gPud = 0.0, gWetS = 0.0;
   {
     vec2 wp = vGW, uv = (wp - uOrigin) / ${CHUNK.toFixed(1)};
-    vec3 tint = texture2D(tTint, uv).rgb;
+    vec4 tint4 = texture2D(tTint, uv); vec3 tint = tint4.rgb; float gFrost = 1.0 - tint4.a;
     vec4 mk = texture2D(tMask, uv);
     vec3 gT = texture2D(tGrass, wp / 6.0).rgb, dT = texture2D(tDirt, wp / 5.0).rgb, sT = texture2D(tStone, wp / 4.5).rgb;
     float gl = dot(gT, vec3(0.3, 0.59, 0.11)), sl = dot(sT, vec3(0.3, 0.59, 0.11));
@@ -261,8 +292,24 @@ const GROUND_FRAG = `
       c = mix(c, lc * (0.8 + 0.4 * gHash(li + 4.4)) * (1.0 - step(abs(lr.y), 0.025) * 0.25), leaf);
     }
     c = mix(c, vec3(0.9, 0.93, 0.98) * (0.92 + gl * 0.25), uSnow * (1.0 - ws * 0.5) * (0.82 + 0.18 * n));
+    // 门派覆霜（寒溪宗）：草地常年发白，石板 / 土路上薄一些
+    c = mix(c, vec3(0.86, 0.9, 0.95) * (0.82 + gl * 0.5), min(1.0, gFrost * 1.2) * (1.0 - hard * 0.75) * (0.88 + 0.12 * n));
     diffuseColor.rgb *= c;
-  }`;
+  }
+  #ifdef TERRAIN
+  { // 台地断崖：陡坡改用三向投影岩壁贴图 + 横向岩层；坡顶坡底压一道暗边（同实验场）
+    vec3 gn = normalize(vGN);
+    float steep = 1.0 - smoothstep(0.5, 0.78, gn.y);
+    if (steep > 0.001) {
+      vec3 bw = pow(abs(gn), vec3(4.0)); bw /= bw.x + bw.y + bw.z;
+      vec3 q = vec3(vGW.x, vGY, vGW.y) * 0.3;
+      vec3 tx = texture2D(tCliff, q.zy).rgb * bw.x + texture2D(tCliff, q.xy).rgb * bw.z + texture2D(tCliff, q.xz).rgb * bw.y;
+      float strata = 0.86 + 0.14 * step(0.5, fract(vGY * 2.2 + tx.r * 0.6));
+      diffuseColor.rgb = mix(diffuseColor.rgb, mix(uRock * tx * 1.15 * strata, vec3(0.9, 0.93, 0.98), uSnow * 0.35), steep);
+    }
+    diffuseColor.rgb *= 1.0 - 0.28 * smoothstep(0.08, 0.3, steep) * (1.0 - smoothstep(0.45, 0.8, steep));
+  }
+  #endif`;
 // 草地 / 土路的法线图：只扰动这两种地面，石板保持平
 const GROUND_NRM = `
   #ifdef GROUND_NORMALS
@@ -271,7 +318,11 @@ const GROUND_NRM = `
     vec4 mk = texture2D(tMask, (wp - uOrigin) / ${CHUNK.toFixed(1)});
     vec3 gN = texture2D(tGrassN, wp / 6.0).xyz * 2.0 - 1.0, dN = texture2D(tDirtN, wp / 5.0).xyz * 2.0 - 1.0;
     vec3 tn = normalize(mix(mix(gN, dN, smoothstep(0.4, 0.6, mk.r)), vec3(0.0, 0.0, 1.0), smoothstep(0.4, 0.6, mk.g)));
-    normal = normalize((viewMatrix * vec4(tn.x, tn.z, tn.y, 0.0)).xyz); // 切线 +x，副切线 +z，法线 +y
+    vec3 wn = vec3(tn.x, tn.z, tn.y); // 切线 +x，副切线 +z，法线 +y
+    #ifdef TERRAIN
+    { vec3 gn = normalize(vGN); wn = normalize(mix(normalize(gn + vec3(wn.x, 0.0, wn.z)), gn, 1.0 - smoothstep(0.5, 0.78, gn.y))); } // 台地：贴图法线绕地形法线扰动，断崖直接用地形法线
+    #endif
+    normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
   }
   #endif
   normal = normalize(mix(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), gPud)); // 水面是平的`;
@@ -298,9 +349,10 @@ float gNoise(vec2 p) {
   return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x), mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 `;
-function groundMat(ox, oz, maps) {
+function groundMat(ox, oz, maps, rock = null) {
   const m = toon('#ffffff', { unique: true });
   m.onBeforeCompile = (s) => {
+    if (rock) { const t = PNG.cliff_rock; if (t) t.wrapS = t.wrapT = THREE.RepeatWrapping; Object.assign(s.uniforms, { tCliff: { value: t || null }, uRock: { value: new THREE.Color(rock) } }); }
     Object.assign(s.uniforms, {
       tTint: { value: maps.tint }, tMask: { value: maps.mask }, uOrigin: { value: new THREE.Vector2(ox, oz) },
       tGrass: { value: PNG.grass_ground }, tDirt: { value: PNG.dirt_path }, tStone: { value: PNG.stone_plaza },
@@ -309,12 +361,13 @@ function groundMat(ox, oz, maps) {
       uGrassRef: { value: lin(GP.grass) }, uPlaza: { value: lin(GP.plaza) },
       uFarm: { value: lin(mix3([0, 0, 0], GP.dirt2, GP.till, 0.75)).divide(lin(GP.dirt)) }, uSand: { value: lin(GP.sand).divide(lin(GP.dirt)) },
     });
-    s.vertexShader = 'varying vec2 vGW;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = position.xz;');
-    s.fragmentShader = (PNG.grass_ground_n && PNG.dirt_path_n ? '#define GROUND_NORMALS\n' : '') + 'uniform sampler2D tTint, tMask, tGrass, tDirt, tStone, tGrassN, tDirtN;\nuniform float uWet, uRain, uRainT, uSnow, uLitter;\nuniform vec3 uSky, uGrassT;\n' + GROUND_NOISE + 'uniform vec2 uOrigin;\nuniform vec3 uGrassRef, uPlaza, uFarm, uSand;\nvarying vec2 vGW;\n'
+    const TD = rock ? '#define TERRAIN\nvarying vec3 vGN;\nvarying float vGY;\n' : '';
+    s.vertexShader = TD + 'varying vec2 vGW;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = position.xz;' + (rock ? ' vGN = objectNormal; vGY = position.y;' : ''));
+    s.fragmentShader = TD + (rock ? 'uniform sampler2D tCliff;\nuniform vec3 uRock;\n' : '') + (PNG.grass_ground_n && PNG.dirt_path_n ? '#define GROUND_NORMALS\n' : '') + 'uniform sampler2D tTint, tMask, tGrass, tDirt, tStone, tGrassN, tDirtN;\nuniform float uWet, uRain, uRainT, uSnow, uLitter;\nuniform vec3 uSky, uGrassT;\n' + GROUND_NOISE + 'uniform vec2 uOrigin;\nuniform vec3 uGrassRef, uPlaza, uFarm, uSand;\nvarying vec2 vGW;\n'
       + s.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>' + GROUND_FRAG).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>' + GROUND_NRM)
       .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + GROUND_WET);
   };
-  m.customProgramCacheKey = () => 'ground';
+  m.customProgramCacheKey = () => (rock ? 'groundT' : 'ground');
   return m;
 }
 
@@ -730,13 +783,30 @@ export class World {
     const ox = cx * CHUNK, oz = cz * CHUNK;
     const group = new THREE.Group();
 
-    // 地面：一块平面 + 像素贴图
-    const gg = new THREE.PlaneGeometry(CHUNK, CHUNK);
+    // 地面：一块平面 + 像素贴图；宗门台地所在的区块细分成 0.5 米网格，顶点抬到台地高度
+    const terr = chunkHasTerrain(ox, oz), SEG = terr ? CHUNK / TG : 1;
+    const gg = new THREE.PlaneGeometry(CHUNK, CHUNK, SEG, SEG);
     gg.rotateX(-Math.PI / 2); gg.translate(ox + CHUNK / 2, 0, oz + CHUNK / 2);
+    if (terr) {
+      const p = gg.attributes.position, nm = gg.attributes.normal, W1 = SEG + 1, H = new Float32Array(p.count);
+      for (let i = 0; i < p.count; i++) { H[i] = groundY(p.getX(i), p.getZ(i)); p.setY(i, H[i]); }
+      // 法线用 ±1 格（0.5 米）中心差分：断崖边岩壁 / 草地过渡平滑，不出锯齿（ENVIRONMENT.md 规则 7）
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), z = p.getZ(i), gx = (groundY(x + TG, z) - groundY(x - TG, z)) / (2 * TG), gz = (groundY(x, z + TG) - groundY(x, z - TG)) / (2 * TG), l = Math.hypot(gx, 1, gz);
+        nm.setXYZ(i, -gx / l, 1 / l, -gz / l);
+      }
+      // 每格的对角线顺着高度差小的方向切：断崖边更平整
+      const idx = [];
+      for (let iy = 0; iy < SEG; iy++) for (let ix = 0; ix < SEG; ix++) {
+        const a = ix + W1 * iy, b = ix + W1 * (iy + 1), c = ix + 1 + W1 * (iy + 1), d = ix + 1 + W1 * iy;
+        if (Math.abs(H[a] - H[c]) < Math.abs(H[b] - H[d])) idx.push(a, b, c, a, c, d); else idx.push(a, b, d, b, c, d);
+      }
+      gg.setIndex(idx); gg.computeBoundingSphere(); gg.computeBoundingBox();
+    }
     const usePNG = PNG.grass_ground && PNG.dirt_path && PNG.stone_plaza;
     const gtex = usePNG ? groundMaps(ox, oz) : paintGround(ox, oz);
-    const gmat = usePNG ? groundMat(ox, oz, gtex) : toon('#ffffff', { map: gtex, unique: true });
-    group.add(mesh(gg, gmat, { cast: false, recv: true }));
+    const gmat = usePNG ? groundMat(ox, oz, gtex, terr ? terrainRock(ox, oz) : null) : toon('#ffffff', { map: gtex, unique: true });
+    group.add(mesh(gg, gmat, { cast: terr, recv: true }));
 
     // 程序填充：树、石、草、花、野生灵草
     const trees = [], blooms = [], pines = [], trunks = [], rocks = [], grass = [], flowers = [], bushes = [], cols = [], herbs = [], tombs = [];
@@ -782,6 +852,7 @@ export class World {
           const gx2 = x + (rng() - 0.5) * step, gz2 = z + (rng() - 0.5) * step;
           groundSample(gx2, gz2, _b);
           if (GS.path > 0.25 || GS.kind === 4 || this.insideHouse(gx2, gz2, 0.8)) continue;
+          if (terr && Math.abs(groundY(gx2 + 0.3, gz2) - groundY(gx2 - 0.3, gz2)) + Math.abs(groundY(gx2, gz2 + 0.3) - groundY(gx2, gz2 - 0.3)) > 0.5) continue; // 断崖上不长草
           const v = 0.9 + rng() * 0.25;
           _c.setRGB(_b[0] / 255 * v * 1.08, _b[1] / 255 * v * 1.1, _b[2] / 255 * v, THREE.SRGBColorSpace);
           grass.push({ x: gx2, z: gz2, s: 0.75 + rng() * 0.6, sy: (0.7 + rng() * 0.7) * (0.7 + lush * 0.5), rot: rng() * 6.28, c: '#' + _c.getHexString() });
@@ -796,6 +867,7 @@ export class World {
         }
       }
     }
+    if (terr) for (const L of [trees, blooms, pines, trunks, rocks, grass, flowers, bushes, tombs]) for (const o of L) o.y = groundY(o.x, o.z); // 台地上的草木跟着地面高度
     const ims = [];
     const add = (im) => { if (im) { group.add(im); ims.push(im); } };
     add(inst(this.G.trunk, this.M.trunk, trunks, true, this.M.line));
@@ -824,7 +896,7 @@ export class World {
       l.rotation.set(Math.sin(i * 2.1) * 0.8, 0, -Math.cos(i * 2.1) * 0.8);
       g.add(l);
     }
-    g.position.set(x, 0, z);
+    g.position.set(x, groundY(x, z), z);
     parent.add(g);
     return { id, x, z, mesh: g, kind };
   }

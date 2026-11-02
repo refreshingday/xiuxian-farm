@@ -6,20 +6,34 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { glow, mesh, at, addOutline, toon, PNG, boxUV } from './util.js';
 import { getRefAsset } from './lab/ref/index.js';
 import { makeLabWater } from './water.js';
+import { groundY } from './world.js';
 import { M, TX, shade, roof, plaque, scroll, podium, hall, tower, pagoda, paifang, wallSeg, banner, brazier, cauldron, lion } from './sectkit.js';
+import { SITES2 } from './sectsites2.js';
+import { SITES3 } from './sectsites3.js';
+import { SITES4 } from './sectsites4.js';
+import { TAU, rng32, bigSword, swordRack, dummy, well, woodpile, anvil, tableSet, bell, fence, herbBed, crystal, crystalCluster, cylUVs, medStone, bridge } from './sectprops.js';
 
-const TAU = Math.PI * 2;
 const disc = (lx, lz, x, z, r) => Math.hypot(lx - x, lz - z) < r;
 const rect = (lx, lz, x0, z0, x1, z1) => lx > x0 && lx < x1 && lz > z0 && lz < z1;
 
 export class Site {
-  constructor(g, x, z) { this.g = g; this.w = g.world; this.x = x; this.z = z; this.anims = []; this.cloths = []; this.flames = []; this.disc = []; this.occ = []; }
-  put(obj, lx, lz, ry = 0, y = 0, { ink = true, bake = false } = {}) {
-    obj.position.set(this.x + lx, y, this.z + lz); obj.rotation.y = ry;
+  constructor(g, x, z) { this.g = g; this.w = g.world; this.x = x; this.z = z; this.anims = []; this.cloths = []; this.flames = []; this.disc = []; this.occ = []; this.T = null; }
+  // 台地高度（门派局部坐标）：put / emit / ref / pave 都自动加上，y 参数一律是「离地高度」；abs 时 y 就是世界高度
+  hy(lx, lz) { return this.T ? groundY(this.x + lx, this.z + lz) : 0; }
+  put(obj, lx, lz, ry = 0, y = 0, { ink = true, bake = false, abs = false } = {}) {
+    obj.position.set(this.x + lx, y + (abs ? 0 : this.hy(lx, lz)), this.z + lz); obj.rotation.y = ry;
+    if (globalThis.SECT_DEBUG && this.T && !abs && obj.userData.foot) this.slopeCheck(obj, lx, lz, ry);
     obj.traverse((o) => { if (o.userData.cloth) this.cloths.push(o.userData.cloth); if (o.userData.flame) this.flames.push(o.userData.flame); if (o.userData.fire) this.flames.push(o.userData.fire); });
     if (bake) obj = this.bake(obj);
     if (ink) addOutline(obj, this.w.M.line);
     this.g.scene.add(obj); return obj;
+  }
+  // 调试（window.SECT_DEBUG = 1）：建筑占地四角的地面高差超过 0.2 米就报警——说明压在坎上了
+  slopeCheck(obj, lx, lz, ry) {
+    const [fw, fd] = obj.userData.foot, c = Math.cos(ry), s = Math.sin(ry), hs = [];
+    for (const u of [-0.47, 0, 0.47]) for (const v of [-0.47, 0, 0.47]) { const a = u * fw, b = v * fd; hs.push(this.hy(lx + a * c + b * s, lz - a * s + b * c)); }
+    const d = Math.max(...hs) - Math.min(...hs);
+    if (d > 0.2) console.warn('SLOPE', obj.userData.name || '', lx.toFixed(1), lz.toFixed(1), 'Δ' + d.toFixed(2));
   }
   box(x0, z0, x1, z1) { this.w.addBox(this.x + Math.min(x0, x1), this.z + Math.min(z0, z1), this.x + Math.max(x0, x1), this.z + Math.max(z0, z1)); this.mark(x0, z0, x1, z1); }
   // 占地登记（不加碰撞）：撒树、撒石头时避开
@@ -56,20 +70,22 @@ export class Site {
   pave(geo, color = '#cfc8bc', k = 0.22) {
     const p = geo.attributes.position, uv = [];
     for (let i = 0; i < p.count; i++) uv.push((p.getX(i) + this.x) * k, (p.getZ(i) + this.z) * k);
+    if (this.T) { for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + this.hy(p.getX(i), p.getZ(i))); geo.computeVertexNormals(); } // 台地：石板贴着地面（坡道上顺坡铺）
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     const tex = PNG.stone_plaza; if (tex) tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     const m = toon(color, { map: tex || null, ref: true, unique: true }); m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -1;
     const o = mesh(geo, m, { cast: false, recv: true }); o.position.set(this.x, 0.015, this.z); this.g.scene.add(o); return o;
   }
   paveDisc(lx, lz, r, color) { return this.pave(new THREE.CircleGeometry(r, 48).rotateX(-Math.PI / 2).translate(lx, 0, lz), color); }
-  paveRect(x0, z0, x1, z1, color) { this.mark(x0, z0, x1, z1); return this.pave(new THREE.PlaneGeometry(x1 - x0, z1 - z0).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, 0, (z0 + z1) / 2), color); }
+  paveRect(x0, z0, x1, z1, color) { this.mark(x0, z0, x1, z1); const sx = this.T ? Math.max(1, Math.ceil(Math.abs(x1 - x0) / 0.5)) : 1, sz = this.T ? Math.max(1, Math.ceil(Math.abs(z1 - z0) / 0.5)) : 1; return this.pave(new THREE.PlaneGeometry(x1 - x0, z1 - z0, sx, sz).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, 0, (z0 + z1) / 2), color); }
   circ(lx, lz, r) { return this.w.addCircle(this.x + lx, this.z + lz, r); }
   ref(id, v, lx, lz, s = 1, r = 0, col = 0) {
     const o = this.w.ref(id, Math.abs(Math.round(v)), this.x + lx, this.z + lz, s, r);
+    if (o) o.position.y = this.hy(lx, lz);
     if (o && col) this.circ(lx, lz, col);
     return o;
   }
-  emit(lx, y, lz, color, power = 0.8, kind = 'lantern', m = null) { return this.w.addEmitter(this.x + lx, y, this.z + lz, color, power, kind, m); }
+  emit(lx, y, lz, color, power = 0.8, kind = 'lantern', m = null) { return this.w.addEmitter(this.x + lx, y + this.hy(lx, lz), this.z + lz, color, power, kind, m); }
   lantern(lx, lz, y = 2.0, color = '#ff4a2a') {
     const l = mesh(new THREE.SphereGeometry(0.24, 10, 8).scale(1, 1.2, 1), glow(color, 1.8, true), { cast: false });
     this.put(l, lx, lz, 0, y, { ink: false }); l.userData.em = this.emit(lx, y, lz, '#ff7a4a', 0.7, 'lantern', l); return l;
@@ -87,29 +103,6 @@ export class Site {
     for (const a of this.anims) a(dt, t);
   }
 }
-function rng32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-
-// 巨剑（剑冢、剑林用）
-function bigSword(len, o = {}) {
-  const G = new THREE.Group(), bw = len * 0.075;
-  const blade = new THREE.Shape([new THREE.Vector2(-bw, 0), new THREE.Vector2(bw, 0), new THREE.Vector2(bw * 0.9, len * 0.85), new THREE.Vector2(0, len), new THREE.Vector2(-bw * 0.9, len * 0.85)]);
-  G.add(mesh(new THREE.ExtrudeGeometry(blade, { depth: bw * 0.25, bevelEnabled: false }).translate(0, 0, -bw * 0.125).rotateZ(Math.PI).translate(0, len, 0), M(o.blade || '#d8e2ea')));
-  G.add(at(mesh(new THREE.BoxGeometry(bw * 5, bw * 0.8, bw * 1.2), M(o.guard || '#c8a24a')), 0, len, 0));
-  G.add(at(mesh(new THREE.CylinderGeometry(bw * 0.45, bw * 0.45, len * 0.25, 8), M(o.grip || '#3a5a7a')), 0, len + len * 0.13, 0));
-  G.add(at(mesh(new THREE.SphereGeometry(bw * 0.8, 8, 6), M(o.guard || '#c8a24a')), 0, len * 1.27, 0));
-  if (o.glow) { const e = mesh(new THREE.BoxGeometry(bw * 0.25, len * 0.8, bw * 0.4), glow(o.glow, 2.2, true), { cast: false }); e.position.y = len * 0.45; G.add(e); }
-  return G;
-}
-// 剑架：两柱一横，架上斜靠几把剑
-function swordRack(n = 4) {
-  const G = new THREE.Group(), wood = M('#6a4029');
-  for (const s of [-1, 1]) G.add(at(mesh(new THREE.BoxGeometry(0.16, 1.5, 0.16).translate(0, 0.75, 0), wood), s * 1.2, 0, 0));
-  G.add(at(mesh(new THREE.BoxGeometry(2.6, 0.12, 0.16), wood), 0, 1.3, 0));
-  G.add(at(mesh(new THREE.BoxGeometry(2.6, 0.1, 0.4), wood), 0, 0.15, 0.1));
-  for (let i = 0; i < n; i++) { const sw = bigSword(1.15, { grip: '#2a3a4a' }); sw.rotation.set(-0.18, 0, 0.05); sw.position.set(-0.9 + i * 0.6, 0.12, 0.2); G.add(sw); }
-  return G;
-}
-
 // ===================== 1 青锋剑派：雪坡下的剑派（大场地，半径约 90 米）=====================
 // 由南往北一条中轴：牌坊 → 山门 → 外院（演武场、擂台、执事堂、膳堂、外门弟子居、灵药园、杂役院）→ 二山门
 // → 中院（钟鼓楼、香鼎广场、青锋殿、藏经阁、丹房、铸剑坊）→ 后院（凌霄阁、内门弟子居、长老院、执法堂、八角亭、剑塔、剑冢、思过崖）
@@ -118,77 +111,11 @@ const QF_WALL = { x: 56, s: 60, n: -70 };
 const QF_PAVE = [[-2.5, -31, 2.5, 84], [-22, 24, 22, 54], [-9, 58, 9, 80], [-14, -2, 14, 17], [-9, -31.5, 9, -25.5], [-36, 1.5, 36, 4.5], [-46, 19.5, 46, 22.5], [-36, -24, 36, -21], [-2, -54, 2, -31]];
 // 颜色
 const QC = { col: '#3a6a9a', wall: '#eef0f2', roof: '#3a4658', ridge: '#232a36', wall2: '#e8e2d4', col2: '#5a4030', roof2: '#4a5262', pave: '#dcd6ca' };
-// 小件：木人桩、水井、柴堆、铁砧、桌凳、钟、鼓
-function dummy() {
-  const G = new THREE.Group(), w = M('#7a5030', { tx: TX.wood });
-  G.add(mesh(new THREE.CylinderGeometry(0.2, 0.24, 1.9, 8).translate(0, 0.95, 0), w));
-  for (const [y, r] of [[1.35, 0.4], [0.95, -0.5], [0.6, 0.9]]) { const a = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 6).rotateZ(Math.PI / 2).translate(0.3, 0, 0), w); a.position.y = y; a.rotation.y = r; G.add(a); }
-  G.add(mesh(new THREE.CylinderGeometry(0.4, 0.45, 0.15, 10).translate(0, 0.07, 0), M('#8a8680', { tx: TX.stone })));
-  return G;
-}
-function well() {
-  const G = new THREE.Group(), st = M('#9a958c', { tx: TX.stone }), w = M('#6a4029', { tx: TX.wood });
-  G.add(mesh(new THREE.CylinderGeometry(0.9, 0.95, 0.75, 14, 1, true).translate(0, 0.37, 0), st));
-  G.add(mesh(new THREE.TorusGeometry(0.9, 0.12, 6, 18).rotateX(Math.PI / 2).translate(0, 0.75, 0), st));
-  G.add(mesh(new THREE.CircleGeometry(0.85, 16).rotateX(-Math.PI / 2).translate(0, 0.3, 0), M('#2a3a4a')));
-  for (const s of [-1, 1]) G.add(at(mesh(new THREE.BoxGeometry(0.14, 2.0, 0.14).translate(0, 1, 0), w), s * 1.0, 0, 0));
-  G.add(at(mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.2, 8).rotateZ(Math.PI / 2), w), 0, 1.6, 0));
-  const r = roof(2.6, 1.6, 0.6, QC.roof2, { k: 0.3 }); r.position.y = 2.0; G.add(r);
-  G.add(at(mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.3, 8), w), 0.4, 1.1, 0));
-  return G;
-}
-function woodpile() {
-  const G = new THREE.Group(), w = M('#8a5a34'), e = M('#d8b080');
-  for (let r = 0; r < 3; r++) for (let i = 0; i < 6 - r; i++) {
-    const l = mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.4, 7).rotateX(Math.PI / 2), w); l.position.set(-0.85 + i * 0.34 + r * 0.17, 0.16 + r * 0.29, 0); G.add(l);
-    const c = mesh(new THREE.CircleGeometry(0.15, 7), e); c.position.set(l.position.x, l.position.y, 0.71); G.add(c);
-  }
-  G.add(at(mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.5, 9).translate(0, 0.25, 0), w), 1.6, 0, 0.3)); // 劈柴墩
-  return G;
-}
-function anvil() {
-  const G = new THREE.Group(), m = M('#4a4a50', { tx: 'rusty_iron' });
-  G.add(mesh(new THREE.BoxGeometry(0.5, 0.5, 0.4).translate(0, 0.25, 0), M('#6a4029')));
-  G.add(mesh(new THREE.BoxGeometry(0.9, 0.25, 0.4).translate(0.1, 0.62, 0), m));
-  G.add(mesh(new THREE.ConeGeometry(0.13, 0.4, 6).rotateZ(Math.PI / 2).translate(0.75, 0.66, 0), m));
-  return G;
-}
-function tableSet() {
-  const G = new THREE.Group(), w = M('#7a5030', { tx: TX.wood });
-  G.add(mesh(new THREE.BoxGeometry(2.4, 0.1, 1.0).translate(0, 0.78, 0), w));
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) G.add(at(mesh(new THREE.BoxGeometry(0.1, 0.78, 0.1).translate(0, 0.39, 0), w), sx * 1.05, 0, sz * 0.4));
-  for (const sz of [-1, 1]) { G.add(at(mesh(new THREE.BoxGeometry(2.4, 0.08, 0.32).translate(0, 0.45, 0), w), 0, 0, sz * 0.85)); for (const sx of [-1, 1]) G.add(at(mesh(new THREE.BoxGeometry(0.08, 0.45, 0.08).translate(0, 0.22, 0), w), sx * 1.05, 0, sz * 0.85)); }
-  for (let i = 0; i < 4; i++) G.add(at(mesh(new THREE.CylinderGeometry(0.13, 0.09, 0.1, 8), M('#e8e2d4')), -0.8 + i * 0.55, 0.88, (i % 2 - 0.5) * 0.4));
-  return G;
-}
-function bell(drum) {
-  if (drum) { const G = new THREE.Group(); G.add(mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.9, 16).rotateX(Math.PI / 2), M('#a83a2a'))); for (const s of [-1, 1]) { const f = at(mesh(new THREE.CircleGeometry(0.72, 16), M('#e8d8b0')), 0, 0, s * 0.46); f.rotation.y = s > 0 ? 0 : Math.PI; G.add(f); } return G; }
-  const pts = [[0, 0], [0.62, 0], [0.58, 0.2], [0.45, 0.9], [0.4, 1.1], [0.15, 1.2], [0, 1.2]].map(([x, y]) => new THREE.Vector2(x, y));
-  return mesh(new THREE.LatheGeometry(pts, 16).translate(0, -1.2, 0), M('#7a6a3a', { metal: true }));
-}
 // 钟楼 / 鼓楼：高台基上一座四角攒尖亭，亭里吊钟 / 架鼓
 function bellTower(name, drum) {
   const G = hall({ w: 5, d: 5, h: 3.0, open: true, col: QC.col, roof: QC.roof, ridge: QC.ridge, base: 1.6, pyramid: true, k: 1, rise: 2.2, stairW: 1.8 });
   const b = bell(drum); b.position.y = drum ? 2.5 : 4.4; G.add(b);
   const p = plaque(name, 1.6, 0.5); p.position.set(0, 4.35, 2.55); G.add(p);
-  return G;
-}
-// 一圈栅栏
-function fence(w, d) {
-  const G = new THREE.Group(), m = M('#7a5a3a', { tx: TX.wood });
-  const side = (len, x, z, ry) => { const s = new THREE.Group(); for (let i = 0; i <= Math.round(len / 1.2); i++) s.add(at(mesh(new THREE.BoxGeometry(0.1, 0.9, 0.1).translate(0, 0.45, 0), m), -len / 2 + i * len / Math.round(len / 1.2), 0, 0)); for (const y of [0.35, 0.75]) s.add(at(mesh(new THREE.BoxGeometry(len, 0.07, 0.05), m), 0, y, 0)); s.position.set(x, 0, z); s.rotation.y = ry; G.add(s); };
-  side(w, 0, -d / 2, 0); side(w * 0.4, -w * 0.3, d / 2, 0); side(w * 0.4, w * 0.3, d / 2, 0); side(d, -w / 2, 0, Math.PI / 2); side(d, w / 2, 0, Math.PI / 2);
-  return G;
-}
-// 一畦药田：耕土 + 几排药苗
-function herbBed(w, d, rng) {
-  const G = new THREE.Group(), soil = M('#8a6a4a', { tx: 'tilled_soil' });
-  G.add(mesh(boxUV(new THREE.BoxGeometry(w, 0.2, d), w, 0.2, d, 0.5).translate(0, 0.1, 0), soil, { recv: true }));
-  const leaf = [M('#5aa04a'), M('#7ac05a'), M('#4a8a6a')], fl = [M('#e86a8a'), M('#f0d060'), M('#a87ae8')];
-  for (let x = -w / 2 + 0.5; x < w / 2; x += 0.8) for (let z = -d / 2 + 0.5; z < d / 2; z += 0.9) {
-    const h = 0.3 + rng() * 0.3, p = mesh(new THREE.ConeGeometry(0.22, h, 5).translate(0, h / 2 + 0.2, 0), leaf[Math.floor(rng() * 3)]); p.position.set(x, 0, z); G.add(p);
-    if (rng() < 0.35) G.add(at(mesh(new THREE.SphereGeometry(0.08, 6, 5), fl[Math.floor(rng() * 3)]), x, h + 0.25, z));
-  }
   return G;
 }
 // 思过崖：几块大岩叠成崖壁
@@ -239,7 +166,7 @@ const qingfeng = {
     B(hallQ('执事堂', 10, 6), 38, 50);
     B(hallP('膳堂', 11, 6), 38, 36);
     for (const [x, z] of [[34, 29], [40, 29]]) { H.push(S.put(tableSet(), x, z, 0, 0, { bake: true })); S.box(x - 1.3, z - 1, x + 1.3, z + 1); }
-    H.push(S.put(well(), 46, 25, 0, 0, { bake: true })); S.circ(46, 25, 1.1);
+    H.push(S.put(well(QC.roof2), 46, 25, 0, 0, { bake: true })); S.circ(46, 25, 1.1);
     H.push(S.put(woodpile(), 28, 25.5, 0, 0, { bake: true })); S.box(26.9, 25, 30.2, 26.2);
     // 西：外门弟子居两排、灵药园
     B(hallP('外门弟子居', 11, 5.5), -40, 50); B(hallP('外门弟子居', 11, 5.5), -40, 39);
@@ -378,18 +305,6 @@ const HX_STREAM = [[-64, -8], [-40, -5], [-20, 3], [0, 6], [20, 9], [38, 14], [6
 const HX_HW = 1.7, HX_ICE = 3.4;   // 水道半宽 / 冰岸外沿半宽
 const HX_PAVE = [[-2.5, 11, 2.5, 66], [-20, 18, 20, 48], [-9, 54, 9, 68], [-2.5, -44, 2.5, 1], [-14, -21, 14, -3], [-40, 49.5, 40, 52], [-36, -33, 36, -30.5], [-40, 13, -2.5, 15.5], [2.5, 15.5, 40, 18]];
 
-// 冰晶：拉长的八面体
-function crystal(h, color = '#bfe8ff') {
-  return mesh(new THREE.OctahedronGeometry(1, 0).scale(0.28 * h / 1.6, h / 2, 0.28 * h / 1.6).translate(0, h / 2 * 0.9, 0), M(color, { emissive: '#5ab8f0', ei: 0.35 }));
-}
-function crystalCluster(n, size, rng) {
-  const G = new THREE.Group();
-  for (let i = 0; i < n; i++) {
-    const c = crystal(size * (0.45 + rng() * 0.7)); const a = rng() * TAU, r = i ? size * (0.15 + rng() * 0.3) : 0;
-    c.position.set(Math.sin(a) * r, -0.1, Math.cos(a) * r); c.rotation.set((rng() - 0.5) * 0.7, rng() * TAU, (rng() - 0.5) * 0.7); G.add(c);
-  }
-  return G;
-}
 // 冰石山门：两根六棱冰石柱 + 石梁 + 匾，柱头冰晶
 function iceGate(name) {
   const G = new THREE.Group(), st = M('#b8d0e2', { tx: TX.stone });
@@ -402,24 +317,6 @@ function iceGate(name) {
   G.add(at(mesh(boxUV(new THREE.BoxGeometry(9.6, 0.4, 0.8), 9.6, 0.4, 0.8, 0.45), st), 0, 4.5, 0));
   const r = roof(12.4, 1.8, 0.7, HC.roof, { ridge: HC.ridge, k: 0.3 }); r.position.y = 6.0; G.add(r);
   for (const z of [0.42, -0.42]) { const p = plaque(name, 3.4, 0.9, { bg: '#2a3a4a', rim: '#cfe6f6', fg: '#eaf6ff' }); p.position.set(0, 5.05, z * 1.3); if (z < 0) p.rotation.y = Math.PI; G.add(p); }
-  return G;
-}
-const cylUVs = (geo, r, h) => { const uv = geo.attributes.uv, C = TAU * r; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * C * 0.45, uv.getY(i) * h * 0.45); return geo; };
-// 打坐石台：一块扁平大石
-function medStone(rng) {
-  return mesh(new THREE.CylinderGeometry(1.1, 1.3, 0.35, 7).translate(0, 0.17, 0).scale(1, 1, 0.8 + rng() * 0.3), M('#9aa4ae', { tx: TX.stone }), { recv: true });
-}
-// 石桥：平铺桥面（玩家地面是平的，桥面不能拱太高）+ 两侧弧形栏板 + 望柱
-function bridge(len, w, o = {}) {
-  const G = new THREE.Group(), st = M(o.color || '#e6e8ea', { tx: o.tx || TX.stone }), dark = M(shade(o.color || '#e6e8ea', 0.75), { tx: o.tx || TX.stone });
-  G.add(mesh(boxUV(new THREE.BoxGeometry(w, 0.16, len), w, 0.16, len, 0.45).translate(0, 0.08, 0), st, { recv: true }));
-  for (const s of [-1, 1]) {
-    const n = 10;
-    for (let i = 0; i < n; i++) { const t0 = i / n, t1 = (i + 1) / n, h = (t) => 0.55 + Math.sin(t * Math.PI) * 0.35, z0 = -len / 2 + t0 * len, z1 = -len / 2 + t1 * len, hh = (h(t0) + h(t1)) / 2;
-      G.add(at(mesh(new THREE.BoxGeometry(0.16, hh, z1 - z0).translate(0, hh / 2, 0), st), s * (w / 2 - 0.08), 0.16, (z0 + z1) / 2)); }
-    for (let i = 0; i <= 4; i++) { const t = i / 4, h = 0.9 + Math.sin(t * Math.PI) * 0.35; G.add(at(mesh(new THREE.BoxGeometry(0.24, h, 0.24).translate(0, h / 2, 0), dark), s * (w / 2 - 0.08), 0.16, -len / 2 + t * len)); G.add(at(mesh(new THREE.SphereGeometry(0.15, 8, 6), dark), s * (w / 2 - 0.08), 0.16 + h + 0.08, -len / 2 + t * len)); }
-  }
-  G.userData.rails = [len, w];
   return G;
 }
 // 冰窟：几块大岩围出洞口，洞里透蓝光
@@ -480,6 +377,7 @@ const hanxi = {
       const mists = [];
       for (let i = 0; i < 22; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(4 + rng() * 4, 2.2).rotateX(-Math.PI / 2), mistM.clone()); m.userData.u = rng(); m.userData.ph = rng() * TAU; g.scene.add(m); mists.push(m); }
       S.anims.push((dt, t) => { for (const m of mists) { const u = (m.userData.u + t * 0.004) % 1, p = pts[Math.floor(u * (pts.length - 1))]; m.position.set(S.x + p.x + p.nx * Math.sin(t * 0.3 + m.userData.ph), 0.35 + Math.sin(t * 0.5 + m.userData.ph) * 0.12, S.z + p.z); m.rotation.y = Math.atan2(p.tx, p.tz); m.material.opacity = 0.16 + 0.12 * Math.sin(t * 0.4 + m.userData.ph); } });
+      S.anims[S.anims.length - 1](0, 0);   // 先摆到溪面上（否则第一帧前都堆在世界原点 = 村子水井）
     }
     // 水道里不长树：整条溪登记占地
     for (let i = 0; i < pts.length; i += 6) { const p = pts[i]; S.mark(p.x - HX_ICE - 0.5, p.z - HX_ICE - 0.5, p.x + HX_ICE + 0.5, p.z + HX_ICE + 0.5); }
@@ -572,7 +470,7 @@ const hanxi = {
       const puffM = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false }), puffs = [];
       const src = R.disciples.filter((d) => d[3] === 'sit').map(([x, z, f]) => [x + Math.sin(f) * 0.35, z + Math.cos(f) * 0.35]);
       src.forEach(([x, z], i) => { for (let k = 0; k < 2; k++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), puffM.clone()); m.userData = { x: S.x + x, z: S.z + z, ph: i * 0.73 + k * 1.4 }; g.scene.add(m); puffs.push(m); } });
-      S.anims.push((dt, t) => { for (const m of puffs) { const u = ((t + m.userData.ph) % 2.8) / 2.8; m.position.set(m.userData.x, 1.0 + u * 0.7, m.userData.z); m.scale.setScalar(1 + u * 3); m.material.opacity = 0.45 * (1 - u) * Math.min(1, u * 6); } });
+      S.anims.push((dt, t) => { for (const m of puffs) { const u = ((t + m.userData.ph) % 2.8) / 2.8; m.position.set(m.userData.x, 1.0 + u * 0.7, m.userData.z); m.scale.setScalar(1 + u * 3); m.material.opacity = 0.45 * (1 - u) * Math.min(1, u * 6); } }); S.anims[S.anims.length - 1](0, 0);
     }
     // 院内雪松 + 墙外雪松林 + 冰晶簇 + 雪堆
     const inside = (x, z) => Math.abs(x) < W.x + 3 && z > W.n - 3 && z < W.s + 3;
@@ -648,5 +546,5 @@ const generic = {
   },
 };
 
-export const SITES = { 青锋剑派: qingfeng, 寒溪宗: hanxi };
+export const SITES = { 青锋剑派: qingfeng, 寒溪宗: hanxi, ...SITES2, ...SITES3, ...SITES4 };
 export const siteOf = (name) => SITES[name] || generic;

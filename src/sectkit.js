@@ -91,7 +91,7 @@ export function podium(w, d, h, color = '#a8a29a', o = {}) {
   return G;
 }
 
-// 殿：o = { w, d, h, wall, col, roof, tiers, sign, base, open(四面开敞=亭/廊) }
+// 殿：o = { w, d, h, wall, col, roof, tiers, sign, base, open(四面开敞=亭/廊), rtx(屋顶贴图，默认青瓦) }
 export function hall(o) {
   const G = new THREE.Group(), w = o.w, d = o.d, h = o.h ?? 2.8, base = o.base ?? 0.6;
   const wallM = M(o.wall || '#ece2cc', { tx: TX.wall }), colM = M(o.col || '#a83a2a', { tx: TX.wood }), beamM = M(o.beam || shade(o.col || '#a83a2a', 0.65), { tx: TX.wood });
@@ -120,14 +120,14 @@ export function hall(o) {
   G.add(at(box(w + 0.1, 0.36, d + 0.1, beamM, 0.6), 0, y0 + h + 0.12, 0)); // 额枋
   const tiers = o.tiers || 1, rc = o.roof || '#3f4552';
   let ry = y0 + h + 0.3;
-  const R1 = roof(w + 1.8, d + 1.8, o.rise ?? d * 0.42, rc, { ridge: o.ridge, k: o.k, pyramid: o.pyramid, knob: o.knob });
+  const R1 = roof(w + 1.8, d + 1.8, o.rise ?? d * 0.42, rc, { ridge: o.ridge, k: o.k, pyramid: o.pyramid, knob: o.knob, tx: o.rtx });
   if (tiers === 2) { // 重檐：下层一圈短檐，上面再起一层
-    const low = roof(w + 1.8, d + 1.8, 0.7, rc, { ridge: o.ridge, k: 0.2 }); low.position.y = ry; G.add(low);
+    const low = roof(w + 1.8, d + 1.8, 0.7, rc, { ridge: o.ridge, k: 0.2, tx: o.rtx }); low.position.y = ry; G.add(low);
     G.add(at(box(w - 0.6, 1.0, d - 0.6, wallM, 0.35), 0, ry + 0.8, 0));
-    const R2 = roof(w + 0.4, d + 0.4, o.rise ?? d * 0.4, rc, { ridge: o.ridge, k: o.k, pyramid: o.pyramid, knob: o.knob }); R2.position.y = ry + 1.25; G.add(R2);
+    const R2 = roof(w + 0.4, d + 0.4, o.rise ?? d * 0.4, rc, { ridge: o.ridge, k: o.k, pyramid: o.pyramid, knob: o.knob, tx: o.rtx }); R2.position.y = ry + 1.25; G.add(R2);
   } else { R1.position.y = ry; G.add(R1); }
   if (o.sign) { const s = plaque(o.sign, Math.min(3.2, w * 0.36), 0.8, o.signC); s.position.set(0, y0 + h - 0.35, d / 2 + 0.02); G.add(s); }
-  G.userData.foot = [w + 1.6, d + 1.6];
+  G.userData.foot = [w + 1.6, d + 1.6]; G.userData.name = o.sign || '';
   return G;
 }
 
@@ -156,7 +156,7 @@ export function tower(o) {
     if (i === 0 && o.door !== false) G.add(at(box(1.2, h * 0.75, 0.08, M('#5a2a1a', { tx: TX.wood }), 0.6), 0, y + h * 0.375, d / 2 + 0.03));
     y += h;
     const last = i === n - 1;
-    const R = roof(w + 1.6, d + 1.6, last ? (o.rise ?? Math.max(w, d) * 0.45) : 0.6, o.roof || '#3f4552', { ridge: o.ridge, k: last ? (o.k ?? 1) : 0.15, pyramid: last && (o.k ?? 1) >= 0.99, knob: o.knob });
+    const R = roof(w + 1.6, d + 1.6, last ? (o.rise ?? Math.max(w, d) * 0.45) : 0.6, o.roof || '#3f4552', { ridge: o.ridge, k: last ? (o.k ?? 1) : 0.15, pyramid: last && (o.k ?? 1) >= 0.99, knob: o.knob, tx: o.rtx });
     R.position.y = y + 0.1; G.add(R);
     if (!last) { // 平座栏杆
       G.add(at(box(w + 0.6, 0.3, d + 0.6, M(shade(o.col || '#a83a2a', 0.7), { tx: TX.wood }), 0.6), 0, y + 0.75, 0));
@@ -164,7 +164,7 @@ export function tower(o) {
     }
   }
   if (o.sign) { const s = plaque(o.sign, Math.min(2.6, o.w * 0.55), 0.7, o.signC); s.position.set(0, base + (o.h ?? 2.6) - 0.35, o.d / 2 + 0.05); G.add(s); }
-  G.userData.top = y; G.userData.foot = [o.w + 1.4, o.d + 1.4];
+  G.userData.top = y; G.userData.foot = [o.w + 1.4, o.d + 1.4]; G.userData.name = o.sign || '';
   return G;
 }
 

@@ -16,7 +16,7 @@ import { levelInfo, REALMS } from './realm.js';
 import { TYPES, SECTOR_MOBS } from './enemies.js';
 import { sectorAt } from './worldmap.js';
 import { itemName } from './items.js';
-import { VILLAGE_R } from './world.js';
+import { VILLAGE_R, groundY } from './world.js';
 import { toon, glow, mesh, at, addOutline, outlineMat, canvasTex } from './util.js';
 import { Site, siteOf } from './sectsites.js';
 
@@ -50,22 +50,24 @@ export class Sects {
   build(L) {
     const g = this.g, d = this.data[L.name], x = L.x, z = L.z, robe = d.robe;
     // 每派自己的布局（sectsites.js，规划见 SECTS.md）
-    const site = new Site(g, x, z), A = siteOf(L.name).build(site, d, L.name.replace(/\s.*$/, ''));
+    const site = new Site(g, x, z); site.T = siteOf(L.name).terrain || null;
+    const A = siteOf(L.name).build(site, d, L.name.replace(/\s.*$/, ''));
     const W = ([lx, lz]) => ({ x: x + lx, z: z + lz });
     if (!L.hidden) g.landmarks.build(L, W(A.stele));
     const lk = A.look;
     const mk = (px, pz, elder, i = 0) => {
       const c = createChibi(elder ? { skin: '#eac3a0', hair: '#e8e8ec', hairStyle: 2, robe: lk.elderRobe || '#f0ece0', robe2: lk.robe2 || shade(robe, 0.6), belt: lk.belt || shade(robe, 0.4), age: 'elder', beard: true }
         : { skin: lk.skin || '#eac3a0', hair: lk.hair || '#2e1e18', hairStyle: Array.isArray(lk.hairStyle) ? lk.hairStyle[i % lk.hairStyle.length] : lk.hairStyle ?? 2, robe: lk.robe || robe, robe2: lk.robe2 || shade(robe, 0.6), belt: lk.belt || shade(robe, 0.4), pants: lk.pants, age: 'adult', sword: lk.sword ?? true });
-      c.root.position.set(px, 0, pz); g.scene.add(c.root); return c;
+      c.root.position.set(px, groundY(px, pz), pz); g.scene.add(c.root); return c;
     };
     const elder = mk(x + A.elder[0], z + A.elder[1], true); elder.face = A.elder[2] ?? 0; elder.root.rotation.y = elder.face;
-    const disciples = A.disciples.map(([lx, lz, face, act], i) => { const c = mk(x + lx, z + lz, false, i); c.root.rotation.y = face; return { c, t: i * 0.4, face, act, home: { x: x + lx, z: z + lz } }; });
+    // 第 5 项可选 { orbit: [cx, cz, 半径, 速度] }：绕一点转圈走（阵法阁弟子绕法阵踱步施法）；{ t: 0 }：同一个起始相位（剑宗列队同步挥剑）
+    const disciples = A.disciples.map(([lx, lz, face, act, o], i) => { const c = mk(x + lx, z + lz, false, i); c.root.rotation.y = face; return { c, t: o?.t ?? i * 0.4, t0: o?.t ?? i * 0.4, face, act, home: { x: x + lx, z: z + lz }, orbit: o?.orbit && [x + o.orbit[0], z + o.orbit[1], o.orbit[2], o.orbit[3]], ph: o?.orbit ? Math.atan2(lx - o.orbit[0], lz - o.orbit[1]) : 0 }; });
     const s = { name: L.name, d, x, z, r: siteOf(L.name).r, elder, disciples, site, ruinFx: A.ruin, yard: W(A.yard), lib: W(A.lib), front: W(A.front), arena: W(A.arena || A.yard), lvl: Math.max(1, Math.floor(dangerFor(x, z))) };
     // 有名有姓的门人（掌门、长老、师兄师姐、杂役……）：各有站位、动作、几句台词，走近按 F 说话
     s.npcs = (A.npcs || []).map((n, i) => {
       const c = createChibi({ skin: '#eac3a0', hair: '#2e1e18', hairStyle: 2, robe: lk.robe || robe, robe2: lk.robe2 || shade(robe, 0.6), belt: lk.belt || shade(robe, 0.4), age: 'adult', sword: lk.sword ?? true, ...n.look });
-      const [lx, lz, face = 0] = n.p; c.root.position.set(x + lx, 0, z + lz); c.root.rotation.y = face; g.scene.add(c.root);
+      const [lx, lz, face = 0] = n.p; c.root.position.set(x + lx, groundY(x + lx, z + lz), z + lz); c.root.rotation.y = face; g.scene.add(c.root);
       const npc = { ...n, c, t: i * 0.37, face, act: n.act || 'idle', home: { x: x + lx, z: z + lz }, route: n.route && n.route.map(([rx, rz]) => ({ x: x + rx, z: z + rz })), ri: 0, wait: 0, said: 0 };
       g.life.on((P) => { if (s.ruined) return false; const dd = near(P, c.root.position, 1.8); return dd !== false && { label: `💬 ${n.name} · ${n.title}`, act: () => this.npcTalk(s, npc), d: dd - 0.2 }; });
       return npc;
@@ -359,7 +361,7 @@ export class Sects {
     if (e && e.pos.distanceTo(P.pos) < 7) { tx = e.pos.x; tz = e.pos.z; if (pt.cd <= 0 && Math.hypot(p.x - e.pos.x, p.z - e.pos.z) < e.r + 0.8) { pt.cd = 1.2; g.enemies.damage(e, 6 * lv * g.atkMul(), p.x, p.z, 3); g.fx.burst(e.pos, '#ffd8a8', 8, { speed: 3, up: 2, life: 0.3, y: 0.8 }); } }
     const dx = tx - p.x, dz = tz - p.z, dd = Math.hypot(dx, dz);
     if (dd > 0.2) { const v = Math.min(dd, (dd > 6 ? 14 : 7) * dt); p.x += dx / dd * v; p.z += dz / dd * v; pt.m.rotation.y = Math.atan2(dx, dz); }
-    p.y = Math.abs(Math.sin(g.time * 8)) * 0.15;
+    p.y = groundY(p.x, p.z) + Math.abs(Math.sin(g.time * 8)) * 0.15;
   }
 
   // ---------- 青锋剑派灭门危机（GDD 独特地点 3）：魔修围山，三天内去救；守住成你的附属门派，放任就成废墟（永久）----------
@@ -429,7 +431,7 @@ export class Sects {
     else {
       const dx = T.x - p.x, dz = T.z - p.z, d = Math.hypot(dx, dz), sp = n.speed || 1.3;
       if (d < 0.2) { n.ri = (n.ri + 1) % n.route.length; n.wait = n.pause ?? 2.5; }
-      else { const k = Math.min(1, sp * dt / d); p.x += dx * k; p.z += dz * k; c.root.rotation.y = Math.atan2(dx, dz); st.move = sp / 3.2; }
+      else { const k = Math.min(1, sp * dt / d); p.x += dx * k; p.z += dz * k; p.y = groundY(p.x, p.z); c.root.rotation.y = Math.atan2(dx, dz); st.move = sp / 3.2; }
     }
     animChibi(c, dt, st);
   }
@@ -447,9 +449,13 @@ export class Sects {
     else if (a === 'cast') st.cast = 0.5 + 0.5 * Math.sin(t * 2);
     else if (a === 'work') st.work = (t % 1.2) / 1.2;
     else if (a === 'sit') { c.hips.position.y = 0.32; c.legs[0].rotation.x = c.legs[1].rotation.x = -1.4; st.talk = false; }
+    else if (a === 'orbit' && dsc.orbit) {
+      const [cx, cz, R, sp] = dsc.orbit, w = dsc.ph + (t - dsc.t0) * sp / R, wx = cx + Math.sin(w) * R, wz = cz + Math.cos(w) * R;
+      c.root.position.set(wx, groundY(wx, wz), wz); c.root.rotation.y = w + Math.sign(sp) * Math.PI / 2; st.move = Math.abs(sp) / 3.2; st.cast = 0.6;
+    }
     else if (a === 'walk') {
       const R = dsc.walkR || 2.2, w = t * 0.35 + (dsc.ph || 0);
-      c.root.position.set(dsc.home.x + Math.sin(w) * R, 0, dsc.home.z + Math.cos(w) * R - R); c.root.rotation.y = w + Math.PI / 2; st.move = 0.45;
+      const wx = dsc.home.x + Math.sin(w) * R, wz = dsc.home.z + Math.cos(w) * R - R; c.root.position.set(wx, groundY(wx, wz), wz); c.root.rotation.y = w + Math.PI / 2; st.move = 0.45;
     }
     animChibi(c, dt, st);
     if (a === 'sit') { c.hips.position.y = 0.3; c.legs[0].rotation.x = c.legs[1].rotation.x = -1.45; c.arms[0].sh.rotation.x = c.arms[1].sh.rotation.x = -0.5; }

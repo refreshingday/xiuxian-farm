@@ -4,6 +4,7 @@ import { flat } from './util.js';
 // 粒子、刀光、预警圈、伤害数字
 export class FX {
   constructor(scene, camera) {
+    this.gy = () => 0; // 地面高度（main 接 world 的 groundY）：传进来的 y 都是离地高度
     this.scene = scene; this.camera = camera;
     this.N = 600;
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
@@ -37,7 +38,7 @@ export class FX {
     for (let i = 0; i < n && this.parts.length < this.N; i++) {
       const a = Math.random() * Math.PI * 2, sp = (o.speed ?? 4) * (0.4 + Math.random() * 0.8);
       this.parts.push({
-        x: p.x, y: (p.y ?? 0) + (o.y ?? 0.8), z: p.z,
+        x: p.x, y: (p.y ?? 0) + (o.y ?? 0.8) + this.gy(p.x, p.z), z: p.z,
         vx: Math.cos(a) * sp, vy: (o.up ?? 2) * (0.5 + Math.random()), vz: Math.sin(a) * sp,
         life: 0, max: (o.life ?? 0.5) * (0.6 + Math.random() * 0.8), size: (o.size ?? 1) * (0.6 + Math.random() * 0.8),
         c, grav: o.grav ?? -9, drag: o.drag ?? 2,
@@ -46,19 +47,19 @@ export class FX {
   }
   mote(x, y, z, color, o = {}) {
     if (this.parts.length >= this.N) return;
-    this.parts.push({ x, y, z, vx: o.vx ?? 0, vy: o.vy ?? 0.3, vz: o.vz ?? 0, life: 0, max: o.life ?? 2, size: o.size ?? 0.6, c: new THREE.Color(color).multiplyScalar(o.bright ?? 2), grav: o.grav ?? 0, drag: 0.5 });
+    this.parts.push({ x, y: y + this.gy(x, z), z, vx: o.vx ?? 0, vy: o.vy ?? 0.3, vz: o.vz ?? 0, life: 0, max: o.life ?? 2, size: o.size ?? 0.6, c: new THREE.Color(color).multiplyScalar(o.bright ?? 2), grav: o.grav ?? 0, drag: 0.5 });
   }
 
   // tilt：绕前方轴翻滚，斜劈用（0 = 水平横扫）
   slash(pos, yaw, color = '#9ef0ff', flip = false, scale = 1, tilt = 0) {
     const m = new THREE.Mesh(this.slashGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(2.2), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-    m.position.set(pos.x, 1.0, pos.z); m.rotation.order = 'YXZ'; m.rotation.set(0, yaw, tilt); m.scale.set(flip ? -scale : scale, 1, scale);
+    m.position.set(pos.x, 1.0 + this.gy(pos.x, pos.z), pos.z); m.rotation.order = 'YXZ'; m.rotation.set(0, yaw, tilt); m.scale.set(flip ? -scale : scale, 1, scale);
     this.scene.add(m);
     this.slashes.push({ m, t: 0, dur: 0.18 });
   }
   shockRing(x, z, r, color, dur = 0.35) {
     const m = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(2.5), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide }));
-    m.position.set(x, 0.15, z); this.scene.add(m);
+    m.position.set(x, 0.15 + this.gy(x, z), z); this.scene.add(m);
     this.rings.push({ m, t: 0, dur, r });
   }
 
@@ -66,7 +67,7 @@ export class FX {
   circle(x, z, r, dur, onDone) {
     const mk = (geo, op) => new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: op, depthWrite: false, toneMapped: false }));
     const ring = mk(this.ringGeo, 0.9), fill = mk(this.circleGeo, 0.35);
-    ring.position.set(x, 0.05, z); fill.position.set(x, 0.04, z);
+    const gy = this.gy(x, z); ring.position.set(x, 0.05 + gy, z); fill.position.set(x, 0.04 + gy, z);
     ring.scale.setScalar(r); fill.scale.setScalar(0.01);
     this.scene.add(ring, fill);
     this.tele.push({ kind: 'circle', ring, fill, r, t: 0, dur, onDone });
@@ -74,7 +75,7 @@ export class FX {
   line(x, z, yaw, len, w, dur, onDone) {
     const m = new THREE.Mesh(this.lineGeo, new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.25, depthWrite: false, toneMapped: false }));
     const f = new THREE.Mesh(this.lineGeo, new THREE.MeshBasicMaterial({ color: 0xff4a2a, transparent: true, opacity: 0.4, depthWrite: false, toneMapped: false }));
-    for (const o of [m, f]) { o.position.set(x, 0.05, z); o.rotation.y = yaw; o.scale.set(w, 1, len); }
+    for (const o of [m, f]) { o.position.set(x, 0.05 + this.gy(x, z), z); o.rotation.y = yaw; o.scale.set(w, 1, len); }
     f.scale.z = 0.01;
     this.scene.add(m, f);
     this.tele.push({ kind: 'line', ring: m, fill: f, len, t: 0, dur, onDone });
@@ -84,7 +85,7 @@ export class FX {
     const el = this.numPool.pop() || document.createElement('div');
     el.className = 'dn ' + cls; el.textContent = text;
     this.numBox.appendChild(el);
-    this.nums.push({ el, p: new THREE.Vector3(p.x + (Math.random() - 0.5) * 0.6, 2.0, p.z), t: 0 });
+    this.nums.push({ el, p: new THREE.Vector3(p.x + (Math.random() - 0.5) * 0.6, 2.0 + this.gy(p.x, p.z), p.z), t: 0 });
   }
 
   update(dt) {

@@ -8,7 +8,7 @@ import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angD
 import { createChibi, animChibi } from './chibi.js';
 import { Weather } from './weather.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
-import { World, configureVillage, configureClearings, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
+import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
 import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
 import { sectorAt, biomeK, polar } from './worldmap.js';
@@ -128,7 +128,8 @@ const g = {
   toast(msg, sec = 2.2) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), sec * 1000); },
 };
 const fx = new FX(scene, camera); g.fx = fx;
-const cfx = new ComboFX(scene, fx, { soft: true });
+const cfxRoot = new THREE.Group(); scene.add(cfxRoot); // 招式特效挂在这里：台地上整体抬到玩家脚下的地面高度
+const cfx = new ComboFX(cfxRoot, fx, { soft: true });
 const sfx = new SFX(); g.sfx = sfx;
 await loadItems();
 await loadTextures({
@@ -137,15 +138,16 @@ await loadTextures({
   cliff_rock: { norm: 0.9 }, foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 },
   leaf_cards: { norm: 0.9, key: true }, grass_blades: { norm: 0.9, key: true }, blossom_cards: { norm: 0.9, key: true },
   stone_carved: { norm: 0.9 }, cloth_canvas: { norm: 0.96 }, // 门派建筑：石砖台基 / 粉墙（sectkit TX）
+  thatch_straw: { norm: 0.9, rep: 0.5 }, tree_bark: { norm: 0.9 },  // 御兽宗：茅草顶、原木栅栏
 });
 configureVillage(await loadVillageData().then((d) => (g.villageData = d)));
 // 世界地图数据：坊市 / 宗门所在的地方要先空出来、铺石板（区块生成时就不长树）
 g.mapData = await (await fetch('data/world_map.json')).json();
 configureClearings([
   ...g.mapData.hubs.map((h) => ({ ...polar(h.ang, h.dist), r: 26, plaza: 17 })),
-  ...g.mapData.sects.map((s) => { const S = siteOf(s.name); return { ...polar(s.ang, s.dist), r: S.r, ground: S.ground, tint: S.tint, tintK: S.tintK }; }),
+  ...g.mapData.sects.map((s) => { const S = siteOf(s.name); return { ...polar(s.ang, s.dist), r: S.r, ground: S.ground, tint: S.tint, tintK: S.tintK, terrain: S.terrain }; }),
 ]);
-const world = new World(scene); g.world = world;
+const world = new World(scene); g.world = world; fx.gy = groundY; // 特效、伤害数字等都按「离地高度」给 y，落在台地上要加地面高度
 const enemies = new Enemies(g); g.enemies = enemies;
 const weather = new Weather(scene); g.weather = weather;
 
@@ -282,7 +284,7 @@ const keys = new Set();
 const SKILL_KEYS = ['KeyQ', 'KeyE', 'KeyR', 'KeyC']; // 四个技能槽（F 留给交互）
 const mouse = new THREE.Vector2(), mouseDown = [false, false, false];
 const aim = new THREE.Vector3();
-let camYaw = 0, camYawT = 0, camZoom = 1, camZoomU = 1; // camZoomU：玩家自己滚出来的缩放（0.6 近 … 3 远）
+let camYaw = 0, camYawT = 0, camZoom = 1, camZoomU = 1, camGY = 0; // camZoomU：玩家自己滚出来的缩放（0.6 近 … 3 远）
 addEventListener('keydown', (e) => {
   sfx.unlock();
   if (e.repeat) { keys.add(e.code); return; }
@@ -352,7 +354,7 @@ function updateAim() {
     aim.set(P.pos.x + (ix * Math.cos(camYaw) - iy * Math.sin(camYaw)) * 5, 0, P.pos.z + (-ix * Math.sin(camYaw) - iy * Math.cos(camYaw)) * 5);
     return;
   }
-  if (!touch.on && !pad.on) { ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); return; }
+  if (!touch.on && !pad.on) { ground.constant = -(P.gy || 0); ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); return; }
   // 手机：自动瞄准附近最近的敌人（摇杆推着时优先摇杆方向上的），没有就朝移动 / 面朝方向
   const mv = moveInput(), my = mv.lengthSq() > 0.1 ? Math.atan2(mv.x, mv.y) : null;
   let best = null, bs = 1e9;
@@ -640,7 +642,7 @@ function placeBar(bar, dt, x, y, z) {
   if (!front) bar.el.style.visibility = 'hidden';
 }
 function updateHpBars(dt) {
-  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, barY(e) + e.pos.y, e.pos.z);
+  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, barY(e) + e.pos.y + groundY(e.pos.x, e.pos.z), e.pos.z);
   for (let i = fadingBars.length - 1; i >= 0; i--) {
     const f = fadingBars[i]; f.t -= dt; placeBar(f.bar, dt, f.x, f.y, f.z);
     f.bar.el.style.opacity = Math.min(1, f.t / 0.4).toFixed(3);
@@ -755,7 +757,12 @@ function updatePlayer(dt) {
     fx.mote(P.pos.x, 0.8 + Math.random() * 0.6, P.pos.z, '#9ef0ff', { life: 0.3, size: 1.2 });
   }
   P.vel.set(vx, 0, vz);
+  const ox = P.pos.x, oz = P.pos.z;
   P.pos.x += (vx + P.kx) * dt; P.pos.z += (vz + P.kz) * dt;
+  // 宗门台地：断崖走不上去也跳不下去（顺着崖边滑开）；御剑飞行不受限
+  if (!realm.fly && !stepOK(ox, oz, P.pos.x, P.pos.z)) {
+    if (stepOK(ox, oz, P.pos.x, oz)) P.pos.z = oz; else if (stepOK(ox, oz, ox, P.pos.z)) P.pos.x = ox; else { P.pos.x = ox; P.pos.z = oz; }
+  }
   const kd = Math.exp(-10 * dt); P.kx *= kd; P.kz *= kd;
   world.resolve(P.pos, P.r);
   if (!st.ghost && P.dashT <= 0) for (const e of enemies.list) {
@@ -774,7 +781,9 @@ function updatePlayer(dt) {
   if (!SW.on && wd > SWIM_IN) SW.on = true; else if (SW.on && wd < SWIM_OUT) SW.on = false;
   SW.k = lerp(SW.k, SW.on ? 1 : 0, 1 - Math.exp(-7 * dt));
   if (SW.on) SW.ph += dt * (1.5 + 4.2 * moveK);
-  P.c.root.position.y = st.y;
+  // 画的时候加上地面高度（台地）；平地起伏直接贴地，飞过崖时平滑追
+  const gy = groundY(P.pos.x, P.pos.z); P.gy = P.gy === undefined || Math.abs(gy - P.gy) < 0.08 ? gy : lerp(P.gy, gy, 1 - Math.exp(-12 * dt));
+  P.c.root.position.y = st.y + P.gy; cfxRoot.position.y = P.gy;
   combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work });
   if (SW.k > 0.002) swimPose(P.c, SW.k, moveK, SW.ph, g.time);
   if (wd > 0.03) {
@@ -807,18 +816,19 @@ function updateCamera(dt) {
   camYawT = clamp(camYawT, -0.8, 0.8);
   camYaw = lerp(camYaw, camYawT, 1 - Math.exp(-8 * dt));
   focus.lerp(P.pos, 1 - Math.exp(-8 * dt));
+  camGY = lerp(camGY, P.gy || 0, 1 - Math.exp(-6 * dt)); // 台地：镜头跟着地面高度升降
   // 手机屏幕小，镜头拉远 1.4 倍看得更远
   camZoom = lerp(camZoom, (touch.on ? 1.4 : 1) * camZoomU, 1 - Math.exp(-6 * dt));
   const farK = 140 * Math.max(1, camZoom); if (Math.abs(camera.far - farK) > 1) { camera.far = farK; camera.updateProjectionMatrix(); }
   const dist = 21 * camZoom, pitch = 0.9;
-  camera.position.set(focus.x + Math.sin(camYaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, focus.z + Math.cos(camYaw) * Math.cos(pitch) * dist);
+  camera.position.set(focus.x + Math.sin(camYaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist + camGY, focus.z + Math.cos(camYaw) * Math.cos(pitch) * dist);
   if (g.shakeV > 0) {
     camera.position.x += (Math.random() - 0.5) * g.shakeV * 0.5;
     camera.position.y += (Math.random() - 0.5) * g.shakeV * 0.5;
     g.shakeV = Math.max(0, g.shakeV - dt * 3);
   }
-  camera.lookAt(focus.x, 1, focus.z);
-  occ.uPlayer.value.set(P.pos.x, 1.0, P.pos.z);
+  camera.lookAt(focus.x, 1 + camGY, focus.z);
+  occ.uPlayer.value.set(P.pos.x, 1.0 + (P.gy || 0), P.pos.z);
   occ.uCam.value.copy(camera.position);
 }
 
@@ -994,7 +1004,7 @@ function startPlay() {
 }
 requestAnimationFrame(frame);
 // 调试入口
-window.game = g; g.combo = runner; g.combat = combat;
+window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
 g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) composer.render(); };
 export { flat, glow, mesh };
