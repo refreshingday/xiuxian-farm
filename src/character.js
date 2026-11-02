@@ -221,7 +221,10 @@ const ANIMS = {
 
 // ---------- Mixamo 版：同一个模型上传 Mixamo 自动绑骨后下载的 FBX（骨骼 + 动画），贴图用 hero_basecolor.jpg ----------
 // 新下载的 Mixamo 动画 FBX 放进 assets/models/chibi_wuxia/anim/，在这里加一行 [显示名, 文件名]。
-const MX_CLIPS = [['待机', 'idle.fbx']];
+// 文件不存在就跳过，所以可以先列全，下载一个放一个。
+const MX_CLIPS = [['待机', 'idle.fbx'], ['行走', 'walk.fbx'], ['奔跑', 'run.fbx'], ['受击', 'hit.fbx'], ['死亡', 'death.fbx'], ['跳跃', 'jump.fbx'],
+  ['睡觉', 'sleep.fbx'], ['打坐', 'sit.fbx'], ['翻滚', 'roll.fbx'], ['下坠', 'fall.fbx'], ['挥砍', 'slash.fbx'], ['出拳', 'punch.fbx'],
+  ['喝水', 'drink.fbx'], ['捡东西', 'pickup.fbx'], ['行礼', 'bow.fbx'], ['锤打', 'hammer.fbx']];
 const mxRoot = new THREE.Group(); mxRoot.visible = false; scene.add(mxRoot);
 const mxClips = {};
 let mxMixer = null, mxAction = null, mxModel = null;
@@ -233,7 +236,9 @@ try {
   first.scale.setScalar(1.6 / 0.9995); // FBX 里身高约 1.0，统一成 1.6
   mxModel = first; mxRoot.add(first); mxMixer = new THREE.AnimationMixer(first);
   mxClips[MX_CLIPS[0][1]] = first.animations[0];
-  for (const [, f] of MX_CLIPS.slice(1)) mxClips[f] = (await loader.loadAsync(base + f)).animations[0];
+  await Promise.all(MX_CLIPS.slice(1).map(async ([, f]) => {
+    try { const r = await fetch(base + f, { method: 'HEAD' }); if (!r.ok) return; mxClips[f] = (await loader.loadAsync(base + f)).animations[0]; } catch (e) { console.warn(f, e); }
+  }));
 } catch (e) { console.warn('Mixamo FBX 加载失败', e); }
 
 // 用 Mixamo 骨架跑上面的程序动画：把我的 13 根骨的旋转（世界对齐坐标系）换算成 Mixamo 骨骼的局部旋转，
@@ -266,7 +271,8 @@ function driveMixamo() {
 let cur = 'idle', speed = 1, clock = 0;
 const state = { y: 0, rot: {} };
 const names = Object.keys(ANIMS);
-const allNames = () => [...names, ...(mxMixer ? MX_CLIPS.map(c => 'mx:' + c[1]) : [])];
+const loadedMx = () => MX_CLIPS.filter(c => mxClips[c[1]]);
+const allNames = () => [...names, ...(mxMixer ? loadedMx().map(c => 'mx:' + c[1]) : [])];
 const eul = new THREE.Euler();
 function apply(target, k) {
   state.y = lerp(state.y, target.y, k);
@@ -295,7 +301,7 @@ for (const n of names) {
   const b = document.createElement('button'); b.textContent = ANIMS[n].name; b.dataset.n = n;
   b.onclick = () => setAnim(n); animsEl.append(b);
 }
-if (mxMixer) for (const [label, f] of MX_CLIPS) {
+if (mxMixer) for (const [label, f] of loadedMx()) {
   const b = document.createElement('button'); b.textContent = 'Mixamo·' + label; b.dataset.n = 'mx:' + f;
   b.onclick = () => setAnim('mx:' + f); animsEl.append(b);
 }
