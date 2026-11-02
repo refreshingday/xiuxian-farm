@@ -16,7 +16,7 @@ import { levelInfo, REALMS } from './realm.js';
 import { TYPES, SECTOR_MOBS } from './enemies.js';
 import { sectorAt } from './worldmap.js';
 import { itemName } from './items.js';
-import { VILLAGE_R } from './world.js';
+import { VILLAGE_R, groundY } from './world.js';
 import { toon, glow, mesh, at, addOutline, outlineMat, canvasTex } from './util.js';
 import { Site, siteOf } from './sectsites.js';
 
@@ -43,26 +43,37 @@ export class Sects {
     g.sects = this;
     this.recalc();
   }
-  at(p, r = 24) { return this.list.find((s) => Math.hypot(p.x - s.x, p.z - s.z) < r); }
+  // r 按标准小宗（半径 22）给；大场地的门派按自己的半径往外放
+  at(p, r = 24) { return this.list.find((s) => Math.hypot(p.x - s.x, p.z - s.z) < r + (s.r - 22)); }
 
   // ---------- 山门、大殿、偏殿、练武场上的弟子、执事 ----------
   build(L) {
     const g = this.g, d = this.data[L.name], x = L.x, z = L.z, robe = d.robe;
     // 每派自己的布局（sectsites.js，规划见 SECTS.md）
-    const site = new Site(g, x, z), A = siteOf(L.name).build(site, d, L.name.replace(/\s.*$/, ''));
+    const site = new Site(g, x, z); site.T = siteOf(L.name).terrain || null;
+    const A = siteOf(L.name).build(site, d, L.name.replace(/\s.*$/, ''));
     const W = ([lx, lz]) => ({ x: x + lx, z: z + lz });
     if (!L.hidden) g.landmarks.build(L, W(A.stele));
     const lk = A.look;
     const mk = (px, pz, elder, i = 0) => {
       const c = createChibi(elder ? { skin: '#eac3a0', hair: '#e8e8ec', hairStyle: 2, robe: lk.elderRobe || '#f0ece0', robe2: lk.robe2 || shade(robe, 0.6), belt: lk.belt || shade(robe, 0.4), age: 'elder', beard: true }
         : { skin: lk.skin || '#eac3a0', hair: lk.hair || '#2e1e18', hairStyle: Array.isArray(lk.hairStyle) ? lk.hairStyle[i % lk.hairStyle.length] : lk.hairStyle ?? 2, robe: lk.robe || robe, robe2: lk.robe2 || shade(robe, 0.6), belt: lk.belt || shade(robe, 0.4), pants: lk.pants, age: 'adult', sword: lk.sword ?? true });
-      c.root.position.set(px, 0, pz); g.scene.add(c.root); return c;
+      c.root.position.set(px, groundY(px, pz), pz); g.scene.add(c.root); return c;
     };
     const elder = mk(x + A.elder[0], z + A.elder[1], true); elder.face = A.elder[2] ?? 0; elder.root.rotation.y = elder.face;
-    const disciples = A.disciples.map(([lx, lz, face, act], i) => { const c = mk(x + lx, z + lz, false, i); c.root.rotation.y = face; return { c, t: i * 0.4, face, act, home: { x: x + lx, z: z + lz } }; });
-    const s = { name: L.name, d, x, z, elder, disciples, site, ruinFx: A.ruin, yard: W(A.yard), lib: W(A.lib), front: W(A.front), lvl: Math.max(1, Math.floor(dangerFor(x, z))) };
+    // 第 5 项可选 { orbit: [cx, cz, 半径, 速度] }：绕一点转圈走（阵法阁弟子绕法阵踱步施法）；{ t: 0 }：同一个起始相位（剑宗列队同步挥剑）
+    const disciples = A.disciples.map(([lx, lz, face, act, o], i) => { const c = mk(x + lx, z + lz, false, i); c.root.rotation.y = face; return { c, t: o?.t ?? i * 0.4, t0: o?.t ?? i * 0.4, face, act, home: { x: x + lx, z: z + lz }, orbit: o?.orbit && [x + o.orbit[0], z + o.orbit[1], o.orbit[2], o.orbit[3]], ph: o?.orbit ? Math.atan2(lx - o.orbit[0], lz - o.orbit[1]) : 0 }; });
+    const s = { name: L.name, d, x, z, r: siteOf(L.name).r, elder, disciples, site, ruinFx: A.ruin, yard: W(A.yard), lib: W(A.lib), front: W(A.front), arena: W(A.arena || A.yard), lvl: Math.max(1, Math.floor(dangerFor(x, z))) };
+    // 有名有姓的门人（掌门、长老、师兄师姐、杂役……）：各有站位、动作、几句台词，走近按 F 说话
+    s.npcs = (A.npcs || []).map((n, i) => {
+      const c = createChibi({ skin: '#eac3a0', hair: '#2e1e18', hairStyle: 2, robe: lk.robe || robe, robe2: lk.robe2 || shade(robe, 0.6), belt: lk.belt || shade(robe, 0.4), age: 'adult', sword: lk.sword ?? true, ...n.look });
+      const [lx, lz, face = 0] = n.p; c.root.position.set(x + lx, groundY(x + lx, z + lz), z + lz); c.root.rotation.y = face; g.scene.add(c.root);
+      const npc = { ...n, c, t: i * 0.37, face, act: n.act || 'idle', home: { x: x + lx, z: z + lz }, route: n.route && n.route.map(([rx, rz]) => ({ x: x + rx, z: z + rz })), ri: 0, wait: 0, said: 0 };
+      g.life.on((P) => { if (s.ruined) return false; const dd = near(P, c.root.position, 1.8); return dd !== false && { label: `💬 ${n.name} · ${n.title}`, act: () => this.npcTalk(s, npc), d: dd - 0.2 }; });
+      return npc;
+    });
     TYPES['disciple_' + d.id] = { ...TYPES.bandit, name: `${L.name.replace(/\s.*$/, '')}弟子`, c: [robe, shade(robe, 0.5), '#ffe7a8'], drops: [], stones: null, xp: 20 };
-    g.life.on((P) => { const dd = near(P, elder.root.position, 2.3); return dd !== false && { label: `${L.name} · 执事`, act: () => this.talk(s), d: dd - 0.4 }; });
+    g.life.on((P) => { const dd = near(P, elder.root.position, 2.3); return dd !== false && { label: `${L.name} · 执事${A.elderName ? ' ' + A.elderName : ''}`, act: () => this.talk(s), d: dd - 0.4 }; });
     // 偷师：练武场边观摩、藏经阁里翻秘籍（藏经阁在大殿左边，门朝南）
     g.life.on((P) => { const dd = this.canPeek(s) && near(P, s.yard, 4); return dd !== false && { label: `👀 偷师 · 观摩${L.name.replace(/\s.*$/, '')}弟子练功`, act: () => this.startPeek(s), d: dd }; });
     g.life.on((P) => { const dd = this.canPeek(s) && near(P, s.lib, 2); return dd !== false && { label: '📜 偷翻藏经阁的秘籍', act: () => this.sneak(s), d: dd }; });
@@ -285,22 +296,22 @@ export class Sects {
     const g = this.g, P = g.player, m = this.member, rounds = kind === 'tourney' ? 3 : 1;
     const lvl = s.lvl + (kind === 'promote' ? (m.rank + 1) * 2 : kind === 'tourney' ? (m?.rank || 0) * 2 : kind === 'step' ? this.steps : 0);
     this.trial = { s, kind, lvl, round: 0, rounds, t: TRIAL_T, foe: null };
-    for (const e of [...g.enemies.list]) if (!e.boss && Math.hypot(e.pos.x - s.x, e.pos.z - s.z) < 30) g.enemies.remove(e);
-    P.pos.set(s.front.x, 0, s.front.z);
+    for (const e of [...g.enemies.list]) if (!e.boss && Math.hypot(e.pos.x - s.arena.x, e.pos.z - s.arena.z) < 30) g.enemies.remove(e);
+    P.pos.set(s.arena.x, 0, s.arena.z + 4); P.yaw = Math.PI;
     this.nextFoe();
     g.toast({ join: '入门试炼', promote: '晋升试炼', tourney: '宗门大比', step: `九重剑阶 · 第 ${this.steps + 1} 阶` }[kind] + '：开始！', 2);
   }
   nextFoe() {
     const T = this.trial, g = this.g;
     T.round++;
-    const e = g.enemies.spawn('disciple_' + T.s.d.id, T.s.yard.x, T.s.yard.z - 1.5, T.lvl + (T.round - 1));
+    const e = g.enemies.spawn('disciple_' + T.s.d.id, T.s.arena.x, T.s.arena.z - 1.5, T.lvl + (T.round - 1));
     e.state = 'chase'; e.trial = true; T.foe = e;
   }
   updateTrial(dt) {
     const T = this.trial, g = this.g, P = g.player;
     if (!T) return;
     T.t -= dt;
-    const far = Math.hypot(P.pos.x - T.s.x, P.pos.z - T.s.z) > 26;
+    const far = Math.hypot(P.pos.x - T.s.arena.x, P.pos.z - T.s.arena.z) > 26;
     if (P.dead || far || T.t <= 0) { this.endTrial(false, far ? '离开了练武场' : P.dead ? '你被打倒了' : '时间到了'); return; }
     if (!T.foe.alive) {
       if (T.round < T.rounds) { g.toast(`第 ${T.round} 场胜！下一场`, 1.6); this.nextFoe(); }
@@ -350,7 +361,7 @@ export class Sects {
     if (e && e.pos.distanceTo(P.pos) < 7) { tx = e.pos.x; tz = e.pos.z; if (pt.cd <= 0 && Math.hypot(p.x - e.pos.x, p.z - e.pos.z) < e.r + 0.8) { pt.cd = 1.2; g.enemies.damage(e, 6 * lv * g.atkMul(), p.x, p.z, 3); g.fx.burst(e.pos, '#ffd8a8', 8, { speed: 3, up: 2, life: 0.3, y: 0.8 }); } }
     const dx = tx - p.x, dz = tz - p.z, dd = Math.hypot(dx, dz);
     if (dd > 0.2) { const v = Math.min(dd, (dd > 6 ? 14 : 7) * dt); p.x += dx / dd * v; p.z += dz / dd * v; pt.m.rotation.y = Math.atan2(dx, dz); }
-    p.y = Math.abs(Math.sin(g.time * 8)) * 0.15;
+    p.y = groundY(p.x, p.z) + Math.abs(Math.sin(g.time * 8)) * 0.15;
   }
 
   // ---------- 青锋剑派灭门危机（GDD 独特地点 3）：魔修围山，三天内去救；守住成你的附属门派，放任就成废墟（永久）----------
@@ -359,7 +370,7 @@ export class Sects {
     if (!s || C.state === 'saved' || C.state === 'ruined') return;
     if (C.state === 'wait' && g.day >= C.day) { C.state = 'alarm'; C.deadline = g.day + 3; g.toast('急报！青锋剑派遭魔修围攻，\n三天之内去救援，晚了就来不及了！', 5); }
     if (C.state === 'alarm' && g.day > C.deadline) { this.ruin(s); return; }
-    if (C.state === 'alarm' && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 28) {
+    if (C.state === 'alarm' && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < s.r + 6) {
       C.state = 'fight'; C.wave = 0;
       g.toast('魔修正在攻山！', 2);
     }
@@ -367,10 +378,10 @@ export class Sects {
       if (!g.enemies.list.some((e) => e.crisis)) {
         if (C.wave >= 3) { C.state = 'saved'; s.vassal = true; Object.assign(this.R(s), { guest: true, hunt: 0 }); this.addFavor(s.name, 100); this.member && this.member.name === s.name && this.addContrib(200); g.ui.dialog({ name: '青锋剑派 执事', lines: ['魔修退了……青锋剑派保住了！', '恩公大恩，本门愿奉你为上宾——从今往后，青锋剑派就是你的附属门派。'], info: '附属门派：在这里学功法贡献打七折，宗门大比奖励照拿；不入门也奉你为客卿，外传小技能随便学。' }); for (const v of g.village.list) v.addAff(10); return; }
         C.wave++;
-        for (let i = 0; i < 2 + C.wave * 2; i++) { const a = Math.random() * 6.28, e = g.enemies.spawn('demoncult', s.x + Math.cos(a) * 14, s.z + Math.sin(a) * 14, s.lvl + C.wave); e.state = 'chase'; e.crisis = true; }
+        for (let i = 0; i < 2 + C.wave * 2; i++) { const a = Math.random() * 6.28, e = g.enemies.spawn('demoncult', s.yard.x + Math.cos(a) * 14, s.yard.z + Math.sin(a) * 14, s.lvl + C.wave); e.state = 'chase'; e.crisis = true; }
         g.toast(`魔修 · 第 ${C.wave} 波`, 1.5);
       }
-      if (Math.hypot(P.pos.x - s.x, P.pos.z - s.z) > 60 || P.dead) { for (const e of [...g.enemies.list]) if (e.crisis) g.enemies.remove(e); C.state = 'alarm'; }
+      if (Math.hypot(P.pos.x - s.x, P.pos.z - s.z) > s.r + 40 || P.dead) { for (const e of [...g.enemies.list]) if (e.crisis) g.enemies.remove(e); C.state = 'alarm'; }
     }
   }
   ruin(s, quiet) {
@@ -378,6 +389,7 @@ export class Sects {
     this.crisis.state = 'ruined'; s.ruined = true;
     s.ruinFx?.();
     for (const dsc of s.disciples) dsc.c.root.visible = false;
+    for (const n of s.npcs) n.c.root.visible = false;
     s.elder.root.visible = false;
     if (this.member?.name === s.name) this.member = null;
     if (!quiet) g.toast('青锋剑派……被魔修灭门了。\n山门成了一片废墟', 5);
@@ -395,7 +407,7 @@ export class Sects {
     const M = P.mods;
     if (M.regen && !P.dead && !g.enemies.list.some((e) => e.state !== 'idle' && e.pos.distanceTo(P.pos) < 15)) P.hp = Math.min(P.maxHp, P.hp + P.maxHp * M.regen * dt);
     for (const s of this.list) {
-      if (Math.hypot(P.pos.x - s.x, P.pos.z - s.z) > 80) continue;
+      if (Math.hypot(P.pos.x - s.x, P.pos.z - s.z) > s.r + 60) continue;
       s.site.update(dt, g.time ?? performance.now() / 1000);
       s.elder.root.rotation.y = s.elder.face; animChibi(s.elder, dt, { move: 0, attack: -1, cast: 0 });
       for (const dsc of s.disciples) {
@@ -404,7 +416,29 @@ export class Sects {
         if (dsc.glance > 0) { dsc.glance -= dt; const q = dsc.c.root.position; dsc.c.root.rotation.y = Math.atan2(P.pos.x - q.x, P.pos.z - q.z); animChibi(dsc.c, dt, { move: 0, attack: -1, cast: 0 }); continue; }
         this.act(dsc, dt);
       }
+      if (s.ruined) continue;
+      for (const n of s.npcs) {
+        n.t += dt;
+        if (n.glance > 0) { n.glance -= dt; const q = n.c.root.position; n.c.root.rotation.y = Math.atan2(P.pos.x - q.x, P.pos.z - q.z); animChibi(n.c, dt, { move: 0, attack: -1, cast: 0 }); continue; }
+        if (n.route) this.walkRoute(n, dt); else this.act(n, dt);
+      }
     }
+  }
+  // 沿路线来回走：到一个点停一会儿（巡山、扫地、送饭）
+  walkRoute(n, dt) {
+    const c = n.c, p = c.root.position, T = n.route[n.ri], st = { move: 0, attack: -1, cast: 0 };
+    if (n.wait > 0) { n.wait -= dt; if (n.act === 'work') st.work = (n.t % 1.2) / 1.2; }
+    else {
+      const dx = T.x - p.x, dz = T.z - p.z, d = Math.hypot(dx, dz), sp = n.speed || 1.3;
+      if (d < 0.2) { n.ri = (n.ri + 1) % n.route.length; n.wait = n.pause ?? 2.5; }
+      else { const k = Math.min(1, sp * dt / d); p.x += dx * k; p.z += dz * k; p.y = groundY(p.x, p.z); c.root.rotation.y = Math.atan2(dx, dz); st.move = sp / 3.2; }
+    }
+    animChibi(c, dt, st);
+  }
+  npcTalk(s, n) {
+    const g = this.g, line = n.lines[n.said++ % n.lines.length];
+    n.glance = 4;
+    g.ui.dialog({ name: `${n.name} · ${n.title}`, line, hint: n.hint });
   }
   // 弟子的日常动作：spar 对练 / drill 独自练招 / cast 施法 / sit 打坐 / work 干活（抡锤、扇火、采药）/ walk 绕圈踱步 / idle 站着
   act(dsc, dt) {
@@ -415,9 +449,13 @@ export class Sects {
     else if (a === 'cast') st.cast = 0.5 + 0.5 * Math.sin(t * 2);
     else if (a === 'work') st.work = (t % 1.2) / 1.2;
     else if (a === 'sit') { c.hips.position.y = 0.32; c.legs[0].rotation.x = c.legs[1].rotation.x = -1.4; st.talk = false; }
+    else if (a === 'orbit' && dsc.orbit) {
+      const [cx, cz, R, sp] = dsc.orbit, w = dsc.ph + (t - dsc.t0) * sp / R, wx = cx + Math.sin(w) * R, wz = cz + Math.cos(w) * R;
+      c.root.position.set(wx, groundY(wx, wz), wz); c.root.rotation.y = w + Math.sign(sp) * Math.PI / 2; st.move = Math.abs(sp) / 3.2; st.cast = 0.6;
+    }
     else if (a === 'walk') {
       const R = dsc.walkR || 2.2, w = t * 0.35 + (dsc.ph || 0);
-      c.root.position.set(dsc.home.x + Math.sin(w) * R, 0, dsc.home.z + Math.cos(w) * R - R); c.root.rotation.y = w + Math.PI / 2; st.move = 0.45;
+      const wx = dsc.home.x + Math.sin(w) * R, wz = dsc.home.z + Math.cos(w) * R - R; c.root.position.set(wx, groundY(wx, wz), wz); c.root.rotation.y = w + Math.PI / 2; st.move = 0.45;
     }
     animChibi(c, dt, st);
     if (a === 'sit') { c.hips.position.y = 0.3; c.legs[0].rotation.x = c.legs[1].rotation.x = -1.45; c.arms[0].sh.rotation.x = c.arms[1].sh.rotation.x = -0.5; }

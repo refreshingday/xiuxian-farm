@@ -21,6 +21,9 @@ export class Landmarks {
       const p = polar(o.ang, o.dist);
       const L = { kind, name: o.name, x: p.x, z: p.z, realm: o.realm, info: o.style || o.mech || o.ore || '', found: false, ...extra };
       if (seen.has(o.name)) { const a = seen.get(o.name); a.info = [a.info, L.info].filter(Boolean).join(' · '); return a; }
+      // 奇地就在宗门里（「剑宗 · 万剑峰」= 剑宗）：并进宗门，不再在山门中间另立一块碑
+      const host = kind === 'unique' && this.list.find((q) => q.kind === 'sect' && Math.hypot(q.x - L.x, q.z - L.z) < 5);
+      if (host) { host.info = [host.info, L.info].filter(Boolean).join(' · '); return host; }
       seen.set(o.name, L); this.list.push(L); return L;
     };
     for (const s of data.sects) add('sect', s, { size: s.size });
