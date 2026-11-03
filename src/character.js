@@ -539,7 +539,7 @@ function toggle(label, key, fn) {
 toggle('自动旋转', 'spin');
 toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !mxRoot.visible; if (mxHelper) mxHelper.visible = v && mxRoot.visible; });
 toggle('线框', 'wire', v => { mesh.material.wireframe = v; });
-opts.sh = true; toggle('方肩', 'sh', v => { SHOULDER.on = v; }); optsEl.lastChild.classList.add('on'); // 锁骨修正开关，对比用
+opts.sh = true; toggle('方肩·袖', 'sh', v => { SHOULDER.on = v; }); optsEl.lastChild.classList.add('on'); // 锁骨修正开关，对比用
 const sp = document.createElement('button'); sp.textContent = '速度 ×1';
 sp.onclick = () => { speed = speed >= 2 ? 0.25 : speed * 2; sp.textContent = '速度 ×' + speed; };
 optsEl.append(sp);
@@ -547,7 +547,7 @@ addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault();
 setAnim('idle');
 const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:') || atkMap[q])) setAnim(q);
 
-window.__hero = { SHOULDER, bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
+window.__hero = { SHOULDER, ATKS: () => ATKS, bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 let last = performance.now();
 renderer.setAnimationLoop(now => {

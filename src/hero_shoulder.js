@@ -4,13 +4,23 @@
 // q：骨名 → 四元数（相对「世界对齐」的静止姿态，和 drive 公式同一套），会就地改 aP1 / aN1 并写入 sP / sN。
 import * as THREE from 'three';
 
-export const SHOULDER = { down: 0.34, back: 0.12, up: 0.25 };
+// minOut：上臂往外张的最小值（方向的 x 分量）。宽袖子手一贴身就插进衣服里，垂手时至少张开这么多
+export const SHOULDER = { down: 0.34, back: 0.12, up: 0.25, minOut: 0.5 };
+const _z = new THREE.Vector3(0, 0, 1), _r = new THREE.Quaternion();
 const _d = new THREE.Vector3(), _c = new THREE.Quaternion(), _e = new THREE.Euler();
 
 export function shoulderFix(q, o = SHOULDER) {
   for (const [s, sg] of [['P', 1], ['N', -1]]) {
     const a = q['a' + s + '1']; if (!a) continue;
     _d.set(sg, 0, 0).applyQuaternion(a); // 上臂方向：y<0 垂下，y>0 举起
+    // 袖子别插进身体：手垂下、又太贴身时，绕身体前后轴把上臂往外抬到 minOut（只改往外的那一点，前后摆不动）
+    const out = _d.x * sg;
+    if (o.minOut > 0 && _d.y < 0 && out < o.minOut) {
+      const h = Math.hypot(_d.x, _d.y), want = Math.min(o.minOut, h * 0.98); // 在 xy 平面里的长度不变，只转角度
+      const ang = Math.acos(Math.max(-1, Math.min(1, out / h))) - Math.acos(want / h);
+      const w = Math.min(1, Math.max(0, (-_d.y - 0.55) / 0.25)); // 只管垂着的手；出招时横在胸前的手不动
+      if (ang > 0 && w > 0) { a.premultiply(_r.setFromAxisAngle(_z, sg * ang * w)); _d.set(sg, 0, 0).applyQuaternion(a); }
+    }
     const dn = Math.max(0, -_d.y), up = Math.max(0, _d.y);
     const lift = o.down * dn + o.up * up * up, back = o.back * dn;
     _c.setFromEuler(_e.set(0, sg * back, sg * lift, 'XYZ'));
