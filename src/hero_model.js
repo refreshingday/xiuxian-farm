@@ -94,7 +94,7 @@ async function load(c, proxyMeshes) {
       c.legs.forEach((L, i) => {
         const up = -L.rotation.x, vel = dt > 0 ? (up - prevUp[i]) / dt : 0; prevUp[i] = up;
         const want = Math.max(cl(vel * 0.12, 0, 1.1), Math.max(0, up) * 0.7) + 0.06;
-        knee[i] += (want - knee[i]) * (1 - Math.exp(-18 * dt));
+        knee[i] += (want - knee[i]) * (1 - Math.exp(-26 * dt));
         const s = i === 0 ? 'N' : 'P', out = L.rotation.z * (i === 0 ? 1 : -1);
         rot('l' + s + '1', -up, 0, (s === 'P' ? -1 : 1) * out); rot('l' + s + '2', knee[i], 0, 0); rot('l' + s + '3', (up - knee[i]) * 0.8, 0, 0);
       });

@@ -837,7 +837,7 @@ function updatePlayer(dt) {
   // 画的时候加上地面高度（台地）；平地起伏直接贴地，飞过崖时平滑追
   const gy = groundY(P.pos.x, P.pos.z); P.gy = P.gy === undefined || Math.abs(gy - P.gy) < 0.08 ? gy : lerp(P.gy, gy, 1 - Math.exp(-12 * dt));
   P.c.root.position.y = st.y + P.gy; cfxRoot.position.y = P.gy;
-  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work });
+  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work, rate: 16 });
   if (SW.k > 0.002) swimPose(P.c, SW.k, moveK, SW.ph, g.time);
   if (heroModel.ready) { const rm = runner.move || combat.skill?.m, rt = runner.move ? runner.t : combat.skill?.t; heroModel.sync(P.c, dt, rm, rt); }
   if (wd > 0.03) {

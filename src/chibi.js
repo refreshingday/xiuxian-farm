@@ -125,9 +125,9 @@ export function createChibi(a) {
 
 const easeOut = (t) => 1 - (1 - t) * (1 - t);
 
-/** s: { move 0..1, attack -1|0..1, combo, cast 0..1, dash, spin 0..1 } */
+/** s: { rate?, move 0..1, attack -1|0..1, combo, cast 0..1, dash, spin 0..1 } */
 export function animChibi(c, dt, s) {
-  c.phase += dt * (2 + s.move * 9);
+  c.phase += dt * (2 + s.move * (s.rate || 9)); // rate：满速时步频（主角走得快，用更快的步频，不然一步跨太远像在滑）
   const ph = c.phase;
   const sw = Math.sin(ph) * s.move;
   c.hips.position.y = 0.55 + Math.abs(Math.cos(ph)) * 0.06 * s.move + Math.sin(ph * 0.4) * 0.008;

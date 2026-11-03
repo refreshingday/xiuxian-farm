@@ -139,7 +139,7 @@ const ANIMS = {
   },
   walk: {
     name: '行走', fn(t) {
-      const p = rest(), w = t * 6.5, s = S(w), c = C(w);
+      const p = rest(), w = t * 9, s = S(w), c = C(w);
       p.y = -0.03 * Math.abs(s); // 双脚张开最低，腿并拢最高
       p.rot.spine = [0.05, 0.1 * s, 0.03 * c]; p.rot.chest = [0, -0.1 * s, 0]; p.rot.head = [-0.05, 0.06 * s, 0];
       p.rot.pony = [0.15 + 0.25 * C(w * 2), 0, 0.15 * s];
@@ -152,7 +152,7 @@ const ANIMS = {
   },
   run: {
     name: '奔跑', fn(t) {
-      const p = rest(), w = t * 10.5, s = S(w), c = C(w);
+      const p = rest(), w = t * 13.5, s = S(w), c = C(w);
       p.y = Math.abs(S(w)) * 0.05;
       p.rot.spine = [0.22, 0.2 * s, 0]; p.rot.chest = [0.1, -0.2 * s, 0]; p.rot.head = [-0.2, 0.1 * s, 0];
       p.rot.pony = [0.7 + 0.2 * C(w * 2), 0, 0.2 * s];
