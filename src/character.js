@@ -6,6 +6,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { makeFists } from './hero_fist.js';
 import { sharpenHair } from './hero_hair.js';
 import { attackList, attackPose, attackStance } from './hero_attack.js';
+import { shoulderFix, SHOULDER } from './hero_shoulder.js';
 import { parseOBJ } from './hero_obj.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -388,7 +389,7 @@ const mxHelper = mxModel ? (() => {
 
 // 用 Mixamo 骨架跑上面的程序动画：把我的 13 根骨的旋转（世界对齐坐标系）换算成 Mixamo 骨骼的局部旋转，
 // 蒙皮用 Mixamo 自带权重，袖子 / 衣摆比自动绑的好。没有马尾骨，马尾不摆。
-const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lP3: 'LeftFoot', lN3: 'RightFoot', lN1: 'RightUpLeg', lN2: 'RightLeg' };
+const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lP3: 'LeftFoot', lN3: 'RightFoot', lN1: 'RightUpLeg', lN2: 'RightLeg', sP: 'LeftShoulder', sN: 'RightShoulder' };
 const mxDrive = [];
 let hipsRest = null;
 if (mxModel) {
@@ -403,9 +404,12 @@ if (mxModel) {
   hipsRest = { b: hips, pos: hips.position.clone(), perM: hips.parent.worldToLocal(w0.clone().setY(w0.y + 1)).sub(hips.position), perZ: hips.parent.worldToLocal(w0.clone().setZ(w0.z + 1)).sub(hips.position) };
 }
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
+const _sq = {}; // 驱动用的临时姿态（锁骨修正不能改到 state.q，它还要拿来做平滑过渡）
 function driveMixamo() {
+  for (const n in state.q) (_sq[n] ||= new THREE.Quaternion()).copy(state.q[n]);
+  if (SHOULDER.on !== false) shoulderFix(_sq); else { _sq.sP?.identity(); _sq.sN?.identity(); }
   for (const d of mxDrive) {
-    const q = state.q[d.mine]; if (!q) continue;
+    const q = _sq[d.mine]; if (!q) continue;
     d.b.quaternion.copy(d.wpInv).multiply(q).multiply(d.wp).multiply(d.rest);
   }
   hipsRest.b.position.copy(hipsRest.pos).addScaledVector(hipsRest.perM, state.y).addScaledVector(hipsRest.perZ, state.z);
@@ -535,6 +539,7 @@ function toggle(label, key, fn) {
 toggle('自动旋转', 'spin');
 toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !mxRoot.visible; if (mxHelper) mxHelper.visible = v && mxRoot.visible; });
 toggle('线框', 'wire', v => { mesh.material.wireframe = v; });
+opts.sh = true; toggle('方肩', 'sh', v => { SHOULDER.on = v; }); optsEl.lastChild.classList.add('on'); // 锁骨修正开关，对比用
 const sp = document.createElement('button'); sp.textContent = '速度 ×1';
 sp.onclick = () => { speed = speed >= 2 ? 0.25 : speed * 2; sp.textContent = '速度 ×' + speed; };
 optsEl.append(sp);
@@ -542,7 +547,7 @@ addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault();
 setAnim('idle');
 const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:') || atkMap[q])) setAnim(q);
 
-window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
+window.__hero = { SHOULDER, bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 let last = performance.now();
 renderer.setAnimationLoop(now => {
