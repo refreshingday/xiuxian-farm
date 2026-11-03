@@ -697,28 +697,52 @@ function padTick() {
     if (b === PAD.LS) realm.toggleFly();
   }
 }
-// 手机省电画质：像素比上限 1.25、阴影图 1024；帧率掉到 40 以下就自动再降分辨率（最低 0.6），之后不再升回卡过的档
-const perf = { mobile: null, cap: 1.5, pr: 0, acc: 0, n: 0 };
-function setPR(v) { perf.pr = v; renderer.setPixelRatio(v); composer.setPixelRatio(v); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); }
-function perfTick(rdt) {
-  if (touch.on !== perf.mobile) {
-    perf.mobile = touch.on; perf.cap = Math.min(devicePixelRatio, perf.mobile ? 1.25 : 1.5); setPR(perf.cap);
-    const ms = perf.mobile ? 1024 : 2048; sun.shadow.mapSize.set(ms, ms); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
-    perf.acc = perf.n = 0;
+// 雾外剔除（画面完全不变）：雾的 far 之外只剩雾色，看不见；离玩家远也照不出能看到的影子。
+// 每帧渲染前把这种顶层物体（远处的 NPC、房子、树…）临时藏起来、也不算它们的矩阵，渲染完马上还原，游戏逻辑看不到这件事。
+const fogCull = { n: 0, hidden: [], off: /[?&]cull=0\b/.test(location.search) }; // ?cull=0 关掉对比
+const _fcB = new THREE.Box3(), _fcS = new THREE.Sphere(), _fcV = new THREE.Vector3(), _fcI = new THREE.Matrix4();
+function cullInfo(o) {
+  if (o.userData._cull !== undefined) return o.userData._cull;
+  let ok = !o.isLight && !o.isCamera, any = false;
+  o.traverse((q) => { if (q.isLight || q.isPoints || q.isSprite) ok = false; if (q.isMesh) { any = true; for (const m of [].concat(q.material)) if (!m || m.fog === false) ok = false; } });
+  let info = null;
+  if (ok && any) {
+    o.updateMatrixWorld(true); _fcB.setFromObject(o);
+    if (!_fcB.isEmpty()) { _fcB.getBoundingSphere(_fcS); if (_fcS.radius < 60) info = { c: _fcS.center.clone().applyMatrix4(_fcI.copy(o.matrixWorld).invert()), r: _fcS.radius * 1.1 }; }
   }
-  if (rdt > 0.5 || g.paused || gui.blocking) return; // 切后台 / 菜单里不算
-  perf.acc += rdt; perf.n++;
-  if (perf.acc < 2) return;
-  const fps = perf.n / perf.acc; perf.acc = perf.n = 0; g.fps = Math.round(fps);
-  if (fps < 40 && perf.pr > 0.6) { perf.cap = perf.pr - 0.05; setPR(Math.max(0.6, perf.pr - 0.15)); }
-  else if (fps > 56 && perf.pr < perf.cap) setPR(Math.min(perf.cap, perf.pr + 0.1));
+  return (o.userData._cull = info);
+}
+function fogCullBegin() {
+  const H = fogCull.hidden; H.length = 0;
+  if (!scene.fog || g.debugCam || fogCull.off) return;
+  const far = scene.fog.far, cam = camera.position, pp = P.pos, kids = scene.children;
+  for (let i = 0; i < kids.length; i++) {
+    const o = kids[i]; if (!o.visible || o === P.c.root) continue;
+    const info = cullInfo(o); if (!info) continue;
+    if (o.matrixAutoUpdate) o.updateMatrix(); // 藏起来时不会自动更新，自己算，不然走近的 NPC 永远出不来
+    _fcV.copy(info.c).applyMatrix4(o.matrix);
+    if (_fcV.distanceTo(cam) - info.r > far && Math.hypot(_fcV.x - pp.x, _fcV.z - pp.z) - info.r > 50) { o.visible = false; o.matrixWorldAutoUpdate = false; H.push(o); }
+  }
+  fogCull.n = H.length;
+}
+function fogCullEnd() { for (const o of fogCull.hidden) { o.visible = true; o.matrixWorldAutoUpdate = true; } }
+function drawFrame() { fogCullBegin(); composer.render(); fogCullEnd(); }
+
+// 帧率表（版本号旁边）
+const fpsM = { acc: 0, n: 0, el: null };
+function fpsTick(rdt) {
+  if (rdt > 1) return; fpsM.acc += rdt; fpsM.n++;
+  if (fpsM.acc < 0.5) return;
+  const f = Math.round(fpsM.n / fpsM.acc); fpsM.acc = fpsM.n = 0; g.fps = f;
+  if (!fpsM.el) { const v = document.getElementById('ver'); if (!v) return; fpsM.el = document.createElement('span'); v.append(' · ', fpsM.el); }
+  fpsM.el.textContent = f + ' fps'; fpsM.el.style.color = f >= 50 ? '#8f8' : f >= 30 ? '#ff8' : '#f88';
 }
 function frame(now) {
   requestAnimationFrame(frame);
-  perfTick((now - last) / 1000);
+  fpsTick((now - last) / 1000);
   padTick();
   tick(Math.min(0.05, (now - last) / 1000)); last = now;
-  composer.render();
+  drawFrame();
 }
 function tick(dt) {
   // 菜单 / 对话 / 标题画面：暂停（GDD：只在菜单和对话时暂停）
@@ -1037,5 +1061,6 @@ requestAnimationFrame(frame);
 g.zoom = () => camZoomU; // 调试用
 window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
-g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) composer.render(); };
+g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) drawFrame(); };
+g.fogCull = fogCull;
 export { flat, glow, mesh };

@@ -31,7 +31,7 @@ export function attachHeroModel(c) {
 }
 
 async function load(c, proxyMeshes) {
-  const [tex, model] = await Promise.all([new THREE.TextureLoader().loadAsync(BASE + (matchMedia('(pointer: coarse)').matches ? 'hero_basecolor_1024.jpg' : 'hero_basecolor_2048.jpg')), new FBXLoader().loadAsync(BASE + 'anim/idle.fbx')]);
+  const [tex, model] = await Promise.all([new THREE.TextureLoader().loadAsync(BASE + 'hero_basecolor_2048.jpg'), new FBXLoader().loadAsync(BASE + 'anim/idle.fbx')]);
   tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const mat = toon('#ffffff', { map: tex, unique: true });
   model.traverse(o => { if (o.isMesh) { o.material = mat; o.castShadow = true; o.frustumCulled = false; } });
