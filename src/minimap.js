@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { SECTORS, RINGS } from './worldmap.js';
 import { KIND, SECTOR_COLOR } from './landmarks.js';
 import { screenOf } from './hpbar.js';
-import { WALL_R, GATES } from './world.js';
+import { WALL_R, GATES, villagePaths } from './world.js';
+import { PLAZA, PAVED_RECTS, PAVED_DISCS, DECOR, decorFoot } from './townplan.js';
 
 const RANGES = [30, 60, 120, 240];
 const $ = (id) => document.getElementById(id);
@@ -78,6 +79,16 @@ export class Minimap {
     c.setLineDash([]);
     c.fillStyle = 'rgba(255, 231, 168, .18)'; c.beginPath(); c.arc(0, 0, WALL_R, 0, Math.PI * 2); c.fill();
     c.strokeStyle = 'rgba(255, 244, 210, .9)'; c.lineWidth = 2.5 / k; c.beginPath(); c.arc(0, 0, WALL_R, 0, Math.PI * 2); c.stroke(); // 村墙
+    if (Math.hypot(P.pos.x, P.pos.z) < WALL_R + range) { // 村里的街、广场、房子（Lynch：路 / 节点 / 地标一眼看清）
+      c.strokeStyle = 'rgba(214, 178, 120, .55)'; c.lineWidth = 1.6; c.lineCap = 'round';
+      c.beginPath(); for (const [ax, az, bx, bz] of villagePaths()) { c.moveTo(ax, az); c.lineTo(bx, bz); } c.stroke();
+      c.fillStyle = 'rgba(200, 196, 182, .6)';
+      c.beginPath(); c.arc(PLAZA.x, PLAZA.z, PLAZA.r, 0, Math.PI * 2); for (const d of PAVED_DISCS) { c.moveTo(d.x + d.r, d.z); c.arc(d.x, d.z, d.r, 0, Math.PI * 2); } c.fill();
+      for (const [x0, z0, x1, z1] of PAVED_RECTS) c.fillRect(x0, z0, x1 - x0, z1 - z0);
+      c.fillStyle = 'rgba(70, 64, 60, .85)';
+      for (const h of this.g.world.houses) c.fillRect(h.x0, h.z0, h.x1 - h.x0, h.z1 - h.z0);
+      for (const o of DECOR) { const [x0, z0, x1, z1] = decorFoot(o); c.fillRect(x0 + 0.6, z0 + 0.6, x1 - x0 - 1.2, z1 - z0 - 1.2); }
+    }
     for (const gt of GATES) { c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(gt.x, gt.z, 3.5 / k, 0, Math.PI * 2); c.fill(); }
     c.restore();
 

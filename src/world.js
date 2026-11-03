@@ -8,6 +8,8 @@ import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
 import { buildWall } from './wall.js';
 import { makeLabWater, makeLabFall } from './water.js';
 import { getRefAsset } from './lab/ref/index.js';
+import { FACE, rotXZ, TAU, PLAZA, BOARD, PAVED_RECTS, PAVED_DISCS, LANES, DECOR, COTTAGES, BLOCKS, GINKGO, doorOf } from './townplan.js';
+export { BOARD };
 
 // 村子里的东西用参考画风（lab 里的 ref：三阶色阶 + 冷暗暖亮 + 叶簇树冠）：建村期间打开，toon() 自动带上 ref
 let REFMODE = false;
@@ -48,20 +50,18 @@ const gate = (id, name, a) => ({ id, name, a, x: Math.sin(a) * WALL_R, z: -Math.
 export const GATES = [gate('ne', '玄晶门', Math.atan2(MINE_GATE.x, -MINE_GATE.y)), gate('s', '迎客门', Math.PI), gate('w', '竹海门', -1.493)];
 const TOWERS = [2.0, 3.93, 5.78];
 // 仙山：村北的石峰群；瀑布从中间那座落进小潭，再流进荷花池
-const PEAKS = [[-13, -31, 7, 2.6], [-9.5, -33, 9.5, 2.9], [-6, -31.2, 8, 2.4], [-2.4, -32.6, 10.5, 2.7], [1.2, -30.6, 6, 2], [-16.4, -28.6, 4.5, 1.8], [4, -28.4, 3.6, 1.5], [-19, -31, 6.5, 2.2]];
-const BASIN = { x: -6, z: -26.6, r: 1.7 };
-const STREAM = [BASIN.x, BASIN.z + 1.2, -6.6, -22.6];
-let HOUSES = [
-  { cx: -15, cz: -8, w: 7, d: 6, roof: '#6e7688', wall: '#c08048', player: true },
-  { cx: 17, cz: 0, w: 7, d: 6, roof: '#65708a', wall: '#b87a46' },
-  { cx: -14, cz: 16, w: 6, d: 5, roof: '#727a8a', wall: '#c88a52' },
-  { cx: 14, cz: 14, w: 7, d: 6, roof: '#687084', wall: '#b47648' },
-];
+// 2026-11-03：整组往东挪 5 米，瀑布正对南大街中轴（远景地标）
+const PEAKS = [[-13, -31, 7, 2.6], [-9.5, -33, 9.5, 2.9], [-6, -31.2, 8, 2.4], [-2.4, -32.6, 10.5, 2.7], [1.2, -30.6, 6, 2], [-16.4, -28.6, 4.5, 1.8], [4, -28.4, 3.6, 1.5], [-19, -31, 6.5, 2.2]].map(([x, z, h, r]) => [x + 5, z, h, r]);
+const BASIN = { x: -1, z: -26.6, r: 1.7 };
+const STREAM = [BASIN.x - 0.3, BASIN.z + 1.2, -4.6, -21.9];
+let HOUSES = [{ cx: -15, cz: -8, w: 7, d: 6, roof: '#6e7688', wall: '#c08048', player: true }];
+const DEF_LOOK = [['#65708a', '#b87a46'], ['#727a8a', '#c88a52'], ['#687084', '#b47648'], ['#6e7688', '#c08048']];
 // 池塘轮廓：带噪声的圆
 export const pondR = (a) => POND.r * (1 + 0.13 * Math.sin(a * 3 + 1) + 0.08 * Math.sin(a * 5 + 2));
 export const pondDist = (x, z) => Math.hypot(x - POND.x, z - POND.z) - pondR(Math.atan2(z - POND.z, x - POND.x));
 
 const key = (x, z) => `${x},${z}`;
+const inBlock = (x, z, pad) => BLOCKS.some(([a, b, c, d]) => x > a - pad && x < c + pad && z > b - pad && z < d + pad);
 
 function segDist(px, pz, ax, az, bx, bz) {
   const vx = bx - ax, vz = bz - az;
@@ -99,8 +99,27 @@ const GP = {
   plaza: [204, 198, 186], stone: [64, 60, 74], stone2: [44, 42, 52], crystal: [74, 60, 104],
 };
 const mix3 = (o, a, b, t) => { o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t; return o; };
-const makePaths = () => HOUSES.map((h) => [h.cx, h.cz + h.d / 2 + 0.6, 0, 0]).concat([[POND.x + 3, POND.z + 3.5, 0, 0], [FARM.x0 + 4.5, FARM.z0 - 0.6, -15, -4.4], [-1, 27.5, GATES[1].x, GATES[1].z], [-7, -3.2, GATES[2].x, GATES[2].z]]);
+// 路网上离 (x, z) 最近的点：土路、大路、石板街、广场
+function netNearest(x, z) {
+  let best = null, bd = Infinity;
+  const tryP = (px, pz) => { const d = Math.hypot(x - px, z - pz); if (d < bd) { bd = d; best = [px, pz]; } };
+  const seg = (ax, az, bx, bz) => { const vx = bx - ax, vz = bz - az, t = clamp(((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz), 0, 1); tryP(ax + vx * t, az + vz * t); };
+  for (const L of LANES) seg(...L);
+  seg(0, 0, MINE_GATE.x, MINE_GATE.y);
+  for (const [a, b, c, d] of PAVED_RECTS) tryP(clamp(x, a, c), clamp(z, b, d));
+  for (const D of [PLAZA, ...PAVED_DISCS]) { const dd = Math.hypot(x - D.x, z - D.z); tryP(dd < D.r ? x : D.x + (x - D.x) / dd * (D.r - 0.3), dd < D.r ? z : D.z + (z - D.z) / dd * (D.r - 0.3)); }
+  return best;
+}
+// 路：横巷 + 每户门口一段小路接到最近的街巷（「路要按人真实的走法连」）
+const makePaths = () => {
+  const P = LANES.map((l) => [...l]);
+  P.push([FARM.x0 + 4.5, FARM.z0 - 0.6, -15, -4.4]);
+  const doors = [...HOUSES.map((h) => doorOf({ x: h.cx, z: h.cz, d: h.d, face: h.face }, 0.9)), ...COTTAGES.map((c) => doorOf(c, 0.9)), ...DECOR.filter((o) => o.kind !== 'pavilion').map((o) => doorOf({ ...o, d: o.d + 1.6 }, 0.6))];
+  for (const d of doors) { const q = netNearest(d.x, d.z); if (q && Math.hypot(q[0] - d.x, q[1] - d.z) > 0.4) P.push([d.x, d.z, q[0], q[1]]); }
+  return P;
+};
 let PATHS = makePaths();
+export const villagePaths = () => PATHS; // 小地图画村里的路
 // 村子布局（data/villagers.json）：房屋、茶摊、委托板。要在 new World 之前调用
 let STALL = null;
 // 野外空地：坊市、宗门所在的地方不长树，中间铺石板（main 在 new World 之前登记）
@@ -137,11 +156,10 @@ export function stepOK(x0, z0, x1, z1) {
 }
 const chunkHasTerrain = (ox, oz) => TERRAINS.some((R) => ox < R.x1 && ox + CHUNK > R.x0 && oz < R.z1 && oz + CHUNK > R.z0);
 const terrainRock = (ox, oz) => TERRAINS.find((R) => ox < R.x1 && ox + CHUNK > R.x0 && oz < R.z1 && oz + CHUNK > R.z0)?.T.rock || '#9a948a';
-export const BOARD = { x: -4.5, z: -7 };
 export function configureVillage(data) {
-  HOUSES = Object.entries(data.houses).map(([id, h]) => {
-    const old = HOUSES.find((o) => o.cx === h.x && o.cz === h.z) || { w: 7, d: 6, roof: '#6e7688', wall: '#c08048' };
-    return { ...old, w: h.w ?? old.w, d: h.d ?? old.d, roof: h.roof ?? old.roof, wall: h.wall ?? old.wall, id, name: h.name, cx: h.x, cz: h.z, player: id === 'home' };
+  HOUSES = Object.entries(data.houses).map(([id, h], i) => {
+    const [roof, wall] = DEF_LOOK[i % 4];
+    return { w: h.w ?? 7, d: h.d ?? 6, roof: h.roof ?? (id === 'home' ? '#6e7688' : roof), wall: h.wall ?? (id === 'home' ? '#c08048' : wall), face: h.face || 's', id, name: h.name, cx: h.x, cz: h.z, player: id === 'home' };
   });
   STALL = data.stall;
   PATHS = makePaths();
@@ -164,7 +182,9 @@ function groundSample(x, z, out) {
   for (const [ax, az, bx, bz] of PATHS) rd = Math.min(rd, segDist(x, z, ax, az, bx, bz) + 0.25);
   GS.path = 1 - smooth(0.9, 1.6, rd + (n - 0.5) * 0.9);
   GS.kind = 0; GS.frost = 0;
-  if (dv < 7.5 + (n - 0.5) * 1.5) { GS.kind = 1; GS.path = 1; }
+  if (Math.hypot(x - PLAZA.x, z - PLAZA.z) < PLAZA.r + (n - 0.5) * 1.2) { GS.kind = 1; GS.path = 1; }
+  for (const [a, b, c, d] of PAVED_RECTS) if (x > a + (n - 0.5) * 0.5 && x < c - (n - 0.5) * 0.5 && z > b && z < d) { GS.kind = 1; GS.path = 1; }
+  for (const D of PAVED_DISCS) if (Math.hypot(x - D.x, z - D.z) < D.r + (n - 0.5) * 0.8) { GS.kind = 1; GS.path = 1; }
   for (const g of GATES) if (Math.hypot(x - g.x, z - g.z) < 5 + (n - 0.5) * 1.2) { GS.kind = 1; GS.path = 1; } // 村门口铺石板
   const pd = pondDist(x, z);
   if (pd < 1.1 + (n - 0.5) * 0.6) { GS.kind = 2; GS.path = Math.max(GS.path, 1); }
@@ -703,6 +723,27 @@ export class World {
   insideHouse(x, z, pad = 0) {
     return this.houses.find((h) => x > h.x0 - pad && x < h.x1 + pad && z > h.z0 - pad && z < h.z1 + pad);
   }
+  // 村里这一点能不能种树 / 摆东西：房子、规划占地、路、田、塘、石峰、井都不行
+  blocked(x, z, pad = 0) {
+    if (this.insideHouse(x, z, pad) || BLOCKS.some(([a, b, c, d]) => x > a - pad && x < c + pad && z > b - pad && z < d + pad)) return true;
+    const F = FARM;
+    if (x > F.x0 - 0.5 - pad && x < F.x0 + F.cols * F.size + 0.5 + pad && z > F.z0 - 0.5 - pad && z < F.z0 + F.rows * F.size + 0.5 + pad) return true;
+    if (pondDist(x, z) < pad + 1 || Math.hypot(x - BASIN.x, z - BASIN.z) < BASIN.r + pad + 1.5 || segDist(x, z, ...STREAM) < pad + 0.8 || Math.hypot(x, z) < 1.5 + pad) return true;
+    if (PEAKS.some(([px, pz, , pr]) => Math.hypot(x - px, z - pz) < pr + pad)) return true;
+    if (roadDist(x, z) < 1.6 + pad || Math.hypot(x, z) > WALL_R - 2.5) return true;
+    groundSample(x, z, _b); if (GS.path > 0.1) return true;
+    for (const [ax, az, bx, bz] of PATHS) if (segDist(x, z, ax, az, bx, bz) < 0.9 + pad * 0.5) return true;
+    return false;
+  }
+  // 村民寻路（village.js 的格子 A*）：碰撞体、塘水、石峰走不了；石板路和土路便宜，草地贵一点，于是村民会沿街走
+  navCost(x, z) {
+    const p = { x, z }; this.resolve(p, 0.42);
+    if (Math.abs(p.x - x) + Math.abs(p.z - z) > 0.01) return Infinity;
+    if (pondDist(x, z) < 0.4 || Math.hypot(x - BASIN.x, z - BASIN.z) < BASIN.r + 0.4) return Infinity;
+    if (PEAKS.some(([px, pz, , pr]) => Math.hypot(x - px, z - pz) < pr + 0.2)) return Infinity;
+    groundSample(x, z, _b);
+    return GS.kind === 1 || GS.path > 0.3 || roadDist(x, z) < 1.4 ? 1 : 1.7;
+  }
 
   // ---------- 发光源（灯笼/火把/晶石），由光源池挑最近的点亮 ----------
   addEmitter(x, y, z, color, power, kind, glowMesh) {
@@ -843,7 +884,7 @@ export class World {
         const id = `${k}:${hi++}`;
         if (!this.herbGone(id)) herbs.push(this.makeHerb(x, z, id, group, wildHerb(x, z)));
       }
-      const inPlaza = dv < 8.5, inMine = dm < MINE_R + 1, onRoad = rd < 1.8;
+      const inPlaza = dv < PLAZA.r + 0.8, inMine = dm < MINE_R + 1, onRoad = rd < 1.8;
       if (!inPlaza && !inMine && !onRoad) {
         // 密草：每格 ~30 丛，颜色取自地面，草丛疏密随噪声成片
         const lush = (0.45 + fbm(x * 0.12, z * 0.12, 41, 2) * 0.9) * (1 + (sec.grass - 1) * bk);
@@ -851,7 +892,7 @@ export class World {
         for (let i = 0; i < gn; i++) {
           const gx2 = x + (rng() - 0.5) * step, gz2 = z + (rng() - 0.5) * step;
           groundSample(gx2, gz2, _b);
-          if (GS.path > 0.25 || GS.kind === 4 || this.insideHouse(gx2, gz2, 0.8)) continue;
+          if (GS.path > 0.25 || GS.kind === 4 || this.insideHouse(gx2, gz2, 0.8) || (dv < WALL_R && inBlock(gx2, gz2, 0.3))) continue;
           if (terr && Math.abs(groundY(gx2 + 0.3, gz2) - groundY(gx2 - 0.3, gz2)) + Math.abs(groundY(gx2, gz2 + 0.3) - groundY(gx2, gz2 - 0.3)) > 0.5) continue; // 断崖上不长草
           const v = 0.9 + rng() * 0.25;
           _c.setRGB(_b[0] / 255 * v * 1.08, _b[1] / 255 * v * 1.1, _b[2] / 255 * v, THREE.SRGBColorSpace);
@@ -942,36 +983,39 @@ export class World {
     this.scene.add(well);
     this.addCircle(0, 0, 1.3);
 
-    // 灯笼柱
-    for (const [x, z] of [[5, 4], [-5, -4], [6, -1], [-5, 5], [-11, -3.5], [11, -6], [-9, 12], [9, 10], [20, -12], [26, -18]]) if (!this.insideHouse(x, z, 1)) this.lanternPost(x, z);
+    // 不进人的民居（townplan COTTAGES，能进门看看）
+    for (const c of COTTAGES) this.buildHouse(c.x, c.z, c.w, c.d, c);
+
+    // 灯笼柱：广场一圈、街口、巷口、大路边（townplan 规划的路网）
+    for (const [x, z] of [[-3.4, 8.6], [3.4, 8.6], [-8.8, 3.6], [2.2, -10.2], [8.6, -4.4], [-3.3, 17.9], [3.3, 17.9], [-3.3, 28.0], [3.3, 28.0], [-5.4, 36.2], [5.4, 36.2],
+      [12, 9], [27, 9.2], [-12, 18], [-22, 18], [12, 18], [22, 18], [13.5, -8.9], [21.1, -21.4], [-24, -1.8], [-32, -4.9], [-17.6, -19.5]]) if (!this.insideHouse(x, z, 0.6)) this.lanternPost(x, z);
 
     // 村里的树、竹、灌木、花、石：lab 里参考画风的素材（叶簇树冠），再补上季节着色
-    const ref = (id, v, x, z, s = 1, r = 0) => {
-      const o = getRefAsset(id, v)?.clone(); if (!o) return null;
-      seasonRef(o); o.traverse((c) => { if (c.userData.isLine) { (this.refInk ||= []).push(c); c.visible = !!this.inkOn; } });
-      o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = r; this.scene.add(o); return o;
-    };
-    const prng = mulberry32(21);
-    const trees = [[-26, 3], [-15, -23], [4, 22], [24, 2], [22, 24], [-24, 24], [-26, -16], [0, -24], [7, -15], [-2, -14], [31, -12], [-32, 12], [32, 14], [-12, 33], [12, 33], [-33, -14]];
-    trees.forEach(([x, z], i) => {
-      if (this.insideHouse(x, z, 2.5) || roadDist(x, z) < 2.5) return;
-      ref(i % 2 === 0 ? 'peach' : 'tree', i, x, z, 1.05 + prng() * 0.15, prng() * 6.28);
-      this.addCircle(x, z, 0.5);
-    });
-    // 竹丛（靠近村墙的一圈）
-    [[-27, 6], [-28, -8], [-22, -26], [27, -6], [28, 8], [-6, 27], [10, 26], [-29, 14], [34, 0], [-36, 22], [36, 24]].forEach(([bx, bz], i) => {
-      if (this.insideHouse(bx, bz, 2.5) || roadDist(bx, bz) < 3) return;
-      ref('bamboo', i, bx, bz, 1, prng() * 6.28);
-      this.addCircle(bx, bz, 1.4);
-    });
+    const ref = (id, v, x, z, s = 1, r = 0) => this.ref(id, v, x, z, s, r);
+    // 古银杏：广场西北角的「村树」，近景地标（秋天满树金黄）
+    ref('ginkgo', 1, GINKGO.x, GINKGO.z, 1.9, 0.6); this.addCircle(GINKGO.x, GINKGO.z, 0.8);
+    // 自动撒：避开房子、装饰建筑占地、路、田、塘、石峰；按片区换树种（东南民居桃树果树、北边山水松柏紫藤、东北工坊杂树、西边田园果树）
+    const prng = mulberry32(21), trees = [[GINKGO.x, GINKGO.z]];
+    const spaced = (x, z, d) => trees.every(([a, b]) => Math.hypot(x - a, z - b) > d);
+    for (let i = 0; i < 400 && trees.length < 30; i++) {
+      const a = prng() * TAU, r = 6 + Math.sqrt(prng()) * 31, x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (this.blocked(x, z, 2.4) || !spaced(x, z, 6.5)) continue;
+      const kind = z < -12 ? (prng() < 0.4 ? 'wisteria' : 'tree') : x > 8 && z > 6 ? (prng() < 0.6 ? 'peach' : 'fruitTree') : x < -8 ? (prng() < 0.6 ? 'fruitTree' : 'peach') : (prng() < 0.5 ? 'tree' : 'peach');
+      ref(kind, i, x, z, 1.0 + prng() * 0.2, prng() * TAU); this.addCircle(x, z, 0.5); trees.push([x, z]);
+    }
+    // 竹丛：贴着村墙内侧一圈（墙是「边」，竹子把它衬软）
+    for (let i = 0, n = 0; i < 120 && n < 16; i++) {
+      const a = prng() * TAU, r = 33 + prng() * 4, x = Math.sin(a) * r, z = -Math.cos(a) * r;
+      if (GATES.some((g) => Math.hypot(x - g.x, z - g.z) < 9) || this.blocked(x, z, 2) || !spaced(x, z, 4)) continue;
+      ref('bamboo', i, x, z, 1, prng() * TAU); this.addCircle(x, z, 1.4); trees.push([x, z]); n++;
+    }
     // 灌木与花丛点缀
     const brng = mulberry32(5);
-    for (let i = 0, nb = 0, nf = 0; i < 90; i++) {
-      const a = brng() * 6.28, r = 9 + brng() * 29, x = Math.cos(a) * r, z = Math.sin(a) * r;
-      groundSample(x, z, _b);
-      if (GS.path > 0.1 || this.insideHouse(x, z, 2) || pondDist(x, z) < 1.5 || roadDist(x, z) < 2.5 || (z < -26 && Math.abs(x + 8) < 14)) continue;
-      if (i % 3 === 0 && nb < 20) { nb++; ref('bush', i, x, z, 0.9 + brng() * 0.4, brng() * 6); this.addCircle(x, z, 0.5); }
-      else if (nf < 16) { nf++; ref('flower', i, x, z, 1, brng() * 6); }
+    for (let i = 0, nb = 0, nf = 0; i < 160; i++) {
+      const a = brng() * TAU, r = 9 + brng() * 29, x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (this.blocked(x, z, 1.6)) continue;
+      if (i % 3 === 0 && nb < 22) { nb++; ref('bush', i, x, z, 0.9 + brng() * 0.4, brng() * 6); this.addCircle(x, z, 0.5); }
+      else if (nf < 18) { nf++; ref('flower', i, x, z, 1, brng() * 6); }
     }
     // 村门两侧各摆一块大石头
     for (const gt of GATES) for (const sd of [-1, 1]) {
@@ -1054,10 +1098,14 @@ export class World {
     return g;
   }
 
-  buildHouse(cx, cz, w, d, opt) {
-    const H = 2.4, T = 0.25, door = 1.5, TX = this.T;
-    const x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2;
-    const root = new THREE.Group(); this.scene.add(root);
+  // 房子在本地坐标里画（门朝本地 +z），整体转到 opt.face（s / e / n / w）；碰撞、灯光、门口都换算成世界坐标
+  buildHouse(CX, CZ, w, d, opt) {
+    const H = 2.4, T = 0.25, door = 1.5, TX = this.T, yaw = FACE[opt.face || 's'] || 0;
+    const cx = 0, cz = 0, x0 = -w / 2, x1 = w / 2, z0 = -d / 2, z1 = d / 2;
+    const W = (lx, lz) => { const [dx, dz] = rotXZ(lx, lz, yaw); return { x: CX + dx, z: CZ + dz }; };
+    const boxL = (a, b, c, e) => { const p = W(a, b), q = W(c, e); return this.addBox(Math.min(p.x, q.x), Math.min(p.z, q.z), Math.max(p.x, q.x), Math.max(p.z, q.z)); };
+    const emitL = (lx, y, lz, ...r) => { const p = W(lx, lz); return this.addEmitter(p.x, y, p.z, ...r); };
+    const root = new THREE.Group(); root.position.set(CX, 0, CZ); root.rotation.y = yaw; this.scene.add(root);
     const wallM = toon(opt.wall, { occ: true, map: TX.plank }), trim = toon('#5a3a26', { occ: true });
     const baseM = toon('#a8a29c', { occ: true, map: TX.stone });
     const roofM = toon(opt.roof, { unique: true, occ: true, map: TX.tile });
@@ -1073,8 +1121,8 @@ export class World {
       m.position.set(x, 0, z); wallsG.add(m);
       const b = mesh(boxUV(new THREE.BoxGeometry(gw + 0.08, 0.45, gd + 0.08), gw, 0.45, gd, 1.2).translate(0, 0.22, 0), baseM, { recv: true });
       b.position.set(x, 0, z); wallsG.add(b);
-      if (alongX) this.addBox(x - len / 2, z - T / 2, x + len / 2, z + T / 2);
-      else this.addBox(x - T / 2, z - len / 2, x + T / 2, z + len / 2);
+      if (alongX) boxL(x - len / 2, z - T / 2, x + len / 2, z + T / 2);
+      else boxL(x - T / 2, z - len / 2, x + T / 2, z + len / 2);
     };
     wall(cx, z0, w, true);
     wall(x0, cz, d, false);
@@ -1119,12 +1167,12 @@ export class World {
       lan.position.set(lx, 1.95, lz); root.add(lan);
       for (const dy of [0.25, -0.25]) root.add(at(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.05, 8), toon('#3a2a20')), lx, 1.95 + dy, lz));
       root.add(at(mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 3), toon('#3a2a20')), lx, 2.4, lz));
-      this.addEmitter(lx, 1.9, lz, '#ff7a4a', 0.7, 'lantern', lan);
+      emitL(lx, 1.9, lz, '#ff7a4a', 0.7, 'lantern', lan);
     }
     // 室内家具
     const furn = (gw, gh, gd, x, z, color) => {
       root.add(at(mesh(new THREE.BoxGeometry(gw, gh, gd).translate(0, gh / 2, 0), toon(color), { recv: true }), x, 0.12, z));
-      this.addBox(x - gw / 2, z - gd / 2, x + gw / 2, z + gd / 2);
+      boxL(x - gw / 2, z - gd / 2, x + gw / 2, z + gd / 2);
     };
     furn(1.3, 0.4, 2.0, x0 + 1.0, z0 + 1.3, '#b0784a');
     root.add(at(mesh(new THREE.BoxGeometry(1.0, 0.15, 0.5), toon('#f0f0f0')), x0 + 1.0, 0.6, z0 + 0.6));
@@ -1133,9 +1181,9 @@ export class World {
     furn(0.9, 0.6, 0.6, x1 - 0.8, z1 - 1.0, '#7a4a2a');
     const lamp = mesh(flat(new THREE.CylinderGeometry(0.14, 0.14, 0.3, 6)), glow('#ffb060', 3, true), { cast: false });
     lamp.position.set(x1 - 1.3, 1.0, z0 + 1.3); root.add(lamp);
-    this.addEmitter(x1 - 1.3, 1.3, z0 + 1.3, '#ffb070', 0.8, 'window', lamp);
+    emitL(x1 - 1.3, 1.3, z0 + 1.3, '#ffb070', 0.8, 'window', lamp);
     // 屋外木桶 / 箱子
-    const prop = (geo, mat, x, z) => { const m = mesh(geo, mat); m.position.set(x, 0, z); root.add(m); addOutline(m, this.M.line); this.addCircle(x, z, 0.4); };
+    const prop = (geo, mat, x, z) => { const m = mesh(geo, mat); m.position.set(x, 0, z); root.add(m); addOutline(m, this.M.line); const p = W(x, z); this.addCircle(p.x, p.z, 0.4); };
     prop(new THREE.CylinderGeometry(0.34, 0.3, 0.8, 10).translate(0, 0.4, 0), toon('#9a6438', { map: TX.plank }), x1 + 0.6, z1 - 0.6);
     prop(boxUV(new THREE.BoxGeometry(0.7, 0.6, 0.6), 0.7, 0.6, 0.6, 1.5).translate(0, 0.3, 0), toon('#a8743f', { map: TX.plank }), x0 - 0.6, z1 - 0.5);
 
@@ -1148,26 +1196,32 @@ export class World {
       const sign = mesh(new THREE.PlaneGeometry(1.6, 0.45), toon('#ffffff', { map: tex }), { cast: false });
       sign.position.set(cx, H + 0.05, z1 + T / 2 + 0.06); root.add(sign); hideWhenCut.push(sign);
     }
-    this.houses.push({ id: opt.id, name: opt.name, x0, x1, z0, z1, cx, cz, wallsG, roof, roofMats, hideWhenCut, t: 0, door: { x: cx, z: z1 + 1.2 }, inside: { x: cx, z: cz + 0.6 }, player: !!opt.player });
+    const A = W(x0, z0), B = W(x1, z1);
+    const house = { id: opt.id, name: opt.name, x0: Math.min(A.x, B.x), x1: Math.max(A.x, B.x), z0: Math.min(A.z, B.z), z1: Math.max(A.z, B.z), cx: CX, cz: CZ, yaw, w, d, wallsG, roof, roofMats, hideWhenCut, t: 0,
+      door: W(0, z1 + 1.2), inside: W(0, 0.6), local: W, player: !!opt.player };
+    this.houses.push(house);
+    return house;
   }
 
   // 铁匠铺门口的铁砧和炉子、村口茶摊、委托板
   buildVillageProps() {
     const line = this.M.line, stoneM = toon('#9a948e', { occ: true, map: this.T.stone }), woodM = toon('#8a5a34', { occ: true, map: this.T.plank });
     const smithy = this.houses.find((h) => h.id === 'smithy');
-    if (smithy) {
-      const x = smithy.x0 - 1.4, z = smithy.z1 - 1.2, g = new THREE.Group();
+    if (smithy) { // 本地坐标：铁砧、炉子在铺子左手边（朝哪都跟着转）
+      const L = smithy.local, hw = smithy.w / 2, hd = smithy.d / 2, yaw = smithy.yaw;
+      const A = L(-hw - 1.4, hd - 1.2), g = new THREE.Group();
       g.add(at(mesh(new THREE.BoxGeometry(0.5, 0.5, 0.4).translate(0, 0.25, 0), toon('#5a3a26')), 0, 0, 0));
       g.add(at(mesh(new THREE.BoxGeometry(0.9, 0.22, 0.4).translate(0, 0.61, 0), toon('#4a4e58')), 0, 0, 0));
       g.add(at(mesh(new THREE.ConeGeometry(0.11, 0.4, 6).rotateZ(Math.PI / 2).translate(0.62, 0.61, 0), toon('#4a4e58')), 0, 0, 0));
-      g.position.set(x, 0, z); addOutline(g, line); this.scene.add(g); this.addCircle(x, z, 0.5);
-      const f = new THREE.Group(), fx = smithy.x0 - 1.4, fz = smithy.z0 + 1.6;
+      g.position.set(A.x, 0, A.z); g.rotation.y = yaw; addOutline(g, line); this.scene.add(g); this.addCircle(A.x, A.z, 0.5);
+      const f = new THREE.Group(), Fp = L(-hw - 1.4, -hd + 1.6);
       f.add(mesh(boxUV(new THREE.BoxGeometry(1.4, 1.0, 1.2), 1.4, 1, 1.2, 1.4).translate(0, 0.5, 0), stoneM));
       const coal = mesh(new THREE.BoxGeometry(1.0, 0.1, 0.8), glow('#ff6a2a', 3, true), { cast: false }); coal.position.y = 1.02; f.add(coal);
       f.add(at(mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.6, 8).translate(0, 1.8, 0), stoneM), 0.3, 0, -0.3));
-      f.position.set(fx, 0, fz); addOutline(f, line); this.scene.add(f); this.addBox(fx - 0.75, fz - 0.65, fx + 0.75, fz + 0.65);
-      this.addEmitter(fx, 1.4, fz, '#ff8a3a', 1.2, 'torch', coal);
-      this.anvil = { x: x + 0.9, z };
+      f.position.set(Fp.x, 0, Fp.z); f.rotation.y = yaw; addOutline(f, line); this.scene.add(f); this.addBox(Fp.x - 0.72, Fp.z - 0.72, Fp.x + 0.72, Fp.z + 0.72);
+      this.addEmitter(Fp.x, 1.4, Fp.z, '#ff8a3a', 1.2, 'torch', coal);
+      this.forge = Fp;
+      this.anvil = L(-hw - 0.5, hd - 1.2);
     }
     if (STALL) {
       const { x, z } = STALL, g = new THREE.Group();

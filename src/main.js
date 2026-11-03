@@ -23,6 +23,7 @@ import { TUNE } from './combo.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
+import { Town } from './town.js';
 import { Farm } from './farm.js';
 import { Alchemy } from './alchemy.js';
 import { Quests, loadQuestData } from './quests.js';
@@ -486,6 +487,7 @@ function moveInput() {
 // ---------- 日常 / 交互（F）：各系统往 life 里登记可交互的东西，按距离挑最近的 ----------
 const life = new Life(g); g.life = life;
 // 青竹村 21 位村民（village.js / data/villagers.json）
+const town = new Town(g); g.town = town; // 青竹村街景（townplan.js 的 Lynch 五要素布局）
 const village = new Village(g, g.villageData); g.village = village;
 g.sense = () => 20 + P.layer * 8; // 神识：看清别人灵根要够高（境界系统接入前先按层数算）
 life.on((P) => {
@@ -724,6 +726,7 @@ function tick(dt) {
   quests.update(dt);
   jobs.update(dt);
   village.update(dt);
+  town.update(dt);
   enemies.update(dt);
   combat.updateEffects(dt);
   ambientSpawns(dt);
