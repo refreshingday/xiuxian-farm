@@ -76,12 +76,22 @@ export function attackStance(m, t) {
   if (m.air || m.pose === 'leap') return null;
   const S = ST[FAM[m.pose]]; if (!S) return null;
   const h = m.hits[0]?.t ?? m.lunge?.[1] ?? 0.2;
-  // 起手 0.07 秒沉进架势；到出手点压到最低；出手后 0.2 秒回一半；收招段（cancel → dur）再回到架势
+  // 起手 0.07 秒沉进架势；到出手点压到最低，略过冲一点再回一半；收招段（cancel → dur）再回到架势
   const into = sm(cl(t / 0.07));
-  let k = t < h ? sm(cl(t / h)) ** 1.6 : 1 - 0.5 * sm(cl((t - h) / 0.2));
+  let k;
+  if (t < h) k = sm(cl(t / h)) ** 1.6;
+  else k = 1 + 0.12 * sm(cl((t - h) / 0.04)) * (1 - sm(cl((t - h - 0.04) / 0.1))) - 0.5 * sm(cl((t - h - 0.06) / 0.2));
   if (t > m.cancel) k *= 1 - 0.6 * sm(cl((t - m.cancel) / Math.max(0.05, m.dur - m.cancel)));
-  if (m.pose === 'rush') k = 0.5 + 0.5 * Math.max(...m.hits.map(x => cl(1 - Math.abs(t - x.t) / 0.07)));
+  // 蓄力：出手前重心先压到后脚、上身微微后仰（0.6h 时最强，出手时归零）
+  let pre = t < h ? sm(cl(t / (0.6 * h))) * (1 - sm(cl((t - 0.6 * h) / (0.4 * h)))) : 0;
+  if (m.pose === 'rush') { k = 0.5 + 0.5 * Math.max(...m.hits.map(x => cl(1 - Math.abs(t - x.t) / 0.07))); pre = 0; }
   const o = { lead: S.lead };
   for (const key in S.R) o[key] = (S.R[key] + (S.H[key] - S.R[key]) * k) * into;
+  // 上步：前脚要往前迈得多时，出手前把前脚抬起来迈过去（不是在地上滑）
+  const step = S.H.f - S.R.f, u = cl((t - 0.1 * h) / (0.9 * h));
+  o.lift = step > 0.08 && t < h ? Math.sin(Math.PI * u) * Math.min(0.1, step * 0.45) * into : 0;
+  // 重心转移：出手时胯推到前脚上方，蓄力时退到后脚
+  o.shift = (S.H.f > 0.2 ? 0.09 * Math.min(1, k) : 0.02 * Math.min(1, k)) * into - 0.05 * pre * into;
+  o.lean -= 0.12 * pre * into;
   return o;
 }

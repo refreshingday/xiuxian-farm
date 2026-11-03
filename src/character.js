@@ -400,7 +400,7 @@ if (mxModel) {
     mxDrive.push({ mine, b, rest: b.quaternion.clone(), wp, wpInv: wp.clone().invert() });
   }
   const hips = find('Hips'), w0 = hips.getWorldPosition(new THREE.Vector3());
-  hipsRest = { b: hips, pos: hips.position.clone(), perM: hips.parent.worldToLocal(w0.clone().setY(w0.y + 1)).sub(hips.position) };
+  hipsRest = { b: hips, pos: hips.position.clone(), perM: hips.parent.worldToLocal(w0.clone().setY(w0.y + 1)).sub(hips.position), perZ: hips.parent.worldToLocal(w0.clone().setZ(w0.z + 1)).sub(hips.position) };
 }
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
 function driveMixamo() {
@@ -408,7 +408,7 @@ function driveMixamo() {
     const q = state.q[d.mine]; if (!q) continue;
     d.b.quaternion.copy(d.wpInv).multiply(q).multiply(d.wp).multiply(d.rest);
   }
-  hipsRest.b.position.copy(hipsRest.pos).addScaledVector(hipsRest.perM, state.y);
+  hipsRest.b.position.copy(hipsRest.pos).addScaledVector(hipsRest.perM, state.y).addScaledVector(hipsRest.perZ, state.z);
 }
 
 // ---- 出招下盘：两节腿的 IK。胯往下沉、脚钉在地上（前后错开、左右外开），解出大腿和膝盖角 ----
@@ -433,30 +433,35 @@ function setRot(rot) {
 }
 function stanceLegs(p, st) {
   if (!legDim) return;
-  const L = legDim.L1 + legDim.L2, drop = st.drop * L, pitch = p.rot.root?.[0] ?? 0;
+  const L = legDim.L1 + legDim.L2, drop = st.drop * L, shift = st.shift * L, pitch = p.rot.root?.[0] ?? 0;
   const [t0, k0] = solveLeg(legDim.H, 0), rot = {};
   for (const s of ['P', 'N']) {
-    const fz = (s === st.lead ? st.f : st.b) * L, out = st.w * (s === st.lead ? 0.8 : 1);
-    const [th, kn] = solveLeg((legDim.H - drop) / Math.cos(out), fz);
+    const front = s === st.lead, fz = (front ? st.f : st.b) * L - shift, out = st.w * (front ? 0.8 : 1);
+    const lift = front ? st.lift * L : 0; // 迈步的那只脚离地
+    const [th, kn] = solveLeg((legDim.H - drop - lift) / Math.cos(out), fz);
     const up = th - t0 + pitch, knee = kn - k0; // 胯整体前倾 pitch 时，大腿要多摆回来，脚掌照样贴地
     rot['l' + s + '1'] = [-up, 0, (s === 'P' ? -1 : 1) * out];
     rot['l' + s + '2'] = [knee, 0, 0];
-    rot['l' + s + '3'] = [up - knee - pitch, 0, 0];
+    rot['l' + s + '3'] = [up - knee - pitch - (lift > 0 ? lift / L * 2 : 0), 0, 0]; // 抬脚时脚尖略朝下
   }
   setRot(rot);
-  state.y = -drop;
+  state.y = -drop; state.z = shift;
+  // 转腰从胯开始：身体扭转的 30% 给胯（脚跟着碾转），腰 / 胸各分剩下的
+  const by = (p.rot.spine?.[1] ?? 0) / 0.4, r0 = p.rot.root || [0, 0, 0];
   // 上身前压：分给腰和胸。Q 版头大，压太多脸就看不见了：减半，并且和胯的前倾加起来不超过 0.3
   const lean = Math.min(st.lean * 0.5, 0.3 - pitch);
-  for (const [n, f] of [['spine', 0.45], ['chest', 0.55]]) {
-    const r = p.rot[n] || [0, 0, 0];
-    _tq.setFromEuler(_e.set(r[0] + lean * f, r[1], r[2], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq);
-  }
-  bones.root.position.y = 0.42 + state.y;
+  const set = (n, e) => { _tq.setFromEuler(_e.set(e[0], e[1], e[2], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq); };
+  set('root', [r0[0], r0[1] + by * 0.3, r0[2]]);
+  set('spine', [(p.rot.spine?.[0] ?? 0) + lean * 0.45, by * 0.3, 0]);
+  set('chest', [(p.rot.chest?.[0] ?? 0) + lean * 0.55, by * 0.4, 0]);
+  // 稳头：头往回抬，抵掉大部分前倾，眼睛一直看着前方的目标
+  set('head', [-(pitch + lean) * 0.6, -by * 0.15, 0]);
+  bones.root.position.y = 0.42 + state.y; bones.root.position.z = state.z;
 }
 
 // ---------- 播放 ----------
 let cur = 'idle', speed = 1, clock = 0;
-const state = { y: 0, q: {} }; // q：每根骨的当前旋转（四元数，相对「世界对齐」的静止姿态）
+const state = { y: 0, z: 0, q: {} }; // q：每根骨的当前旋转（四元数，相对「世界对齐」的静止姿态）
 const names = Object.keys(ANIMS);
 const loadedMx = () => MX_CLIPS.filter(c => mxClips[c[1]]);
 const allNames = () => [...names, ...(mxMixer ? loadedMx().map(c => 'mx:' + c[1]) : [])];
@@ -465,6 +470,7 @@ const _tq = new THREE.Quaternion(), _id = new THREE.Quaternion();
 // 姿态 = { y, rot: {骨: 欧拉}, q: {骨: 四元数} }。k<1 平滑过渡，k=1 直接到位（攻击要和招式时间严格对齐，不能有延迟）
 function apply(target, k) {
   state.y = k >= 1 ? target.y : lerp(state.y, target.y, k);
+  state.z = k >= 1 ? 0 : lerp(state.z, 0, k);
   const keys = new Set([...Object.keys(bones), ...Object.keys(target.rot), ...Object.keys(target.q || {}), ...Object.keys(state.q)]);
   for (const n of keys) {
     const tq = target.q?.[n] || (target.rot[n] ? _tq.setFromEuler(_e.set(target.rot[n][0], target.rot[n][1], target.rot[n][2], 'XYZ')) : _id);
@@ -472,7 +478,7 @@ function apply(target, k) {
     if (k >= 1) cu.copy(tq); else cu.slerp(tq, k);
     bones[n]?.quaternion.copy(cu);
   }
-  bones.root.position.y = 0.42 + state.y;
+  bones.root.position.y = 0.42 + state.y; bones.root.position.z = state.z;
   if (mxDrive.length) driveMixamo();
 }
 let frozen = false; // 只给截图调试用（__hero.seek），点任何按钮都会解冻
