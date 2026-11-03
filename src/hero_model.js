@@ -18,7 +18,7 @@ const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1
 
 const on = () => ENABLED && !/[?&]hero=old\b/.test(location.search);
 const sm = k => k * k * (3 - 2 * k), cl = (x, a, b) => Math.min(b, Math.max(a, x));
-const _q = new THREE.Quaternion(), _e = new THREE.Euler(), DOWN = new THREE.Vector3(0, -1, 0), _v = new THREE.Vector3();
+const _q = new THREE.Quaternion(), _e = new THREE.Euler(), DOWN = new THREE.Vector3(0, -1, 0), _v = new THREE.Vector3(), _dU = new THREE.Vector3(), _dF = new THREE.Vector3();
 
 // 在 createChibi 之后立刻调用（同步记下替身自己的网格，后面挂上去的拳光 / 符纸 / 飞剑不会被藏）；模型异步加载，好了才换
 export function attachHeroModel(c) {
@@ -31,7 +31,7 @@ export function attachHeroModel(c) {
 }
 
 async function load(c, proxyMeshes) {
-  const [tex, model] = await Promise.all([new THREE.TextureLoader().loadAsync(BASE + 'hero_basecolor.jpg'), new FBXLoader().loadAsync(BASE + 'anim/idle.fbx')]);
+  const [tex, model] = await Promise.all([new THREE.TextureLoader().loadAsync(BASE + (matchMedia('(pointer: coarse)').matches ? 'hero_basecolor_1024.jpg' : 'hero_basecolor_2048.jpg')), new FBXLoader().loadAsync(BASE + 'anim/idle.fbx')]);
   tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const mat = toon('#ffffff', { map: tex, unique: true });
   model.traverse(o => { if (o.isMesh) { o.material = mat; o.castShadow = true; o.frustumCulled = false; } });
@@ -80,9 +80,9 @@ async function load(c, proxyMeshes) {
     let y = (c.hips.position.y - 0.55) * ratio, z = 0;
     for (const A of c.arms) {
       const s = A.s < 0 ? 'N' : 'P', rest = _v.set(A.s, 0, 0);
-      const dU = DOWN.clone().applyQuaternion(A.sh.quaternion), dF = DOWN.clone().applyQuaternion(A.el.quaternion).applyQuaternion(A.sh.quaternion);
-      const qU = new THREE.Quaternion().setFromUnitVectors(rest, dU);
-      q['a' + s + '1'] = qU; q['a' + s + '2'] = qU.clone().invert().multiply(new THREE.Quaternion().setFromUnitVectors(rest, dF));
+      _dU.copy(DOWN).applyQuaternion(A.sh.quaternion); _dF.copy(DOWN).applyQuaternion(A.el.quaternion).applyQuaternion(A.sh.quaternion);
+      const qU = (q['a' + s + '1'] ||= new THREE.Quaternion()).setFromUnitVectors(rest, _dU);
+      (q['a' + s + '2'] ||= new THREE.Quaternion()).copy(qU).invert().multiply(_q.setFromUnitVectors(rest, _dF));
     }
     const neck = c.head.parent;
     const st = m && t <= m.dur ? attackStance(m, t) : null;

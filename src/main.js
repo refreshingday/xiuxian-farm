@@ -346,7 +346,17 @@ document.getElementById('questBtn').addEventListener('click', () => quests.openL
 document.getElementById('mapBtn').addEventListener('click', () => landmarks.open());
 touch.bind(document.getElementById('prompt'), tap(interact));
 touch.bind(document.getElementById('mobTime'), { hold: 'time' });
-touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
+// 手机：单指在画面上左右拖转镜头，双指捏合缩放（张开拉近、捏拢拉远）
+const pinch = new Map(); let pinchD = 0;
+const pinchDist = () => { const [a, b] = [...pinch.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+renderer.domElement.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pinch.set(e.pointerId, [e.clientX, e.clientY]); if (pinch.size === 2) pinchD = pinchDist(); });
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!pinch.has(e.pointerId)) return; pinch.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pinch.size !== 2) return; const d = pinchDist();
+  if (pinchD > 0 && d > 0) camZoomU = clamp(camZoomU * pinchD / d, 0.6, 3); pinchD = d;
+});
+for (const t of ['pointerup', 'pointercancel']) renderer.domElement.addEventListener(t, (e) => { pinch.delete(e.pointerId); if (pinch.size < 2) pinchD = 0; });
+touch.drag(renderer.domElement, (dx) => { if (pinch.size < 2) camYawT -= dx * 0.006; });
 
 const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function updateAim() {
@@ -687,8 +697,25 @@ function padTick() {
     if (b === PAD.LS) realm.toggleFly();
   }
 }
+// 手机省电画质：像素比上限 1.25、阴影图 1024；帧率掉到 40 以下就自动再降分辨率（最低 0.6），之后不再升回卡过的档
+const perf = { mobile: null, cap: 1.5, pr: 0, acc: 0, n: 0 };
+function setPR(v) { perf.pr = v; renderer.setPixelRatio(v); composer.setPixelRatio(v); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); }
+function perfTick(rdt) {
+  if (touch.on !== perf.mobile) {
+    perf.mobile = touch.on; perf.cap = Math.min(devicePixelRatio, perf.mobile ? 1.25 : 1.5); setPR(perf.cap);
+    const ms = perf.mobile ? 1024 : 2048; sun.shadow.mapSize.set(ms, ms); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+    perf.acc = perf.n = 0;
+  }
+  if (rdt > 0.5 || g.paused || gui.blocking) return; // 切后台 / 菜单里不算
+  perf.acc += rdt; perf.n++;
+  if (perf.acc < 2) return;
+  const fps = perf.n / perf.acc; perf.acc = perf.n = 0; g.fps = Math.round(fps);
+  if (fps < 40 && perf.pr > 0.6) { perf.cap = perf.pr - 0.05; setPR(Math.max(0.6, perf.pr - 0.15)); }
+  else if (fps > 56 && perf.pr < perf.cap) setPR(Math.min(perf.cap, perf.pr + 0.1));
+}
 function frame(now) {
   requestAnimationFrame(frame);
+  perfTick((now - last) / 1000);
   padTick();
   tick(Math.min(0.05, (now - last) / 1000)); last = now;
   composer.render();
@@ -1007,6 +1034,7 @@ function startPlay() {
 }
 requestAnimationFrame(frame);
 // 调试入口
+g.zoom = () => camZoomU; // 调试用
 window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
 g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) composer.render(); };
