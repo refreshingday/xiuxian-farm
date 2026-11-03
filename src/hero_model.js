@@ -10,11 +10,13 @@ import { makeFists } from './hero_fist.js';
 import { sharpenHair } from './hero_hair.js';
 import { attackStance } from './hero_attack.js';
 import { toon } from './util.js';
+import { shoulderFix, trimSleeves } from './hero_shoulder.js';
 
 const ENABLED = true;
 const HEIGHT = 1.75; // 旧 chibi 头顶约 1.84
 const BASE = 'assets/models/chibi_wuxia/';
-const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lP3: 'LeftFoot', lN1: 'RightUpLeg', lN2: 'RightLeg', lN3: 'RightFoot' };
+const _sq = {}; // 驱动用临时姿态：锁骨修正不能改到 q / last（平滑过渡要用）
+const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', sP: 'LeftShoulder', sN: 'RightShoulder', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lP3: 'LeftFoot', lN1: 'RightUpLeg', lN2: 'RightLeg', lN3: 'RightFoot' };
 
 const on = () => ENABLED && !/[?&]hero=old\b/.test(location.search);
 const sm = k => k * k * (3 - 2 * k), cl = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -35,7 +37,7 @@ async function load(c, proxyMeshes) {
   tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const mat = toon('#ffffff', { map: tex, unique: true });
   model.traverse(o => { if (o.isMesh) { o.material = mat; o.castShadow = true; o.frustumCulled = false; } });
-  model.traverse(o => { if (o.isSkinnedMesh) { makeFists(o); sharpenHair(o, tex.image); } });
+  model.traverse(o => { if (o.isSkinnedMesh) { makeFists(o); sharpenHair(o, tex.image); trimSleeves(o); } });
   model.scale.setScalar(HEIGHT / 0.9995); // FBX 里身高约 1.0
   model.updateMatrixWorld(true);
   const find = k => model.getObjectByName('mixamorig' + k) || model.getObjectByName('mixamorig:' + k);
@@ -122,7 +124,9 @@ async function load(c, proxyMeshes) {
     }
     for (const n in q) (last[n] ||= new THREE.Quaternion()).copy(q[n]);
     lastP.y = y; lastP.z = z;
-    for (const d of drive) { const r = q[d.mine]; if (r) d.b.quaternion.copy(d.wpInv).multiply(r).multiply(d.wp).multiply(d.rest); }
+    for (const n in q) (_sq[n] ||= new THREE.Quaternion()).copy(q[n]);
+    shoulderFix(_sq); // 方肩 + 袖子别插进身体（和查看器同一套）
+    for (const d of drive) { const r = _sq[d.mine]; if (r) d.b.quaternion.copy(d.wpInv).multiply(r).multiply(d.wp).multiply(d.rest); }
     hips.position.copy(hipR.pos).addScaledVector(hipR.perY, y).addScaledVector(hipR.perZ, z);
   };
 }
