@@ -25,7 +25,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 矿场暗雾光照 — 🟨 — 2026-10-27 — 平地 + 光照假象，不做地下层
 
 ## 角色 / NPC (`chibi.js` `npc.js`)
-- 角色查看器 `character.html`（`src/character.js` `src/hero_obj.js`）：导入 Tripo 的 Q 版武侠主角模型（`assets/models/chibi_wuxia/`，静态 T-pose OBJ，无骨骼）；浏览器里自动绑骨 + 分区权重，程序化动画 待机/行走/奔跑/挥手/出拳/掐诀/跳跃/打坐，马尾带物理摆动 — 🟨 — 2026-11-03 — 还没接入主游戏；已接入 Mixamo 自动绑骨的 FBX（`anim/idle.fbx`，28 骨，贴图用 hero_basecolor.jpg），新动画 FBX 放 anim/ 并加进 MX_CLIPS；程序动画现在改由 Mixamo 骨架驱动（Mixamo 自带权重，袖子不糊；无马尾骨所以马尾不摆），旧自制骨架只在 FBX 加载失败时当后备；手改握拳（`src/hero_fist.js`，加载时按手/食指骨骼权重缩短并鼓圆，烘焙进网格前的运行时处理）；补了游戏里缺的 14 个程序动画：受击/死亡/睡觉/入定/闪避/下坠/挥砍/喝水/捡东西/行礼/锤打/御剑/欢呼/踩水；游戏里全部招式（剑/拳/符 + 12 个技能）都能在查看器里播，直接调用游戏的 animCombo，时长/出手点/可衔接点与真实招式一致，带时间轴（`src/hero_attack.js`）；发梢削尖（`src/hero_hair.js`）；出招下盘（`hero_attack.js` attackStance + character.js 两节腿 IK）：按招式族沉胯屈膝、前后脚错开，蓄力时重心退后脚、上身后仰，出手前抬前脚上步，出手瞬间胯推到前脚上方压到最低、略过冲再回架势；转腰从胯开始，头往回抬稳住视线；空中招不动；查看器里还没画剑
+- 角色查看器 `character.html`（`src/character.js` `src/hero_obj.js`）：导入 Tripo 的 Q 版武侠主角模型（`assets/models/chibi_wuxia/`，静态 T-pose OBJ，无骨骼）；浏览器里自动绑骨 + 分区权重，程序化动画 待机/行走/奔跑/挥手/出拳/掐诀/跳跃/打坐，马尾带物理摆动 — 🟨 — 2026-11-03 — 已接入主游戏当主角（`src/hero_model.js`：方块 chibi 留着当看不见的替身骨架，每帧把姿势换算到 Mixamo 骨骼，出招走 attackStance + 腿 IK，替身手臂长度对齐新模型让剑 / 符 / 拳光落在手里；网址加 `?hero=old` 或把 ENABLED 改 false 就退回方块小人；村民 / NPC 还是方块）；已接入 Mixamo 自动绑骨的 FBX（`anim/idle.fbx`，28 骨，贴图用 hero_basecolor.jpg），新动画 FBX 放 anim/ 并加进 MX_CLIPS；程序动画现在改由 Mixamo 骨架驱动（Mixamo 自带权重，袖子不糊；无马尾骨所以马尾不摆），旧自制骨架只在 FBX 加载失败时当后备；手改握拳（`src/hero_fist.js`，加载时按手/食指骨骼权重缩短并鼓圆，烘焙进网格前的运行时处理）；补了游戏里缺的 14 个程序动画：受击/死亡/睡觉/入定/闪避/下坠/挥砍/喝水/捡东西/行礼/锤打/御剑/欢呼/踩水；游戏里全部招式（剑/拳/符 + 12 个技能）都能在查看器里播，直接调用游戏的 animCombo，时长/出手点/可衔接点与真实招式一致，带时间轴（`src/hero_attack.js`）；发梢削尖（`src/hero_hair.js`）；出招下盘（`hero_attack.js` attackStance + character.js 两节腿 IK）：按招式族沉胯屈膝、前后脚错开，蓄力时重心退后脚、上身后仰，出手前抬前脚上步，出手瞬间胯推到前脚上方压到最低、略过冲再回架势；转腰从胯开始，头往回抬稳住视线；空中招不动；查看器里还没画剑
 - 统一 Q 版骨架 + 动画 — 🟩 — 2026-10-27 — 所有人共用一套，只换部件/配色
 - 青竹村 21 位有名有姓的村民（`village.js` + `data/villagers.json`）：村长、退隐修士导师云鹤、铁匠、药师、商人、神秘流浪者等；每人有日程（在家 / 干活 / 茶摊 / 闲逛 / 出村）、喜好、好感（每天聊天 +10、送礼一次）、灵根（神识够才看得清）— 🟩 — 2026-10-30
 - 商店：钱记杂货（应季种子、灵石换钱）、苏氏药铺（灵草种子、丹药）、赵家铁铺（收矿石兽材）、云来茶摊；营业时间、好感折扣、同天卖超 20 个压价 — 🟩 — 2026-10-30
@@ -116,6 +116,7 @@ Update when a feature lands or changes level. Newest notes at top of each sectio
 - 松树不用贴图 — 🟩 — 2026-11-01 — 用户看过贴 foliage 的松树，纯色更好看；`M.pine` 保持 `leafPlain`，别加回去（只保留季节 / 积雪）
 
 ## 日志
+- 2026-11-03 — 主游戏主角换成 Q 版武侠模型（hero_model.js，?hero=old 退回）
 - 2026-11-03 — 角色查看器：出招加蓄力（重心后移）、上步、重心前送、过冲收势、胯带转腰、稳头
 - 2026-11-03 — 角色查看器：出招不再直挺挺站着——弓步 / 马步式沉胯屈膝，腿用 IK 钉地，出手时重心最低
 - 2026-11-03 — 角色查看器：头发发梢削尖（hero_hair.js），不再毛茸茸

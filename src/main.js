@@ -6,6 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
 import { createChibi, animChibi } from './chibi.js';
+import { attachHeroModel } from './hero_model.js';
 import { Weather } from './weather.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
 import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
@@ -161,6 +162,7 @@ const P = {
 };
 const inv = new Inventory(); g.inv = inv;
 const gui = new UI(); g.ui = gui;
+const heroModel = attachHeroModel(P.c); // 换 Q 版武侠模型（?hero=old 退回方块小人）
 P.pos = P.c.root.position;
 P.pos.set(0, 0, 4);
 scene.add(P.c.root);
@@ -786,6 +788,7 @@ function updatePlayer(dt) {
   P.c.root.position.y = st.y + P.gy; cfxRoot.position.y = P.gy;
   combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work });
   if (SW.k > 0.002) swimPose(P.c, SW.k, moveK, SW.ph, g.time);
+  if (heroModel.ready) { const rm = runner.move || combat.skill?.m, rt = runner.move ? runner.t : combat.skill?.t; heroModel.sync(P.c, dt, rm, rt); }
   if (wd > 0.03) {
     const fx0 = Math.sin(P.yaw), fz0 = Math.cos(P.yaw);
     if (SW.prev <= 0.03 && moveK > 0.2) { waterFx.splash(P.pos.x + fx0 * 0.2, WATER_Y, P.pos.z + fz0 * 0.2, 10, 2.2, 0.9, 0.04, new THREE.Vector3(fx0, 0, fz0)); waterFx.ring(P.pos.x, WATER_Y, P.pos.z, 0.15, 1.0, 0.9); waterSound('enter', 0.6); }
