@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>角色查看器 · 灵田问道</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b2433; font-family: "Microsoft YaHei", sans-serif; color: #f4efe2; }
+  canvas { display: block; }
+  #ui { position: fixed; left: 12px; top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  #ui h3 { margin: 0 0 2px; font: 22px "STKaiti","KaiTi",serif; letter-spacing: 2px; text-shadow: 0 2px 6px #000; }
+  #ui .row { display: flex; flex-wrap: wrap; gap: 5px; max-width: 760px; }
+  button { font: inherit; font-size: 13px; color: #f4efe2; background: rgba(14,22,24,.7); border: 1px solid rgba(214,182,112,.4); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  button:hover { background: rgba(232,194,90,.2); }
+  button.on { background: rgba(120,92,30,.9); border-color: #e8c25a; color: #fff6d8; }
+  #hint { position: fixed; right: 12px; bottom: 12px; font-size: 11px; opacity: .6; text-align: right; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <h3>角色查看器</h3>
+  <div class="row" id="anims"></div>
+  <div class="row" id="opts"></div>
+</div>
+<div id="hint">拖动旋转 · 滚轮缩放 · 右键平移<br>Space 切换动作</div>
+<script async src="vendor/es-module-shims.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three@0.160.0/build/three.module.min.js",
+  "three/addons/": "./vendor/three@0.160.0/jsm/"
+} }
+</script>
+<script type="module" src="src/character.js"></script>
+<script type="module" src="src/version.js"></script>
+</body>
+</html>

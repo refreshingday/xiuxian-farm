@@ -208,13 +208,23 @@
     body.mobile #skFly { right: 232px; bottom: 146px; }
   }
   @media (max-width: 700px) {
-    body.mobile #prompt { bottom: 316px; right: calc(14px + env(safe-area-inset-right)); left: auto; transform: none; }
-    body.mobile #comboName { bottom: 360px; }
-    body.mobile .hb.big { top: 200px; }
-    body.mobile #hotbar { top: 150px; left: calc(10px + env(safe-area-inset-left)); transform: none; }
-    body.mobile #qtrack { top: 196px; }
-    body.mobile #miniWrap { left: auto; right: calc(56px + env(safe-area-inset-right)); top: 236px; width: 92px; height: 92px; }
-    body.mobile #menuBtns { flex-direction: column; top: 102px; }
+    /* 竖屏手机：顶部一条（状态 | 时钟），右边一列小按钮，热键栏 / 任务 / 小地图排在下面，中间留给人物 */
+    body.mobile #status { transform: scale(.58); top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); }
+    body.mobile #clock { transform: scale(.6); min-width: 0; top: calc(6px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); }
+    body.mobile #money { top: calc(52px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); font-size: 11px; padding: 3px 7px; }
+    body.mobile #menuBtns { flex-direction: column; gap: 4px; top: calc(80px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); }
+    body.mobile #menuBtns button, body.mobile #mobTime { font-size: 14px; padding: 3px 0; width: 34px; height: 30px; text-align: center; }
+    body.mobile #hotbar { top: calc(104px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); transform: none; gap: 3px; }
+    body.mobile .hs { width: 32px; height: 32px; } body.mobile .hs .hi { font-size: 16px; } body.mobile .hs .hn { font-size: 9px; right: 2px; }
+    body.mobile #qtrack { top: calc(142px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); width: 170px; font-size: 10px; } body.mobile .qt b { font-size: 12px; }
+    body.mobile #miniWrap { left: auto; right: calc(46px + env(safe-area-inset-right)); top: calc(142px + env(safe-area-inset-top)); width: 72px; height: 72px; }
+    body.mobile #miniZ { width: 18px; height: 18px; font-size: 10px; }
+    body.mobile .hb.big { top: calc(226px + env(safe-area-inset-top)); }
+    body.mobile #skills { transform: scale(.8); transform-origin: 100% 100%; right: calc(8px + env(safe-area-inset-right)); bottom: 10px; }
+    body.mobile #prompt { bottom: 250px; right: calc(10px + env(safe-area-inset-right)); left: auto; transform: none; font-size: 13px; padding: 7px 12px; }
+    body.mobile #comboName { bottom: 290px; font-size: 18px; }
+    body.mobile #ver { font-size: 10px !important; padding: 2px 5px !important; right: auto !important; left: 50% !important; transform: translateX(-50%); bottom: 2px !important; opacity: .8; }
+    body.mobile #stick { left: calc(80px + env(safe-area-inset-left)); top: calc(100% - 96px); width: 100px; height: 100px; margin: -50px 0 0 -50px; }
   }
 </style>
 <script type="importmap">

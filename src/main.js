@@ -6,6 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
 import { createChibi, animChibi } from './chibi.js';
+import { attachHeroModel } from './hero_model.js';
 import { Weather } from './weather.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
 import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
@@ -162,6 +163,7 @@ const P = {
 };
 const inv = new Inventory(); g.inv = inv;
 const gui = new UI(); g.ui = gui;
+const heroModel = attachHeroModel(P.c); // 换 Q 版武侠模型（?hero=old 退回方块小人）
 P.pos = P.c.root.position;
 P.pos.set(0, 0, 4);
 scene.add(P.c.root);
@@ -345,7 +347,19 @@ document.getElementById('questBtn').addEventListener('click', () => quests.openL
 document.getElementById('mapBtn').addEventListener('click', () => landmarks.open());
 touch.bind(document.getElementById('prompt'), tap(interact));
 touch.bind(document.getElementById('mobTime'), { hold: 'time' });
-touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
+// 跑步：速度超过 RUN_FROM 开始从走过渡到跑，到 RUN_FULL 完全是跑（满速 6；摇杆推一点点就是走）
+const RUN_FROM = 3.5, RUN_FULL = 5.5, RUN = (v) => clamp((v - RUN_FROM) / (RUN_FULL - RUN_FROM), 0, 1);
+// 手机：单指在画面上左右拖转镜头，双指捏合缩放（张开拉近、捏拢拉远）
+const pinch = new Map(); let pinchD = 0;
+const pinchDist = () => { const [a, b] = [...pinch.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+renderer.domElement.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pinch.set(e.pointerId, [e.clientX, e.clientY]); if (pinch.size === 2) pinchD = pinchDist(); });
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!pinch.has(e.pointerId)) return; pinch.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pinch.size !== 2) return; const d = pinchDist();
+  if (pinchD > 0 && d > 0) camZoomU = clamp(camZoomU * pinchD / d, 0.6, 3); pinchD = d;
+});
+for (const t of ['pointerup', 'pointercancel']) renderer.domElement.addEventListener(t, (e) => { pinch.delete(e.pointerId); if (pinch.size < 2) pinchD = 0; });
+touch.drag(renderer.domElement, (dx) => { if (pinch.size < 2) camYawT -= dx * 0.006; });
 
 const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function updateAim() {
@@ -687,11 +701,52 @@ function padTick() {
     if (b === PAD.LS) realm.toggleFly();
   }
 }
+// 雾外剔除（画面完全不变）：雾的 far 之外只剩雾色，看不见；离玩家远也照不出能看到的影子。
+// 每帧渲染前把这种顶层物体（远处的 NPC、房子、树…）临时藏起来、也不算它们的矩阵，渲染完马上还原，游戏逻辑看不到这件事。
+const fogCull = { n: 0, hidden: [], off: /[?&]cull=0\b/.test(location.search) }; // ?cull=0 关掉对比
+const _fcB = new THREE.Box3(), _fcS = new THREE.Sphere(), _fcV = new THREE.Vector3(), _fcI = new THREE.Matrix4();
+function cullInfo(o) {
+  if (o.userData._cull !== undefined) return o.userData._cull;
+  let ok = !o.isLight && !o.isCamera, any = false;
+  o.traverse((q) => { if (q.isLight || q.isPoints || q.isSprite) ok = false; if (q.isMesh) { any = true; for (const m of [].concat(q.material)) if (!m || m.fog === false) ok = false; } });
+  let info = null;
+  if (ok && any) {
+    o.updateMatrixWorld(true); _fcB.setFromObject(o);
+    if (!_fcB.isEmpty()) { _fcB.getBoundingSphere(_fcS); if (_fcS.radius < 60) info = { c: _fcS.center.clone().applyMatrix4(_fcI.copy(o.matrixWorld).invert()), r: _fcS.radius * 1.1 }; }
+  }
+  return (o.userData._cull = info);
+}
+function fogCullBegin() {
+  const H = fogCull.hidden; H.length = 0;
+  if (!scene.fog || g.debugCam || fogCull.off) return;
+  const far = scene.fog.far, cam = camera.position, pp = P.pos, kids = scene.children;
+  for (let i = 0; i < kids.length; i++) {
+    const o = kids[i]; if (!o.visible || o === P.c.root) continue;
+    const info = cullInfo(o); if (!info) continue;
+    if (o.matrixAutoUpdate) o.updateMatrix(); // 藏起来时不会自动更新，自己算，不然走近的 NPC 永远出不来
+    _fcV.copy(info.c).applyMatrix4(o.matrix);
+    if (_fcV.distanceTo(cam) - info.r > far && Math.hypot(_fcV.x - pp.x, _fcV.z - pp.z) - info.r > 50) { o.visible = false; o.matrixWorldAutoUpdate = false; H.push(o); }
+  }
+  fogCull.n = H.length;
+}
+function fogCullEnd() { for (const o of fogCull.hidden) { o.visible = true; o.matrixWorldAutoUpdate = true; } }
+function drawFrame() { fogCullBegin(); composer.render(); fogCullEnd(); }
+
+// 帧率表（版本号旁边）
+const fpsM = { acc: 0, n: 0, el: null };
+function fpsTick(rdt) {
+  if (rdt > 1) return; fpsM.acc += rdt; fpsM.n++;
+  if (fpsM.acc < 0.5) return;
+  const f = Math.round(fpsM.n / fpsM.acc); fpsM.acc = fpsM.n = 0; g.fps = f;
+  if (!fpsM.el) { const v = document.getElementById('ver'); if (!v) return; fpsM.el = document.createElement('span'); v.append(' · ', fpsM.el); }
+  fpsM.el.textContent = f + ' fps'; fpsM.el.style.color = f >= 50 ? '#8f8' : f >= 30 ? '#ff8' : '#f88';
+}
 function frame(now) {
   requestAnimationFrame(frame);
+  fpsTick((now - last) / 1000);
   padTick();
   tick(Math.min(0.05, (now - last) / 1000)); last = now;
-  composer.render();
+  drawFrame();
 }
 function tick(dt) {
   // 菜单 / 对话 / 标题画面：暂停（GDD：只在菜单和对话时暂停）
@@ -787,8 +842,9 @@ function updatePlayer(dt) {
   // 画的时候加上地面高度（台地）；平地起伏直接贴地，飞过崖时平滑追
   const gy = groundY(P.pos.x, P.pos.z); P.gy = P.gy === undefined || Math.abs(gy - P.gy) < 0.08 ? gy : lerp(P.gy, gy, 1 - Math.exp(-12 * dt));
   P.c.root.position.y = st.y + P.gy; cfxRoot.position.y = P.gy;
-  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work });
+  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work, rate: 16, run: realm.fly ? 0 : RUN(Math.hypot(vx, vz)) * (1 - SW.k) });
   if (SW.k > 0.002) swimPose(P.c, SW.k, moveK, SW.ph, g.time);
+  if (heroModel.ready) { const rm = runner.move || combat.skill?.m, rt = runner.move ? runner.t : combat.skill?.t; heroModel.sync(P.c, dt, rm, rt); }
   if (wd > 0.03) {
     const fx0 = Math.sin(P.yaw), fz0 = Math.cos(P.yaw);
     if (SW.prev <= 0.03 && moveK > 0.2) { waterFx.splash(P.pos.x + fx0 * 0.2, WATER_Y, P.pos.z + fz0 * 0.2, 10, 2.2, 0.9, 0.04, new THREE.Vector3(fx0, 0, fz0)); waterFx.ring(P.pos.x, WATER_Y, P.pos.z, 0.15, 1.0, 0.9); waterSound('enter', 0.6); }
@@ -1007,7 +1063,9 @@ function startPlay() {
 }
 requestAnimationFrame(frame);
 // 调试入口
+g.zoom = () => camZoomU; // 调试用
 window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
-g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) composer.render(); };
+g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) drawFrame(); };
+g.fogCull = fogCull;
 export { flat, glow, mesh };

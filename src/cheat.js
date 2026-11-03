@@ -17,6 +17,9 @@ export class Cheat {
     const set = (o) => { open = o; this.body.style.display = o ? '' : 'none'; this.min.textContent = o ? '—' : '＋'; try { localStorage.setItem('cheatOpen', o ? '1' : '0'); } catch (e) {} };
     d.querySelector('#chHead').addEventListener('click', () => set(!open));
     addEventListener('keydown', (e) => { if (e.code === 'Backquote') set(!open); });
+    // 手机屏幕小：每次进游戏都先收起，只留标题条，要用再点开
+    const phone = /[?&]mobile=1\b/.test(location.search) || (!/[?&]mobile=0\b/.test(location.search) && matchMedia('(pointer: coarse)').matches);
+    if (phone) { open = false; d.style.bottom = '6px'; d.style.left = '6px'; this.body.style.maxHeight = '40vh'; }
     set(open);
     const add = (label, fn) => {
       const b = document.createElement('button');
