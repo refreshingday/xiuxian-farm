@@ -20,7 +20,7 @@ const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1
 
 const on = () => ENABLED && !/[?&]hero=old\b/.test(location.search);
 const sm = k => k * k * (3 - 2 * k), cl = (x, a, b) => Math.min(b, Math.max(a, x));
-const _q = new THREE.Quaternion(), _e = new THREE.Euler(), DOWN = new THREE.Vector3(0, -1, 0), _v = new THREE.Vector3(), _dU = new THREE.Vector3(), _dF = new THREE.Vector3();
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(), DOWN = new THREE.Vector3(0, -1, 0), _v = new THREE.Vector3(), _dU = new THREE.Vector3(), _dF = new THREE.Vector3();
 
 // 在 createChibi 之后立刻调用（同步记下替身自己的网格，后面挂上去的拳光 / 符纸 / 飞剑不会被藏）；模型异步加载，好了才换
 export function attachHeroModel(c) {
@@ -61,6 +61,8 @@ async function load(c, proxyMeshes) {
     A.sh.position.set(a.x, a.y - 0.55, a.z); // 替身的 body 原点在胯（0.55）
     A.el.position.y = -a.distanceTo(e);
     A.hand.position.y = -(e.distanceTo(h) + 0.05);
+    A.off = a.clone().sub(P(find(side + 'Shoulder'))); // 锁骨根 → 肩关节，方肩时替身肩位跟着挪
+    A.ov = { p: new THREE.Vector3(), q: new THREE.Quaternion(), op: new THREE.Vector3(), oq: new THREE.Quaternion(), on: false };
   }
   for (const m of proxyMeshes) m.visible = false;
   c.root.add(model);
@@ -77,6 +79,10 @@ async function load(c, proxyMeshes) {
   const last = {}, lastP = { y: 0, z: 0 }; let wasSt = false, trans = 0; // 进出出招架势时 0.15 秒过渡，不要一帧跳过去
 
   return function sync(c, dt, m, t) {
+    // 上一帧为了让剑跟手而改过替身手臂；动画没重新设置的分量还回去
+    for (const A of c.arms) { const o = A.ov; if (!o.on) continue; o.on = false;
+      if (A.sh.position.x === o.p.x) A.sh.position.x = o.op.x; if (A.sh.position.y === o.p.y) A.sh.position.y = o.op.y; if (A.sh.position.z === o.p.z) A.sh.position.z = o.op.z;
+      if (A.sh.quaternion.equals(o.q)) A.sh.quaternion.copy(o.oq); }
     // ---- 上身：直接照替身 ----
     const pitch = c.rig.rotation.x + c.hips.rotation.x, by = c.body.rotation.y, bx = c.body.rotation.x;
     let y = (c.hips.position.y - 0.55) * ratio, z = 0;
@@ -126,6 +132,14 @@ async function load(c, proxyMeshes) {
     lastP.y = y; lastP.z = z;
     for (const n in q) (_sq[n] ||= new THREE.Quaternion()).copy(q[n]);
     shoulderFix(_sq); // 方肩 + 袖子别插进身体（和查看器同一套）
+    // 替身手臂也跟着改（剑 / 手上特效挂在替身手上）：肩位按锁骨抬起挪，整条手臂转同样的角度
+    for (const A of c.arms) {
+      const s = A.s < 0 ? 'N' : 'P', C = _sq['s' + s], a0 = q['a' + s + '1'], o = A.ov; if (!C || !a0) continue;
+      o.op.copy(A.sh.position); o.oq.copy(A.sh.quaternion);
+      A.sh.position.add(_dF.copy(A.off).applyQuaternion(C).sub(A.off));
+      A.sh.quaternion.premultiply(_q.copy(C).multiply(_sq['a' + s + '1']).multiply(_q2.copy(a0).invert())); // 整条手臂实际转了多少（锁骨 × 新上臂 × 旧上臂⁻¹）
+      o.p.copy(A.sh.position); o.q.copy(A.sh.quaternion); o.on = true;
+    }
     for (const d of drive) { const r = _sq[d.mine]; if (r) d.b.quaternion.copy(d.wpInv).multiply(r).multiply(d.wp).multiply(d.rest); }
     hips.position.copy(hipR.pos).addScaledVector(hipR.perY, y).addScaledVector(hipR.perZ, z);
   };
