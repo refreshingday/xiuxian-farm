@@ -6,7 +6,8 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { makeFists } from './hero_fist.js';
 import { sharpenHair } from './hero_hair.js';
 import { attackList, attackPose, attackStance } from './hero_attack.js';
-import { shoulderFix, SHOULDER } from './hero_shoulder.js';
+import { shoulderFix, SHOULDER, trimSleeves, SLEEVE } from './hero_shoulder.js';
+let sleeveTrim = null;
 import { parseOBJ } from './hero_obj.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -357,7 +358,7 @@ try {
   const loader = new FBXLoader(), base = 'assets/models/chibi_wuxia/anim/';
   const first = await loader.loadAsync(base + MX_CLIPS[0][1]);
   first.traverse(o => { if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }); o.frustumCulled = false; } });
-  first.traverse(o => { if (o.isSkinnedMesh) { makeFists(o); window.__hairMoved = sharpenHair(o, tex.image); } });
+  first.traverse(o => { if (o.isSkinnedMesh) { makeFists(o); window.__hairMoved = sharpenHair(o, tex.image); sleeveTrim = trimSleeves(o); } });
   first.scale.setScalar(1.6 / 0.9995); // FBX 里身高约 1.0，统一成 1.6
   mxModel = first; mxRoot.add(first); mxMixer = new THREE.AnimationMixer(first);
   mxClips[MX_CLIPS[0][1]] = first.animations[0];
@@ -540,6 +541,7 @@ toggle('自动旋转', 'spin');
 toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !mxRoot.visible; if (mxHelper) mxHelper.visible = v && mxRoot.visible; });
 toggle('线框', 'wire', v => { mesh.material.wireframe = v; });
 opts.sh = true; toggle('方肩·袖', 'sh', v => { SHOULDER.on = v; }); optsEl.lastChild.classList.add('on'); // 锁骨修正开关，对比用
+opts.sl = true; toggle('短袖垂', 'sl', v => sleeveTrim?.set(v)); optsEl.lastChild.classList.add('on');
 const sp = document.createElement('button'); sp.textContent = '速度 ×1';
 sp.onclick = () => { speed = speed >= 2 ? 0.25 : speed * 2; sp.textContent = '速度 ×' + speed; };
 optsEl.append(sp);
@@ -547,7 +549,7 @@ addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault();
 setAnim('idle');
 const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:') || atkMap[q])) setAnim(q);
 
-window.__hero = { SHOULDER, ATKS: () => ATKS, bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
+window.__hero = { SHOULDER, SLEEVE, sleeve: () => sleeveTrim, ATKS: () => ATKS, bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 let last = performance.now();
 renderer.setAnimationLoop(now => {

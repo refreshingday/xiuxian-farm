@@ -29,3 +29,35 @@ export function shoulderFix(q, o = SHOULDER) {
   }
   return q;
 }
+
+// 袖子缩短：宽袖在 T 字静止姿态里往下垂的那一片（手放下来就正好朝着身体），往手臂轴线收。
+// 只动「轴线下方超过 r0」的部分：d → r0 + (d − r0) × k；肩窝那头渐入，不扯到腋下。按权重混合，袖口 / 手不动形。
+// 在模型的绑定空间里改顶点（加载时做一次）。返回 set(on)，查看器拿来开关对比。
+export const SLEEVE = { k: 0.3, r0: 0.04, fade: 0.04 };
+export function trimSleeves(mesh, o = SLEEVE) {
+  const sk = mesh.skeleton, g = mesh.geometry, pos = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+  const names = sk.bones.map(b => b.name.replace(/^mixamorig:?/, ''));
+  const bp = sk.boneInverses.map(bi => new THREE.Vector3().setFromMatrixPosition(bi.clone().invert()));
+  const orig = pos.array.slice(), out = pos.array.slice();
+  const inv = mesh.bindMatrix.clone().invert(), v = new THREE.Vector3(), u = new THREE.Vector3(), c = new THREE.Vector3();
+  let moved = 0;
+  for (const side of ['Left', 'Right']) {
+    const ids = new Set(['Arm', 'ForeArm'].map(n => names.indexOf(side + n)));
+    const A = bp[names.indexOf(side + 'Arm')], H = bp[names.indexOf(side + 'Hand')]; if (!A || !H) continue;
+    u.subVectors(H, A); const len = u.length(); u.normalize();
+    for (let i = 0; i < pos.count; i++) {
+      let w = 0; for (let k = 0; k < 4; k++) if (ids.has(si.getComponent(i, k))) w += sw.getComponent(i, k);
+      if (w < 0.05) continue;
+      v.fromBufferAttribute(pos, i).applyMatrix4(mesh.bindMatrix);
+      const t = v.clone().sub(A).dot(u); if (t <= 0 || t >= len) continue;
+      c.copy(A).addScaledVector(u, t);
+      const d = c.y - v.y; if (d <= o.r0) continue; // 只管轴线下面垂出来的
+      const fade = Math.min(1, t / (len * o.fade / 0.18 + 1e-6)) * Math.min(1, w); // 肩窝那头渐入
+      v.y = c.y - (o.r0 + (d - o.r0) * (1 - (1 - o.k) * fade));
+      v.applyMatrix4(inv); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; moved++;
+    }
+  }
+  const set = on => { pos.array.set(on ? out : orig); pos.needsUpdate = true; g.computeBoundingSphere(); };
+  set(true);
+  return { moved, set };
+}
