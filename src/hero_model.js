@@ -88,12 +88,13 @@ async function load(c, proxyMeshes) {
     const st = m && t <= m.dur ? attackStance(m, t) : null;
     if (!st) {
       rot('root', pitch, c.rig.rotation.y, c.rig.rotation.z);
-      rot('spine', bx * 0.5, by * 0.4, 0); rot('chest', bx * 0.5, by * 0.6, 0);
-      rot('head', neck.rotation.x + c.head.rotation.x, c.head.rotation.y, 0);
+      const rk = c.runK || 0; // 跑步：胸口再前倾一点，头抬回来看前面
+      rot('spine', bx * 0.5 + rk * 0.1, by * 0.4, 0); rot('chest', bx * 0.5 + rk * 0.06, by * 0.6, 0);
+      rot('head', neck.rotation.x + c.head.rotation.x - rk * 0.28, c.head.rotation.y, 0);
       // 腿：替身只有胯关节。往前摆的那条腿弯膝（看摆动速度），收腿 / 抬腿时也弯，脚掌放平
       c.legs.forEach((L, i) => {
         const up = -L.rotation.x, vel = dt > 0 ? (up - prevUp[i]) / dt : 0; prevUp[i] = up;
-        const want = Math.max(cl(vel * 0.12, 0, 1.1), Math.max(0, up) * 0.7) + 0.06;
+        const want = Math.max(cl(vel * 0.12, 0, 1.1 + 0.5 * rk), Math.max(0, up) * (0.7 + 0.5 * rk)) + 0.06 + 0.1 * rk; // 跑步膝盖抬更高
         knee[i] += (want - knee[i]) * (1 - Math.exp(-26 * dt));
         const s = i === 0 ? 'N' : 'P', out = L.rotation.z * (i === 0 ? 1 : -1);
         rot('l' + s + '1', -up, 0, (s === 'P' ? -1 : 1) * out); rot('l' + s + '2', knee[i], 0, 0); rot('l' + s + '3', (up - knee[i]) * 0.8, 0, 0);
