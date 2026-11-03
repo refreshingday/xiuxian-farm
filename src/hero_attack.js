@@ -47,3 +47,41 @@ export function attackPose(m, t, dt) {
   p.legs = { upN: -c.legs[0].rotation.x, upP: -c.legs[1].rotation.x };
   return p;
 }
+
+// ---- 下盘：出招时屈膝沉胯，不再直挺挺地站着 ----
+// 参考武术五步拳的弓步 / 马步，以及动作游戏「蓄力 → 落重心 → 收势」的节奏：
+// 起手先沉到架势（ready），出手瞬间迈前脚、胯沉到最低、上身前压（hit），出手后回一半到架势。
+// drop = 胯下沉（腿长的比例），f / b = 前脚 / 后脚前后位置（腿长比例），w = 两腿外开角，lean = 上身前压，lead = 哪只脚在前（N 右 / P 左）
+const ST = {
+  swing:  { lead: 'N', R: { drop: 0.10, f: 0.16, b: -0.14, w: 0.10, lean: 0.06 }, H: { drop: 0.17, f: 0.30, b: -0.20, w: 0.12, lean: 0.22 } },
+  over:   { lead: 'N', R: { drop: 0.10, f: 0.16, b: -0.14, w: 0.10, lean: 0.00 }, H: { drop: 0.24, f: 0.32, b: -0.22, w: 0.14, lean: 0.35 } },
+  U:      { lead: 'N', R: { drop: 0.16, f: 0.18, b: -0.16, w: 0.12, lean: 0.15 }, H: { drop: 0.07, f: 0.24, b: -0.16, w: 0.10, lean: -0.10 } },
+  thrust: { lead: 'N', R: { drop: 0.12, f: 0.20, b: -0.16, w: 0.10, lean: 0.08 }, H: { drop: 0.22, f: 0.42, b: -0.26, w: 0.08, lean: 0.30 } },
+  spin:   { lead: 'N', R: { drop: 0.14, f: 0.04, b: -0.04, w: 0.32, lean: 0.05 }, H: { drop: 0.18, f: 0.04, b: -0.04, w: 0.36, lean: 0.08 } },
+  jab:    { lead: 'P', R: { drop: 0.09, f: 0.16, b: -0.16, w: 0.12, lean: 0.06 }, H: { drop: 0.12, f: 0.22, b: -0.18, w: 0.12, lean: 0.16 } },
+  crush:  { lead: 'P', R: { drop: 0.12, f: 0.18, b: -0.16, w: 0.12, lean: 0.06 }, H: { drop: 0.22, f: 0.40, b: -0.26, w: 0.10, lean: 0.28 } },
+  hook:   { lead: 'P', R: { drop: 0.18, f: 0.16, b: -0.16, w: 0.14, lean: 0.18 }, H: { drop: 0.04, f: 0.18, b: -0.14, w: 0.10, lean: -0.12 } },
+  slam:   { lead: 'P', R: { drop: 0.04, f: 0.06, b: -0.06, w: 0.18, lean: -0.08 }, H: { drop: 0.21, f: 0.08, b: -0.08, w: 0.32, lean: 0.30 } },
+  bash:   { lead: 'P', R: { drop: 0.12, f: 0.18, b: -0.16, w: 0.16, lean: 0.06 }, H: { drop: 0.22, f: 0.36, b: -0.24, w: 0.18, lean: 0.12 } },
+  brace:  { lead: 'P', R: { drop: 0.08, f: 0.04, b: -0.04, w: 0.24, lean: 0.00 }, H: { drop: 0.24, f: 0.04, b: -0.04, w: 0.38, lean: 0.06 } },
+  throw:  { lead: 'P', R: { drop: 0.10, f: 0.16, b: -0.14, w: 0.10, lean: -0.05 }, H: { drop: 0.15, f: 0.30, b: -0.18, w: 0.10, lean: 0.20 } },
+  cast:   { lead: 'P', R: { drop: 0.10, f: 0.06, b: -0.06, w: 0.22, lean: 0.00 }, H: { drop: 0.18, f: 0.06, b: -0.06, w: 0.30, lean: 0.12 } },
+  raise:  { lead: 'P', R: { drop: 0.10, f: 0.10, b: -0.10, w: 0.18, lean: 0.00 }, H: { drop: 0.05, f: 0.10, b: -0.10, w: 0.16, lean: -0.10 } },
+  snap:   { lead: 'P', R: { drop: 0.10, f: 0.14, b: -0.12, w: 0.14, lean: 0.00 }, H: { drop: 0.14, f: 0.20, b: -0.14, w: 0.14, lean: 0.08 } },
+};
+const FAM = { R: 'swing', L: 'swing', U: 'U', over: 'over', thrust: 'thrust', dash: 'thrust', spin: 'spin', jabL: 'jab', jabR: 'jab', rush: 'jab', crush: 'crush', hook: 'hook', slam: 'slam', bash: 'bash', brace: 'brace', throw: 'throw', cast: 'cast', raise: 'raise', snap: 'snap' };
+const sm = k => k * k * (3 - 2 * k), cl = k => Math.min(1, Math.max(0, k));
+// 返回 null = 空中招 / 跳劈（腿交给原来的收腿姿势）
+export function attackStance(m, t) {
+  if (m.air || m.pose === 'leap') return null;
+  const S = ST[FAM[m.pose]]; if (!S) return null;
+  const h = m.hits[0]?.t ?? m.lunge?.[1] ?? 0.2;
+  // 起手 0.07 秒沉进架势；到出手点压到最低；出手后 0.2 秒回一半；收招段（cancel → dur）再回到架势
+  const into = sm(cl(t / 0.07));
+  let k = t < h ? sm(cl(t / h)) ** 1.6 : 1 - 0.5 * sm(cl((t - h) / 0.2));
+  if (t > m.cancel) k *= 1 - 0.6 * sm(cl((t - m.cancel) / Math.max(0.05, m.dur - m.cancel)));
+  if (m.pose === 'rush') k = 0.5 + 0.5 * Math.max(...m.hits.map(x => cl(1 - Math.abs(t - x.t) / 0.07)));
+  const o = { lead: S.lead };
+  for (const key in S.R) o[key] = (S.R[key] + (S.H[key] - S.R[key]) * k) * into;
+  return o;
+}

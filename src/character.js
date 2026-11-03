@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { makeFists } from './hero_fist.js';
 import { sharpenHair } from './hero_hair.js';
-import { attackList, attackPose } from './hero_attack.js';
+import { attackList, attackPose, attackStance } from './hero_attack.js';
 import { parseOBJ } from './hero_obj.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -411,6 +411,49 @@ function driveMixamo() {
   hipsRest.b.position.copy(hipsRest.pos).addScaledVector(hipsRest.perM, state.y);
 }
 
+// ---- 出招下盘：两节腿的 IK。胯往下沉、脚钉在地上（前后错开、左右外开），解出大腿和膝盖角 ----
+// 腿长从骨架实测（Mixamo 优先），角度减去静止姿态的解，保证 drop=0 时就是原来的站姿
+const legDim = (() => {
+  const find = k => mxModel?.getObjectByName('mixamorig' + k) || mxModel?.getObjectByName('mixamorig:' + k);
+  const hipB = find('LeftUpLeg') || bones.lP1, kneeB = find('LeftLeg') || bones.lP2, ankB = find('LeftFoot') || bones.lP3;
+  if (!hipB || !kneeB || !ankB) return null;
+  (mxModel || hero).updateMatrixWorld(true);
+  const P = o => o.getWorldPosition(new THREE.Vector3());
+  const a = P(hipB), b = P(kneeB), c = P(ankB);
+  return { L1: a.distanceTo(b), L2: b.distanceTo(c), H: a.y - c.y };
+})();
+function solveLeg(Dy, fz) { // 返回 [大腿前摆角, 膝盖弯曲角]
+  const { L1, L2 } = legDim, D = Math.min(L1 + L2 - 1e-4, Math.hypot(Dy, fz));
+  const knee = Math.PI - Math.acos(Math.min(1, (L1 * L1 + L2 * L2 - D * D) / (2 * L1 * L2)));
+  const thigh = Math.atan2(fz, Dy) + Math.acos(Math.min(1, (L1 * L1 + D * D - L2 * L2) / (2 * L1 * D)));
+  return [thigh, knee];
+}
+function setRot(rot) {
+  for (const n in rot) { _tq.setFromEuler(_e.set(...rot[n], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq); }
+}
+function stanceLegs(p, st) {
+  if (!legDim) return;
+  const L = legDim.L1 + legDim.L2, drop = st.drop * L, pitch = p.rot.root?.[0] ?? 0;
+  const [t0, k0] = solveLeg(legDim.H, 0), rot = {};
+  for (const s of ['P', 'N']) {
+    const fz = (s === st.lead ? st.f : st.b) * L, out = st.w * (s === st.lead ? 0.8 : 1);
+    const [th, kn] = solveLeg((legDim.H - drop) / Math.cos(out), fz);
+    const up = th - t0 + pitch, knee = kn - k0; // 胯整体前倾 pitch 时，大腿要多摆回来，脚掌照样贴地
+    rot['l' + s + '1'] = [-up, 0, (s === 'P' ? -1 : 1) * out];
+    rot['l' + s + '2'] = [knee, 0, 0];
+    rot['l' + s + '3'] = [up - knee - pitch, 0, 0];
+  }
+  setRot(rot);
+  state.y = -drop;
+  // 上身前压：分给腰和胸。Q 版头大，压太多脸就看不见了：减半，并且和胯的前倾加起来不超过 0.3
+  const lean = Math.min(st.lean * 0.5, 0.3 - pitch);
+  for (const [n, f] of [['spine', 0.45], ['chest', 0.55]]) {
+    const r = p.rot[n] || [0, 0, 0];
+    _tq.setFromEuler(_e.set(r[0] + lean * f, r[1], r[2], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq);
+  }
+  bones.root.position.y = 0.42 + state.y;
+}
+
 // ---------- 播放 ----------
 let cur = 'idle', speed = 1, clock = 0;
 const state = { y: 0, q: {} }; // q：每根骨的当前旋转（四元数，相对「世界对齐」的静止姿态）
@@ -506,10 +549,11 @@ renderer.setAnimationLoop(now => {
     if (atk.t > m.dur + 0.6) atk.t = 0; // 出完招停 0.6 秒再重放
     const p = atk.t <= m.dur ? attackPose(m, atk.t, dt * speed) : null;
     apply(p || ANIMS.idle.fn(clock), p ? 1 : 1 - Math.exp(-14 * dt));
-    if (p && p.legs) { // 腿：和普通姿势一样走 legs()，保证脚掌跟着摆平
+    const st = p && attackStance(m, atk.t);
+    if (st) { stanceLegs(p, st); if (mxDrive.length) driveMixamo(); }
+    else if (p && p.legs) { // 空中招：腿照游戏的收腿姿势
       const q = { rot: {} }; legs(q, { upN: p.legs.upN, upP: p.legs.upP, kneeN: Math.max(0, p.legs.upN) * 0.5, kneeP: Math.max(0, p.legs.upP) * 0.5 });
-      for (const n in q.rot) { _tq.setFromEuler(_e.set(...q.rot[n], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq); }
-      if (mxDrive.length) driveMixamo();
+      setRot(q.rot); if (mxDrive.length) driveMixamo();
     }
     document.getElementById('tlfill').style.width = Math.min(1, atk.t / m.dur) * 100 + '%';
     tlTxt.textContent = `${atkMap[cur].kit}·${m.name}  ${atk.t.toFixed(2)} / ${m.dur.toFixed(2)}s   出手 ${m.hits.map(h => h.t.toFixed(2)).join(' ')}s   可衔接 ${m.cancel.toFixed(2)}s`;
