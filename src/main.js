@@ -738,6 +738,7 @@ function fogCullBegin() {
   fogCull.n = H.length;
 }
 function fogCullEnd() { for (const o of fogCull.hidden) { o.visible = true; o.matrixWorldAutoUpdate = true; } }
+let mirrorScan = 0;
 function mirrorPass() {
   const ok = !g.title && !P.dead && P.c.root.visible;
   const near = ok && weatherU.ice.value < 0.5 && Math.hypot(P.pos.x - POND.x, P.pos.z - POND.z) < POND.r + 12;
@@ -746,6 +747,8 @@ function mirrorPass() {
   waterFxU.on.value = near ? 1 : 0; waterFxU.pud.value = pud ? 1 : 0;
   if (!near && !pud) return;
   P.c.root.traverse(o => o.layers.enable(1));
+  // 周围会投影的东西（树、房子、墙、石头、NPC）也进倒影，不然水洼只照天空、看着像一块白斑。地面本身、描边不进。半秒刷新一次（新刷出来的 NPC / 怪）
+  if (!(mirrorScan++ % 30)) scene.traverse(o => { if (o.isMesh && o.castShadow && !o.userData.isLine && !o.userData.ground) o.layers.enable(1); });
   hemi.layers.enable(1); sun.layers.enable(1); for (const l of pool) l.layers.enable(1);
   const lvl = near ? 0.03 : (P.gy || 0) + 0.01; waterFxU.pudY.value = lvl;
   mirror.render(scene, lvl);

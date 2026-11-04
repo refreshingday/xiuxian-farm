@@ -887,7 +887,7 @@ export class World {
     const usePNG = PNG.grass_ground && PNG.dirt_path && PNG.stone_plaza;
     const gtex = usePNG ? groundMaps(ox, oz) : paintGround(ox, oz);
     const gmat = usePNG ? groundMat(ox, oz, gtex, terr ? terrainRock(ox, oz) : null) : toon('#ffffff', { map: gtex, unique: true });
-    group.add(mesh(gg, gmat, { cast: terr, recv: true }));
+    const gm = mesh(gg, gmat, { cast: terr, recv: true }); gm.userData.ground = true; group.add(gm); // ground：水洼倒影不照地面自己（main.js mirrorPass）
 
     // 程序填充：树、石、草、花、野生灵草
     const trees = [], blooms = [], pines = [], trunks = [], rocks = [], grass = [], flowers = [], bushes = [], cols = [], herbs = [], tombs = [];
