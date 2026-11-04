@@ -113,6 +113,7 @@ export function createChibi(a) {
     sword.add(mesh(g.blade, M('#e4edf5', { emissive: '#7fd8ff', ei: 0.25 })));
     sword.add(mesh(g.guard, M('#c9a24a')));
     sword.add(mesh(g.grip, M('#5a3a2a')));
+    sword.children.forEach((m) => { m.rotation.y = Math.PI / 2; }); // 刃口朝上下（不是平躺着）
     sword.rotation.x = 1.7;
     arms[0].hand.add(sword);
   }
