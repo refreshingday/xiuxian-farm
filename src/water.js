@@ -113,12 +113,13 @@ export function makeLabWater(area) {
             float amp = 0.16 + 0.3 * fk;
             vec3 N = normalize(vec3(-(wg.x * amp + rp.x * 0.35), 1.0, -(wg.y * amp + rp.y * 0.35)));
             vec3 V = normalize(cameraPosition - vW), R = reflect(-V, N);
-            float fr = 0.5 + 0.5 * pow(1.0 - max(dot(N, V), 0.0), 3.0), inner = smoothstep(0.03, 0.2, d);
-            c = mix(c, skyRefl(R), fr * 0.9 * inner * (1.0 - 0.45 * fk));
+            // 菲涅尔：俯视时主要看见水里的颜色和纹路，只有斜着看才反光（原来俯视也有 50% 反射，整片泛白）
+            float fr = 0.12 + 0.88 * pow(1.0 - max(dot(N, V), 0.0), 4.0), inner = smoothstep(0.03, 0.2, d);
+            c = mix(c, skyRefl(R) * 0.9, fr * 0.8 * inner * (1.0 - 0.45 * fk));
             if (uOn * uChar > 0.5) {
               vec4 pr = texM * vec4(vW, 1.0);
               vec4 rc = texture2D(tRef, pr.xy / pr.w + clamp(N.xz * 0.12, -0.05, 0.05));
-              c = mix(c, rc.rgb, rc.a * inner * (0.55 + 0.4 * fr));
+              c = mix(c, rc.rgb * 0.85, rc.a * inner * (0.4 + 0.4 * fr));
             }
             c += rp.z * 0.18 * inner;
             a = max(a, mix(a, 0.95, inner));
