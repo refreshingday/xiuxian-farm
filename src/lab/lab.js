@@ -103,7 +103,7 @@ sky.renderOrder = -1;
 scene.add(sky);
 // 雨天水面 / 湿地实验：共享 uniform（水面着色器里的假云倒影、角色倒影贴图、雨点涟漪、闪电打亮）
 const mirror = createMirror(renderer, camera);
-const MIR = { tRef: { value: mirror.rt.texture }, texM: { value: mirror.texM }, on: { value: 0 }, flash: { value: 0 }, rain: { value: 0 }, skyB: { value: new THREE.Color() } };
+const MIR = { tRef: { value: mirror.rt.texture }, texM: { value: mirror.texM }, on: { value: 0 }, flash: { value: 0 }, rain: { value: 0 }, skyB: { value: new THREE.Color() }, lit: { value: new THREE.Color(1, 1, 1) } };
 const WET_U = { value: 0 };
 mirror.resize(innerWidth, innerHeight, Math.min(devicePixelRatio, 2));
 
@@ -297,13 +297,13 @@ function makeWater(W, hAt, area, masked = false) {
       tDepth: { value: dt }, uTime: U.time, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: sz }, uMask: { value: masked ? 1 : 0 }, uMode: { value: mode },
       cShallow: { value: new THREE.Color(W.shallow) }, cDeep: { value: new THREE.Color(W.deep) }, cFoam: { value: new THREE.Color(W.foam) },
       uSky: { value: new THREE.Color() }, uMirEn: { value: W.mirror && !masked ? 1 : 0 }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
-    }), { tRef: MIR.tRef, texM: MIR.texM, uOn: MIR.on, uFlash: MIR.flash, uRain: MIR.rain, uSkyB: MIR.skyB }),
+    }), { tRef: MIR.tRef, texM: MIR.texM, uOn: MIR.on, uFlash: MIR.flash, uRain: MIR.rain, uSkyB: MIR.skyB, uLit: MIR.lit }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky, uSkyB; uniform vec2 uFlow;
+    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky, uSkyB, uLit; uniform vec2 uFlow;
       uniform sampler2D tRef; uniform mat4 texM; uniform float uMirEn, uOn, uFlash, uRain;
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
@@ -421,6 +421,7 @@ function makeWater(W, hAt, area, masked = false) {
           c = mix(c, vec3(0.1, 0.04, 0.04), smoothstep(0.05, 0.0, d) * 0.8);
           a = 1.0;
         }
+        if (uMode < 1.5) c *= uLit; // 水面本身不发光：跟着环境光（白天 / 黄昏 / 夜里）变亮变暗
         gl_FragColor = vec4(c, a);
         #include <fog_fragment>
       }`,
@@ -904,6 +905,7 @@ function applyLight() {
   grade.uniforms.uWarm.value = L.warm ?? 1;
   for (const m of waterMats) m.uniforms.uSky.value.copy(skyU.top.value);
   MIR.skyB.value.copy(skyU.bottom.value);
+  MIR.lit.value.setRGB(1, 1, 1).lerp(_b.set(L.dark ? '#2a3050' : '#2c3a66'), nightK * 0.85).lerp(_b.set('#ffb890'), dusk * 0.35);
   $('#timeV').textContent = `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.floor((t % 1) * 60)).padStart(2, '0')}`;
 }
 
