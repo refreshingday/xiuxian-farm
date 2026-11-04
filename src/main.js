@@ -878,7 +878,7 @@ function updatePlayer(dt) {
     if (SW.ringT < 0) { SW.ringT = SW.on ? (moveK > 0.3 ? 0.5 : 0.8) : moveK > 0.3 ? 0.4 : 1.1; const r0 = SW.on ? 0.35 : 0.22 + clamp(wd, 0, 0.6) * 0.25; waterFx.ring(P.pos.x, WATER_Y, P.pos.z, r0, r0 + (SW.on ? 1.3 : 1.0), SW.on ? 1.3 : 1.2, SW.on ? 0.65 : 0.55); }
   }
   SW.prev = wd;
-  SW.sunk = st.y < 0.3 ? SW.k * (0.5 + Math.sin(g.time * 2.2) * 0.03) + clamp(wd / SWIM_IN, 0, 1) * 0.1 * (1 - SW.k) : 0;
+  SW.sunk = st.y < 0.3 ? SW.k * (lerp(0.78, 0.72, moveK) + Math.sin(g.time * 2.2) * 0.03) + clamp(wd / SWIM_IN, 0, 1) * 0.1 * (1 - SW.k) : 0;
   P.pos.y -= SW.sunk;
   waterFx.update(dt);
   P.c.root.visible = !P.dead && !(P.iframe > 0 && P.iframe < 0.55 && Math.floor(g.time * 20) % 2 === 0);
