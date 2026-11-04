@@ -385,17 +385,19 @@ function makeWater(W, hAt, area, masked = false) {
             vec3 rp = ripples(p) * uRain;
             // 波纹法线：静水是慢慢晃的小波；溪流里沿流向拉长、顺流快速滚动，倒影被拉成一条条流动的条纹
             vec2 wp = p * 1.5 - drift * 1.5, wfd = fd, wfp = vec2(-fd.y, fd.x);
-            float fk = smoothstep(0.05, 0.4, fs);
-            if (fk > 0.0) wp = mix(wp, vec2(dot(p, wfd) * 0.45 - uTime * fs * 3.2, dot(p, wfp) * 2.4), fk);
-            float e = 0.12, w0 = waveH(wp);
+            float fk = smoothstep(0.05, 0.4, fs), e = 0.12, w0 = waveH(wp);
             vec2 wg = vec2(waveH(wp + vec2(e, 0.0)) - w0, waveH(wp + vec2(0.0, e)) - w0) / e;
-            if (fk > 0.0) wg = mix(wg, wfd * wg.x + wfp * wg.y, fk);
+            if (fk > 0.0) { // 溪流：另算一组沿流向拉长的波，只混合法线（不混坐标，否则交界处会出一条长线）
+              vec2 sp = vec2(dot(p, wfd) * 0.45 - uTime * fs * 3.2, dot(p, wfp) * 2.4); float s0 = waveH(sp);
+              vec2 sg = vec2(waveH(sp + vec2(e, 0.0)) - s0, waveH(sp + vec2(0.0, e)) - s0) / e;
+              wg = mix(wg, wfd * sg.x + wfp * sg.y, fk);
+            }
             float amp = 0.16 + 0.3 * fk;
             vec3 N = normalize(vec3(-(wg.x * amp + rp.x * 0.35), 1.0, -(wg.y * amp + rp.y * 0.35)));
             vec3 V = normalize(cameraPosition - vW), R = reflect(-V, N);
             float fr = 0.5 + 0.5 * pow(1.0 - max(dot(N, V), 0.0), 3.0), inner = smoothstep(0.03, 0.2, d);
-            c = mix(c, skyRefl(R), fr * 0.9 * inner);
-            vec4 rc = texture2D(tRef, (texM * vec4(vW, 1.0)).xy / (texM * vec4(vW, 1.0)).w + N.xz * 0.12);
+            c = mix(c, skyRefl(R), fr * 0.9 * inner * (1.0 - 0.45 * fk));
+            vec4 rc = texture2D(tRef, (texM * vec4(vW, 1.0)).xy / (texM * vec4(vW, 1.0)).w + clamp(N.xz * 0.12, -0.05, 0.05));
             c = mix(c, rc.rgb, rc.a * inner * (0.55 + 0.4 * fr));
             c += rp.z * 0.18 * inner;
           }
