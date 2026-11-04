@@ -7,7 +7,7 @@ import {
 import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
 import { buildWall } from './wall.js';
 import { polyDist } from './terrace.js';
-import { makeLabWater, makeLabFall } from './water.js';
+import { makeLabWater, makeLabFall, waterFxU } from './water.js';
 import { getRefAsset } from './lab/ref/index.js';
 import { FACE, rotXZ, TAU, PLAZA, BOARD, PAVED_RECTS, PAVED_DISCS, LANES, DECOR, COTTAGES, BLOCKS, GINKGO, doorOf } from './townplan.js';
 export { BOARD };
@@ -363,7 +363,6 @@ const GROUND_WET = `
   if (uWet > 0.01) {
     vec3 V = normalize(vViewPosition);
     float fr = 0.3 + 0.7 * pow(1.0 - max(dot(normal, V), 0.0), 3.0);
-    totalEmissiveRadiance += uSky * gPud * fr * 0.32;
     #if NUM_DIR_LIGHTS > 0
       float nh = max(dot(normal, normalize(directionalLights[0].direction + V)), 0.0);
       float sp = mix(smoothstep(0.94, 0.965, nh), smoothstep(0.985, 0.99, nh) * 2.0, gPud);
@@ -371,14 +370,39 @@ const GROUND_WET = `
     #endif
     vec2 rc = floor(vGW * 2.4), rf = fract(vGW * 2.4) - 0.5;
     float ph = fract(uRainT * 1.3 + gHash(rc));
-    float rr = length(rf - (vec2(gHash(rc + 3.1), gHash(rc + 7.7)) - 0.5) * 0.5);
-    totalEmissiveRadiance += uSky * smoothstep(0.035, 0.0, abs(rr - ph * 0.32)) * (1.0 - ph) * gPud * uRain * 0.6;
+    vec2 rd = rf - (vec2(gHash(rc + 3.1), gHash(rc + 7.7)) - 0.5) * 0.5; float rr = length(rd);
+    float ring = smoothstep(0.035, 0.0, abs(rr - ph * 0.32)) * (1.0 - ph) * uRain;
+    totalEmissiveRadiance += uSky * ring * gPud * 0.6;
+    // 水洼倒影：天上的云（假云，按反射方向算）+ 玩家（镜像相机渲的贴图，只在和镜面同高的水洼上）。涟漪把倒影晃开
+    if (gPud > 0.01) {
+      vec2 rn = rd / max(rr, 0.001) * ring * 0.25 + vec2(gNoise(vGW * 3.0 + uRainT * 0.6), gNoise(vGW * 3.0 + 5.1 - uRainT * 0.5)) * 0.04 - 0.02;
+      vec3 Vw = normalize(cameraPosition - vGP), Nw = normalize(vec3(rn.x, 1.0, rn.y)), Rw = reflect(-Vw, Nw);
+      float frw = 0.45 + 0.55 * pow(1.0 - max(dot(Nw, Vw), 0.0), 3.0);
+      vec3 refl = gSkyRefl(Rw, uRainT) * 0.72; // 水洼底是泥，倒影比天空暗一点
+      if (uPud > 0.5) {
+        vec4 pr = texM * vec4(vGP, 1.0);
+        vec4 rc4 = texture2D(tRef, pr.xy / pr.w + rn * 0.5);
+        refl = mix(refl, rc4.rgb, rc4.a * smoothstep(0.3, 0.08, abs(vGP.y - uPudY)));
+      }
+      float k = gPud * frw * 0.85;
+      reflectedLight.directDiffuse *= 1.0 - k; reflectedLight.indirectDiffuse *= 1.0 - k;
+      totalEmissiveRadiance += refl * k;
+    }
   }`;
 const GROUND_NOISE = `
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gNoise(vec2 p) {
   vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x), mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+// 假云倒影（同 water.js）：反射方向投到一层云上，天空色跟天气
+vec3 gSkyRefl(vec3 r, float t) {
+  r.y = max(r.y, 0.1);
+  vec2 p = r.xz / (r.y + 0.18) * 0.9 + vec2(t * 0.025, t * 0.012);
+  float a = 0.0, w = 0.5, a2 = 0.0; vec2 p2 = p + vec2(0.07, 0.05);
+  for (int i = 0; i < 4; i++) { a += w * gNoise(p); a2 += w * gNoise(p2); p = p * 2.03 + 5.7; p2 = p2 * 2.03 + 5.7; w *= 0.5; }
+  float m = smoothstep(0.42, 0.66, a), shade = clamp(0.55 + (a - a2) * 5.0, 0.0, 1.0), lum = clamp(dot(uSky, vec3(0.33)) * 1.3, 0.04, 1.0);
+  return mix(uSky * 0.9, mix(vec3(0.62, 0.68, 0.8), vec3(1.0), shade) * lum, m * 0.95);
 }
 `;
 function groundMat(ox, oz, maps, rock = null) {
@@ -390,12 +414,13 @@ function groundMat(ox, oz, maps, rock = null) {
       tGrass: { value: PNG.grass_ground }, tDirt: { value: PNG.dirt_path }, tStone: { value: PNG.stone_plaza },
       tGrassN: { value: PNG.grass_ground_n }, tDirtN: { value: PNG.dirt_path_n },
       uWet: weatherU.wet, uRain: weatherU.rain, uSky: weatherU.sky, uRainT: wind, uGrassT: weatherU.grassT, uSnow: weatherU.snow, uLitter: weatherU.litter,
+      tRef: waterFxU.tRef, texM: waterFxU.texM, uPud: waterFxU.pud, uPudY: waterFxU.pudY,
       uGrassRef: { value: lin(GP.grass) }, uPlaza: { value: lin(GP.plaza) },
       uFarm: { value: lin(mix3([0, 0, 0], GP.dirt2, GP.till, 0.75)).divide(lin(GP.dirt)) }, uSand: { value: lin(GP.sand).divide(lin(GP.dirt)) },
     });
     const TD = rock ? '#define TERRAIN\nvarying vec3 vGN;\nvarying float vGY;\n' : '';
-    s.vertexShader = TD + 'varying vec2 vGW;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = position.xz;' + (rock ? ' vGN = objectNormal; vGY = position.y;' : ''));
-    s.fragmentShader = TD + (rock ? 'uniform sampler2D tCliff;\nuniform vec3 uRock;\n' : '') + (PNG.grass_ground_n && PNG.dirt_path_n ? '#define GROUND_NORMALS\n' : '') + 'uniform sampler2D tTint, tMask, tGrass, tDirt, tStone, tGrassN, tDirtN;\nuniform float uWet, uRain, uRainT, uSnow, uLitter;\nuniform vec3 uSky, uGrassT;\n' + GROUND_NOISE + 'uniform vec2 uOrigin;\nuniform vec3 uGrassRef, uPlaza, uFarm, uSand;\nvarying vec2 vGW;\n'
+    s.vertexShader = TD + 'varying vec2 vGW;\nvarying vec3 vGP;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = position.xz; vGP = (modelMatrix * vec4(transformed, 1.0)).xyz;' + (rock ? ' vGN = objectNormal; vGY = position.y;' : ''));
+    s.fragmentShader = TD + (rock ? 'uniform sampler2D tCliff;\nuniform vec3 uRock;\n' : '') + (PNG.grass_ground_n && PNG.dirt_path_n ? '#define GROUND_NORMALS\n' : '') + 'uniform sampler2D tTint, tMask, tGrass, tDirt, tStone, tGrassN, tDirtN;\nuniform float uWet, uRain, uRainT, uSnow, uLitter;\nuniform vec3 uSky, uGrassT;\nuniform sampler2D tRef;\nuniform mat4 texM;\nuniform float uPud, uPudY;\nvarying vec3 vGP;\n' + GROUND_NOISE + 'uniform vec2 uOrigin;\nuniform vec3 uGrassRef, uPlaza, uFarm, uSand;\nvarying vec2 vGW;\n'
       + s.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>' + GROUND_FRAG).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>' + GROUND_NRM)
       .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + GROUND_WET);
   };

@@ -739,12 +739,16 @@ function fogCullBegin() {
 }
 function fogCullEnd() { for (const o of fogCull.hidden) { o.visible = true; o.matrixWorldAutoUpdate = true; } }
 function mirrorPass() {
-  const near = !g.title && !P.dead && weatherU.ice.value < 0.5 && P.c.root.visible && Math.hypot(P.pos.x - POND.x, P.pos.z - POND.z) < POND.r + 12;
-  waterFxU.on.value = near ? 1 : 0;
-  if (!near) return;
+  const ok = !g.title && !P.dead && P.c.root.visible;
+  const near = ok && weatherU.ice.value < 0.5 && Math.hypot(P.pos.x - POND.x, P.pos.z - POND.z) < POND.r + 12;
+  // 不在池塘边、地上有积水（雨后）：镜面放在脚下地面高度，照地上的水洼（同高的水洼才有人影，见 world.js GROUND_WET）
+  const pud = ok && !near && weatherU.wet.value > 0.05 && weatherU.snow.value < 0.5 && !SW.on;
+  waterFxU.on.value = near ? 1 : 0; waterFxU.pud.value = pud ? 1 : 0;
+  if (!near && !pud) return;
   P.c.root.traverse(o => o.layers.enable(1));
   hemi.layers.enable(1); sun.layers.enable(1); for (const l of pool) l.layers.enable(1);
-  mirror.render(scene, 0.03);
+  const lvl = near ? 0.03 : (P.gy || 0) + 0.01; waterFxU.pudY.value = lvl;
+  mirror.render(scene, lvl);
 }
 function drawFrame() { fogCullBegin(); mirrorPass(); composer.render(); fogCullEnd(); }
 

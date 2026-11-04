@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { weatherU, clamp } from './util.js';
 
 // 水面倒影的共享 uniform：角色倒影贴图 + 投影矩阵（main.js 每帧在池塘附近渲一次）
-export const waterFxU = { tRef: { value: null }, texM: { value: new THREE.Matrix4() }, on: { value: 0 } };
+// pud / pudY：没在池塘边、地上有积水时改成照地面水洼（镜面放在玩家脚下的高度 pudY）
+export const waterFxU = { tRef: { value: null }, texM: { value: new THREE.Matrix4() }, on: { value: 0 }, pud: { value: 0 }, pudY: { value: 0 } };
 export const WATER_COLORS = { shallow: '#6ad0d8', deep: '#2a7ab8', foam: '#f0fbff' };
 // UniformsUtils.merge 会克隆每个 uniform，共享的（uTime、结冰、天空色）要重新挂回去，不然时间冻住、冬天不结冰
 function fogU(o) { return Object.assign(THREE.UniformsUtils.merge([THREE.UniformsLib.fog, o]), o); }
