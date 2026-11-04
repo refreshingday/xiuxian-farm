@@ -3,6 +3,8 @@
 import * as THREE from 'three';
 import { weatherU, clamp } from './util.js';
 
+// 水面倒影的共享 uniform：角色倒影贴图 + 投影矩阵（main.js 每帧在池塘附近渲一次）
+export const waterFxU = { tRef: { value: null }, texM: { value: new THREE.Matrix4() }, on: { value: 0 } };
 export const WATER_COLORS = { shallow: '#6ad0d8', deep: '#2a7ab8', foam: '#f0fbff' };
 // UniformsUtils.merge 会克隆每个 uniform，共享的（uTime、结冰、天空色）要重新挂回去，不然时间冻住、冬天不结冰
 function fogU(o) { return Object.assign(THREE.UniformsUtils.merge([THREE.UniformsLib.fog, o]), o); }
@@ -18,17 +20,19 @@ export function makeLabWater(area) {
   const C = WATER_COLORS;
   return new THREE.ShaderMaterial({
     transparent: true, fog: true, side: THREE.DoubleSide,
-    uniforms: fogU({
+    uniforms: Object.assign(fogU({
       tDepth: { value: dt }, uTime: { value: 0 }, uLight: { value: 1 }, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: size }, uMode: weatherU.ice,
       cShallow: { value: new THREE.Color(C.shallow) }, cDeep: { value: new THREE.Color(C.deep) }, cFoam: { value: new THREE.Color(C.foam) },
       uSky: weatherU.sky, uCaus: { value: 1 }, uFlow: { value: new THREE.Vector2(0.3, 0.2) },
-    }),
+      uChar: { value: area.char ? 1 : 0 }, uRain: weatherU.rain,
+    }), { tRef: waterFxU.tRef, texM: waterFxU.texM, uOn: waterFxU.on }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
     fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMode, uCaus, uLight; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
+      uniform sampler2D tRef; uniform mat4 texM; uniform float uChar, uOn, uRain;
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -38,6 +42,31 @@ export function makeLabWater(area) {
         for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(h(i + o), h(i + o + 7.3)) - f; float d = dot(r, r);
           if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
         return vec2(sqrt(d1), sqrt(d2)); }
+      // 雨点涟漪（下雨时才有）：两层格子，每格一个随机相位的扩散圆环
+      vec3 ripples(vec2 p) {
+        vec3 r = vec3(0.0);
+        for (int L = 0; L < 2; L++) {
+          vec2 q = p * (L == 0 ? 1.3 : 2.2) + float(L) * 17.3, id = floor(q), f = fract(q) - 0.5;
+          float t = fract(uTime * (0.55 + h(id + 1.7) * 0.5) + h(id + float(L) * 3.1));
+          vec2 d = f - (vec2(h(id + 4.1), h(id + 9.2)) - 0.5) * 0.3; float dist = length(d), rad = t * 0.3;
+          float env = exp(-pow((dist - rad) / 0.05, 2.0)) * (1.0 - t) * (1.0 - t);
+          float ph = sin((dist - rad) * 60.0);
+          r.xy += d / max(dist, 0.001) * env * ph; r.z += env * (0.5 + 0.5 * ph);
+        }
+        return r;
+      }
+      float waveH(vec2 x) { return vn(x + uTime * vec2(0.5, 0.3)) * 0.6 + vn(x * 2.1 - uTime * vec2(0.7, 0.4) + 7.0) * 0.4; }
+      float cloudN(vec2 p) { float a = 0.0, w = 0.5; for (int i = 0; i < 4; i++) { a += w * vn(p); p = p * 2.03 + 5.7; w *= 0.5; } return a; }
+      // 假云倒影：反射方向投到一层云上；天空色用天气系统的 uSky
+      vec3 skyRefl(vec3 r) {
+        r.y = max(r.y, 0.1);
+        vec2 p = r.xz / (r.y + 0.18) * 0.9 + vec2(uTime * 0.025, uTime * 0.012);
+        float cl = cloudN(p), cl2 = cloudN(p + vec2(0.07, 0.05));
+        float m = smoothstep(0.42, 0.66, cl), shade = clamp(0.55 + (cl - cl2) * 5.0, 0.0, 1.0);
+        float lum = clamp(dot(uSky, vec3(0.33)) * 1.3, 0.04, 1.0);
+        vec3 cc = mix(vec3(0.62, 0.68, 0.8), vec3(1.0), shade) * lum;
+        return mix(uSky * 0.9, cc, m * 0.95);
+      }
       void main() {
         vec2 uv = (vXZ - uOrigin) / uSize;
         vec4 dm = texture2D(tDepth, uv);
@@ -69,6 +98,30 @@ export function makeLabWater(area) {
           float rings = smoothstep(0.1, 0.0, abs(wave - 0.5)) * (1.0 - smoothstep(0.08, 0.38, d));
           c = mix(c, cFoam, max(foam, rings * 0.7));
           a = mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
+          // 倒影：云 + 角色，随水波扭曲；溪流里沿流向拉长顺流滚动。岸边渐隐
+          {
+            vec3 rp = ripples(p) * uRain;
+            vec2 wp = p * 1.5 - drift * 1.5, wfd = fd, wfp = vec2(-fd.y, fd.x);
+            float fk = smoothstep(0.05, 0.4, fs), e = 0.12, w0 = waveH(wp);
+            vec2 wg = vec2(waveH(wp + vec2(e, 0.0)) - w0, waveH(wp + vec2(0.0, e)) - w0) / e;
+            if (fk > 0.0) {
+              vec2 sp = vec2(dot(p, wfd) * 0.45 - uTime * fs * 3.2, dot(p, wfp) * 2.4); float s0 = waveH(sp);
+              vec2 sg = vec2(waveH(sp + vec2(e, 0.0)) - s0, waveH(sp + vec2(0.0, e)) - s0) / e;
+              wg = mix(wg, wfd * sg.x + wfp * sg.y, fk);
+            }
+            float amp = 0.16 + 0.3 * fk;
+            vec3 N = normalize(vec3(-(wg.x * amp + rp.x * 0.35), 1.0, -(wg.y * amp + rp.y * 0.35)));
+            vec3 V = normalize(cameraPosition - vW), R = reflect(-V, N);
+            float fr = 0.5 + 0.5 * pow(1.0 - max(dot(N, V), 0.0), 3.0), inner = smoothstep(0.03, 0.2, d);
+            c = mix(c, skyRefl(R), fr * 0.9 * inner * (1.0 - 0.45 * fk));
+            if (uOn * uChar > 0.5) {
+              vec4 pr = texM * vec4(vW, 1.0);
+              vec4 rc = texture2D(tRef, pr.xy / pr.w + clamp(N.xz * 0.12, -0.05, 0.05));
+              c = mix(c, rc.rgb, rc.a * inner * (0.55 + 0.4 * fr));
+            }
+            c += rp.z * 0.18 * inner;
+            a = max(a, mix(a, 0.95, inner));
+          }
         } else {
           vec2 v = cell(p * 0.6);
           c = mix(cShallow, cDeep, smoothstep(0.1, 0.9, d) * 0.6);

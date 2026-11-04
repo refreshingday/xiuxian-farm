@@ -111,7 +111,7 @@ const ZF_SPOKES = (() => {
   return out;
 })();
 const ZF_T = makeTerrain({
-  LH: 1.6, rock: '#8a8698',
+  LH: 2.2, rock: '#8a8698',
   shapes: [
     shape([-46, -46, 46, 46], (x, z) => { const o = oct(x, z); return 2 - Math.max(0, o - ZF.ring1) / 4 - Math.max(0, ZF.ring0 - o) / 4.5; }),
     shape([-18, -64, 18, -28], (x, z) => 5 - Math.max(0, oct(x - ZF.alt[0], z - ZF.alt[1]) - ZF.altTop) / 1.6),
@@ -339,7 +339,7 @@ const JZ_PATHS = [
   { pts: [[-44, -19], [-45.4, -25.4]], w: 1.4 }, { pts: [[45, -19], [46, -29]], w: 1.4 },
 ];
 const JZ_T = makeTerrain({
-  levels: 10, LH: 1.1, rock: '#8e949c',
+  levels: 10, LH: 1.5, rock: '#8e949c',
   shapes: [
     shape([-30, -10, 30, 42], (x, z) => Math.min(9, Math.max(0, (40 - z) / JZ.run)) - Math.max(0, Math.abs(x) - 13) / 1.4),
     plat({ x: 0, z: -25, w: 56, d: 36, lv: 9, ring: 2.2, round: 3 }),

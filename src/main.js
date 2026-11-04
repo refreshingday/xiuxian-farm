@@ -8,8 +8,10 @@ import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angD
 import { createChibi, animChibi } from './chibi.js';
 import { attachHeroModel } from './hero_model.js';
 import { Weather } from './weather.js';
+import { createMirror } from './lab/mirror.js';
+import { waterFxU } from './water.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
-import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
+import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist, POND } from './world.js';
 import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
 import { sectorAt, biomeK, polar } from './worldmap.js';
@@ -82,9 +84,13 @@ const grade = new ShaderPass({
 });
 composer.addPass(grade);
 
+// 水面倒影：玩家在池塘附近时才多渲一次（只含角色 + 灯光，第 1 层）
+const mirror = createMirror(renderer, camera);
+waterFxU.tRef.value = mirror.rt.texture; waterFxU.texM.value = mirror.texM;
+mirror.resize(innerWidth, innerHeight, renderer.getPixelRatio());
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); mirror.resize(innerWidth, innerHeight, renderer.getPixelRatio());
 });
 
 // ---------- 光照 ----------
@@ -732,7 +738,15 @@ function fogCullBegin() {
   fogCull.n = H.length;
 }
 function fogCullEnd() { for (const o of fogCull.hidden) { o.visible = true; o.matrixWorldAutoUpdate = true; } }
-function drawFrame() { fogCullBegin(); composer.render(); fogCullEnd(); }
+function mirrorPass() {
+  const near = !g.title && !P.dead && weatherU.ice.value < 0.5 && P.c.root.visible && Math.hypot(P.pos.x - POND.x, P.pos.z - POND.z) < POND.r + 12;
+  waterFxU.on.value = near ? 1 : 0;
+  if (!near) return;
+  P.c.root.traverse(o => o.layers.enable(1));
+  hemi.layers.enable(1); sun.layers.enable(1); for (const l of pool) l.layers.enable(1);
+  mirror.render(scene, 0.03);
+}
+function drawFrame() { fogCullBegin(); mirrorPass(); composer.render(); fogCullEnd(); }
 
 // 帧率表（版本号旁边）
 const fpsM = { acc: 0, n: 0, el: null };

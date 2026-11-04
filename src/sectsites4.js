@@ -20,7 +20,7 @@ const BC = { wall: '#fff2f4', col: '#b0607a', roof: '#d88aa0', ridge: '#9a4a62',
 const BH_POND = [-14, 18], BH_WY = -0.14;
 const BH_PATHS = [{ pts: [[0, -14], [0, -31]], w: 2.2 }, { pts: [[-22, 30], [-52, 30]], w: 1.3 }, { pts: [[23, -8], [49.5, -8]], w: 1.3 }, { pts: [[7, -12], [12, -12]], w: 1.1 }];
 const BH_T = makeTerrain({
-  LH: 1.2, rock: '#a8949a',
+  LH: 1.7, rock: '#a8949a',
   shapes: [
     // 东西两侧花田梯台：越往外越高（顶上 5 级），北面也围起来；靠近谷口和外圈回落到 0 级
     shape([-80, -80, 80, 56.5], (x, z) => { const ax = Math.abs(x), r = Math.hypot(x, z), base = Math.max((ax - 24) / 5, (-54 - z) / 3) + (vnoise(x * 0.09 + 3, z * 0.09, 5) - 0.5) * 0.9; return Math.min(5.3, base, (76 - r) / 2.4, (55.8 - z) / 0.25); }),
@@ -341,7 +341,7 @@ const DC = { wall: '#f4e8d8', col: '#8a3a1a', roof: '#6a3a22', ridge: '#3a1a0a',
 const DD_PIT = [-30, 8], DD_PLAZA = [0, 14];
 const DD_PATHS = [{ pts: [[0, -17], [0, -29]], w: 2.4 }, { pts: [[34, 46], [34, -27]], w: 1.6 }];
 const DD_T = makeTerrain({
-  LH: 1.2, rock: '#8a7a6a',
+  LH: 1.7, rock: '#8a7a6a',
   shapes: [
     plat({ x: 0, z: -39, w: 48, d: 26, round: 4, lv: 3, ring: 2.6, wob: 1, seed: 61 }),                             // 丹鼎殿台地
     ...[0, 1, 2, 3, 4, 5].map((k) => plat({ x: 38, z: 36 - 12 * k, w: 14, d: 10, round: 1.5, lv: k + 1, ring: 1.6, seed: 63 + k })), // 丹房街：六级

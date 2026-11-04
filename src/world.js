@@ -1291,7 +1291,7 @@ export class World {
     // 水面：lab 里 Claude 版的水面着色器。池塘 + 小潭 + 溪流共用一张深度图（越往里越深；溪流里带流向）
     const Bz = BASIN, [sx0, sz0, sx1, sz1] = STREAM, sl = Math.hypot(sx1 - sx0, sz1 - sz0);
     this.water = makeLabWater({
-      x0: -15.5, z0: -30.5, size: 18, N: 144,
+      x0: -15.5, z0: -30.5, size: 18, N: 144, char: true,
       depthAt: (x, z) => {
         const pond = -pondDist(x, z), basin = Bz.r * (1 + 0.1 * Math.sin(Math.atan2(z - Bz.z, x - Bz.x) * 3 + 0.5)) - Math.hypot(x - Bz.x, z - Bz.z), stream = 0.85 - segDist(x, z, sx0, sz0, sx1, sz1);
         return Math.max(0, pond, basin, stream) * 0.32;
