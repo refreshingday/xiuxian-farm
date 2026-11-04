@@ -110,7 +110,7 @@ mirror.resize(innerWidth, innerHeight, Math.min(devicePixelRatio, 2));
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, mirror: true, v: 3, bloomK: {}, bloomT: {},
+  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, mirror: true, rain: false, v: 3, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
@@ -809,7 +809,8 @@ function build() {
     if (b.fish) fishSchool(b, hAt);
     span = R;
     if (b.water) waterFx.setColor(b.water.foam);
-    for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
+    const pl = S.rain && !b.particles.some((p) => p.type === 'rain') ? [...b.particles, { type: 'rain', n: 1000, color: '#c8d8f0', size: 6 }] : b.particles;
+    for (const p of pl) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
     const ids = S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : b.catalog;
     span = buildCatalog(ids, S.mode);
@@ -912,7 +913,7 @@ function applyToggles() {
   root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认关）
   sun.castShadow = S.shadows;
   REFU.grad.value = S.refgrad ? 1 : 0;
-  { const fx = S.mode === 'scene' && BIOMES[S.biome].light.fx === 'storm'; MIR.rain.value = fx ? 1 : 0; WET_U.value = fx ? 1 : 0; }
+  { const fx = S.mode === 'scene' && (BIOMES[S.biome].light.fx === 'storm' || S.rain); MIR.rain.value = fx ? 1 : 0; WET_U.value = fx ? 1 : 0; }
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
   if (chibi) chibi.root.visible = S.chibi && S.mode === 'scene';
@@ -944,7 +945,7 @@ function setupUI() {
   });
   document.querySelectorAll('#modes button').forEach((el) => el.onclick = () => { S.mode = el.dataset.m; save(); rebuild(true); });
   document.querySelectorAll('[data-src]').forEach((el) => el.onclick = () => { S.src = el.dataset.src; save(); rebuild(false); });
-  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { const k = el.dataset.t === 'outline' ? lineKey() : el.dataset.t; S[k] = !S[k]; save(); applyToggles(); ui(); });
+  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { const k = el.dataset.t === 'outline' ? lineKey() : el.dataset.t; S[k] = !S[k]; save(); if (k === 'rain') build(); else { applyToggles(); ui(); } });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
   $('#bloomS').oninput = (e) => { S.bloomK[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
