@@ -6,6 +6,7 @@ import {
 } from './util.js';
 import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
 import { buildWall } from './wall.js';
+import { polyDist } from './terrace.js';
 import { makeLabWater, makeLabFall } from './water.js';
 import { getRefAsset } from './lab/ref/index.js';
 import { FACE, rotXZ, TAU, PLAZA, BOARD, PAVED_RECTS, PAVED_DISCS, LANES, DECOR, COTTAGES, BLOCKS, GINKGO, doorOf } from './townplan.js';
@@ -151,9 +152,20 @@ export function groundY(x, z) {
 export function stepOK(x0, z0, x1, z1) {
   if (!TERRAINS.length || (!terrainAt(x0, z0) && !terrainAt(x1, z1))) return true;
   const dx = x1 - x0, dz = z1 - z0, d = Math.hypot(dx, dz); if (d < 1e-6) return true;
-  const ux = dx / d, uz = dz / d;
-  return Math.abs(groundY(x1 + ux * 0.25, z1 + uz * 0.25) - groundY(x0, z0)) / (d + 0.25) < 1.2;
+  const ux = dx / d, uz = dz / d, px = x1 + ux * 0.25, pz = z1 + uz * 0.25;
+  if (Math.abs(groundY(px, pz) - groundY(x0, z0)) / (d + 0.25) >= 1.2) return false;
+  // 只看沿移动方向的坡度不够：斜 45° 贴着崖走（或被挡后单轴滑动）时，沿 x / z 的分量只有真实坡度的 0.7 倍，会一点点蹭上 / 蹭下崖。
+  // 所以再看落脚点的真实坡度（梯度大小）：比 1.2 陡就不许踏上去（石阶路上除外）——除非本来就站在陡处（让人能走下来，不会卡死）
+  const gp = Math.max(slopeAt(x1, z1), slopeAt(px, pz));
+  return gp < 1.2 || gp <= slopeAt(x0, z0) || onStairs(x1, z1);
 }
+// 石阶路上（连续坡，边上最陡约 1.2）只用上面沿方向的检查
+function onStairs(x, z) {
+  const R = terrainAt(x, z); if (!R) return false;
+  const lx = x - R.cx, lz = z - R.cz;
+  return R.T.paths.some((p) => p.kind === 'stairs' && lx > p.bb[0] && lx < p.bb[2] && lz > p.bb[1] && lz < p.bb[3] && polyDist(lx, lz, p.pts) < p.w);
+}
+const slopeAt = (x, z) => Math.hypot(groundY(x + 0.2, z) - groundY(x - 0.2, z), groundY(x, z + 0.2) - groundY(x, z - 0.2)) / 0.4;
 const chunkHasTerrain = (ox, oz) => TERRAINS.some((R) => ox < R.x1 && ox + CHUNK > R.x0 && oz < R.z1 && oz + CHUNK > R.z0);
 const terrainRock = (ox, oz) => TERRAINS.find((R) => ox < R.x1 && ox + CHUNK > R.x0 && oz < R.z1 && oz + CHUNK > R.z0)?.T.rock || '#9a948a';
 export function configureVillage(data) {
