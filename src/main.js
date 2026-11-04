@@ -166,7 +166,9 @@ const gui = new UI(); g.ui = gui;
 const heroModel = attachHeroModel(P.c); // 换 Q 版武侠模型（?hero=old 退回方块小人）
 P.pos = P.c.root.position;
 P.pos.set(0, 0, 4);
-scene.add(P.c.root);
+// 台地地面高度放在外面这层（lift）：P.pos.y 只是离地高度（跳跃 / 击飞），不能把地面高度写进去，
+// 否则下一帧战斗的重力把它当成跳在半空、再叠一层地面高度，一上台阶就一路飞上天
+const lift = new THREE.Group(); scene.add(lift); lift.add(P.c.root);
 g.player = P;
 // 下水：池塘 / 瀑布脚下的深潭可以涉水、游泳（深度见 world.waterDepth），特效和姿势复用实验场的 swim.js
 const waterFx = createWaterFx(scene);
@@ -721,7 +723,7 @@ function fogCullBegin() {
   if (!scene.fog || g.debugCam || fogCull.off) return;
   const far = scene.fog.far, cam = camera.position, pp = P.pos, kids = scene.children;
   for (let i = 0; i < kids.length; i++) {
-    const o = kids[i]; if (!o.visible || o === P.c.root) continue;
+    const o = kids[i]; if (!o.visible || o === lift) continue;
     const info = cullInfo(o); if (!info) continue;
     if (o.matrixAutoUpdate) o.updateMatrix(); // 藏起来时不会自动更新，自己算，不然走近的 NPC 永远出不来
     _fcV.copy(info.c).applyMatrix4(o.matrix);
@@ -841,7 +843,7 @@ function updatePlayer(dt) {
   if (SW.on) SW.ph += dt * (1.5 + 4.2 * moveK);
   // 画的时候加上地面高度（台地）；平地起伏直接贴地，飞过崖时平滑追
   const gy = groundY(P.pos.x, P.pos.z); P.gy = P.gy === undefined || Math.abs(gy - P.gy) < 0.08 ? gy : lerp(P.gy, gy, 1 - Math.exp(-12 * dt));
-  P.c.root.position.y = st.y + P.gy; cfxRoot.position.y = P.gy;
+  P.c.root.position.y = st.y; lift.position.y = cfxRoot.position.y = P.gy;
   combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work, rate: 16, run: realm.fly ? 0 : RUN(Math.hypot(vx, vz)) * (1 - SW.k) });
   if (SW.k > 0.002) swimPose(P.c, SW.k, moveK, SW.ph, g.time);
   if (heroModel.ready) { const rm = runner.move || combat.skill?.m, rt = runner.move ? runner.t : combat.skill?.t; heroModel.sync(P.c, dt, rm, rt); }
