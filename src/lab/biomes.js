@@ -25,7 +25,7 @@ function grassy(base, dark, light, x, z, seed) {
 // ---------- 多级台地（7 级）----------
 // F(x,z) 是连续的"台地级数场"（0..6），量化成平台 + 陡坎；台阶路径上改回连续坡度并自动摆石阶；
 // 溪流沿折线往下流，每级平台一段水面，每道坎一挂瀑布（梯级瀑布）
-export const LH = 1.3, LEVELS = 7;
+export const LH = 2.0, LEVELS = 7; // 每级台地的高差（原 1.3，崖更高更有层次感）
 const CLIFF = 0.17; // 每级末尾多少比例用来做坎（坎宽 ≈ CLIFF / |∇F| 米）
 const quant = (F) => { const f = clamp(F, 0, LEVELS - 1), k = Math.floor(f); return k >= LEVELS - 1 ? k : k + smooth(1 - CLIFF, 1, f - k); };
 const polyDist = (x, z, pts) => { let d = 1e9; for (let i = 1; i < pts.length; i++) d = Math.min(d, seg(x, z, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1])); return d; };
