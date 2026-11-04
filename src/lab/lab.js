@@ -336,7 +336,7 @@ function makeWater(W, hAt, area, masked = false) {
         float cl = cloudN(p), cl2 = cloudN(p + vec2(0.07, 0.05));
         float m = smoothstep(0.42, 0.66, cl), shade = clamp(0.55 + (cl - cl2) * 5.0, 0.0, 1.0);
         vec3 sk = mix(uSkyB, uSky, smoothstep(0.0, 0.6, r.y));
-        float lum = clamp(dot(uSkyB + uSky, vec3(0.33)) * 1.2 + 0.12, 0.25, 1.0);
+        float lum = clamp(dot(uSkyB + uSky, vec3(0.33)) * 1.3, 0.04, 1.0);
         vec3 cc = mix(vec3(0.62, 0.68, 0.8), vec3(1.0), shade) * lum;
         sk *= 0.9;
         return mix(sk, cc, m * 0.95) + vec3(0.55, 0.6, 0.85) * uFlash * (0.3 + 0.7 * m);
