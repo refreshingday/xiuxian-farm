@@ -125,16 +125,19 @@ export function createChibi(a) {
 
 const easeOut = (t) => 1 - (1 - t) * (1 - t);
 
-/** s: { move 0..1, attack -1|0..1, combo, cast 0..1, dash, spin 0..1 } */
+/** s: { rate?, run? 0..1, move 0..1, attack -1|0..1, combo, cast 0..1, dash, spin 0..1 } */
 export function animChibi(c, dt, s) {
-  c.phase += dt * (2 + s.move * 9);
+  c.phase += dt * (2 + s.move * (s.rate || 9)); // rate：满速时步频（主角走得快，用更快的步频，不然一步跨太远像在滑）
   const ph = c.phase;
+  // run 0..1：跑步程度（main.js 按速度给），平滑过渡；腿 / 手摆更大、手肘弯、身子前倾、起伏更大
+  c.runK = (c.runK || 0) + ((s.run || 0) - (c.runK || 0)) * (1 - Math.exp(-8 * dt));
+  const r = c.runK;
   const sw = Math.sin(ph) * s.move;
-  c.hips.position.y = 0.55 + Math.abs(Math.cos(ph)) * 0.06 * s.move + Math.sin(ph * 0.4) * 0.008;
-  c.legs[0].rotation.x = sw * 0.8;
-  c.legs[1].rotation.x = -sw * 0.8;
+  c.hips.position.y = 0.55 + Math.abs(Math.cos(ph)) * (0.06 + 0.04 * r) * s.move + Math.sin(ph * 0.4) * 0.008;
+  c.legs[0].rotation.x = sw * (0.8 + 0.25 * r);
+  c.legs[1].rotation.x = -sw * (0.8 + 0.25 * r);
   const [R, L] = c.arms;
-  let rx = -sw * 0.7, ry = 0, lx = sw * 0.7, bodyY = 0, swordX = 1.7;
+  let rx = -sw * (0.7 + 0.45 * r) * (c.sword?.visible ? 1 - 0.45 * r : 1), ry = 0, lx = sw * (0.7 + 0.45 * r), bodyY = 0, swordX = 1.7;
   if (s.attack >= 0) {
     const p = easeOut(s.attack);
     swordX = Math.PI;
@@ -149,11 +152,11 @@ export function animChibi(c, dt, s) {
   R.sh.rotation.set(rx, ry, R.s * 0.15);
   L.sh.rotation.set(lx, 0, L.s * 0.15);
   // 手肘：平时自然微弯，挥剑时伸直
-  R.el.rotation.x = s.attack >= 0 || s.cast > 0 ? -0.1 : -0.3 - Math.max(0, -sw) * 0.4;
-  L.el.rotation.x = s.work > 0 ? -0.6 : -0.3 - Math.max(0, sw) * 0.4;
+  R.el.rotation.x = s.attack >= 0 || s.cast > 0 ? -0.1 : -0.3 - r * 0.9 - Math.max(0, -sw) * 0.4;
+  L.el.rotation.x = s.work > 0 ? -0.6 : -0.3 - r * 0.9 - Math.max(0, sw) * 0.4;
   c.body.rotation.y = bodyY;
   if (c.sword) c.sword.rotation.x = swordX;
-  c.rig.rotation.x = s.dash ? 0.35 : 0;
+  c.rig.rotation.x = s.dash ? 0.35 : 0.12 * r * s.move;
   c.rig.rotation.y = s.spin > 0 ? s.spin * Math.PI * 4 : 0;
   if (c.flash > 0) { c.flash -= dt; setFlash(c.mats, c.flash > 0 ? 0.9 : 0); }
 }

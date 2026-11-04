@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { flat, toon, glow, mesh, at, angDiff, lerpAngle, setFlash, clamp } from './util.js';
-import { ARENA, GATES, WALL_R } from './world.js';
+import { ARENA, GATES, WALL_R, groundY, stepOK } from './world.js';
 import { SIG } from './bossmoves.js';
 
 const G = {};
@@ -233,7 +233,9 @@ export class Enemies {
       gen: 0, hop: 0, hasteT: 0, open: 0, tick: null, passWall,
     };
     root.position.set(x, 0, z);
-    g.scene.add(root);
+    // 外面再包一层：逻辑里 pos.y 是离地高度，外层按台地高度整体抬起（平地上就是 0）
+    e.wrap = new THREE.Group(); e.wrap.add(root); e.wrap.position.y = groundY(x, z);
+    g.scene.add(e.wrap);
     this.list.push(e);
     g.fx.burst(root.position, e.boss ? '#ff5a2a' : '#c8b8ff', e.boss ? 60 : 10, { speed: 3, up: 3 });
     return e;
@@ -242,7 +244,7 @@ export class Enemies {
   remove(e) {
     e.alive = false;
     this.game.onEnemyGone?.(e);
-    this.game.scene.remove(e.root);
+    this.game.scene.remove(e.wrap || e.root);
     for (const m of e.mats) m.dispose();
     this.list.splice(this.list.indexOf(e), 1);
     if (e === this.boss) { this.boss = null; }
@@ -463,8 +465,11 @@ export class Enemies {
 
       // 移动 + 击退 + 碰撞（寒冰掌 / 封印符命中会减速）
       if (e.slowT > 0 && e.state !== 'charge') spd *= 0.6;
+      const ox = e.pos.x, oz = e.pos.z;
       e.pos.x += (mx * spd + e.kx) * dt;
       e.pos.z += (mz * spd + e.kz) * dt;
+      if (!stepOK(ox, oz, e.pos.x, e.pos.z)) { e.pos.x = ox; e.pos.z = oz; } // 台地断崖挡路
+      if (e.wrap) e.wrap.position.y = groundY(e.pos.x, e.pos.z);
       const kd = Math.exp(-(air ? (e.pos.y > 1 ? 0.8 : 3) : 9) * dt); e.kx *= kd; e.kz *= kd;
       g.world.resolve(e.pos, e.r, !!(e.tide || e.passWall));
       if (!e.boss) for (const o of this.list) {

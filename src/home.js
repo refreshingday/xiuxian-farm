@@ -8,8 +8,8 @@ import { near } from './life.js';
 import { btn, el } from './ui.js';
 import { toon, glow, mesh, at, addOutline, outlineMat } from './util.js';
 
-const PEN = { x0: -25.5, z0: 0, x1: -21, z1: 6.5 }, MAX = { chick: 4, calf: 2 };
-const LOT = { x: 23.5, z: 13 };
+import { PEN, LOT } from './townplan.js';
+const MAX = { chick: 4, calf: 2 };
 const UPG = [
   { id: 'room2', name: '静室', desc: '打坐修为 +20%', cost: 3000, mats: { iron: 10 } },
   { id: 'room3', name: '聚灵室', desc: '打坐修为再 +20%', cost: 9000, stones: 20, mats: { iron: 20 }, need: 'room2' },

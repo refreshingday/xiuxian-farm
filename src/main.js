@@ -6,9 +6,10 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
 import { createChibi, animChibi } from './chibi.js';
+import { attachHeroModel } from './hero_model.js';
 import { Weather } from './weather.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
-import { World, configureVillage, configureClearings, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
+import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
 import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
 import { sectorAt, biomeK, polar } from './worldmap.js';
@@ -23,6 +24,7 @@ import { TUNE } from './combo.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
 import { Village, loadVillageData } from './village.js';
+import { Town } from './town.js';
 import { Farm } from './farm.js';
 import { Alchemy } from './alchemy.js';
 import { Quests, loadQuestData } from './quests.js';
@@ -38,7 +40,8 @@ import { TouchControls } from './touch.js';
 import { DAY_START, dateOf, clockText, rollWeather } from './calendar.js';
 import { loadItems, Inventory, item, itemName } from './items.js';
 import { UI, btn, el } from './ui.js';
-import { Cheat } from './cheat.js';
+import { Cheat, startWithQuest } from './cheat.js';
+import { siteOf } from './sectsites.js';
 import { Life, near } from './life.js';
 import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
 
@@ -127,7 +130,8 @@ const g = {
   toast(msg, sec = 2.2) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), sec * 1000); },
 };
 const fx = new FX(scene, camera); g.fx = fx;
-const cfx = new ComboFX(scene, fx, { soft: true });
+const cfxRoot = new THREE.Group(); scene.add(cfxRoot); // 招式特效挂在这里：台地上整体抬到玩家脚下的地面高度
+const cfx = new ComboFX(cfxRoot, fx, { soft: true });
 const sfx = new SFX(); g.sfx = sfx;
 await loadItems();
 await loadTextures({
@@ -135,15 +139,17 @@ await loadTextures({
   roof_tiles: { norm: 0.88, rep: 0.5 }, wood_planks: { norm: 0.88, rep: 0.5 }, tilled_soil: { norm: 0.9 },
   cliff_rock: { norm: 0.9 }, foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 },
   leaf_cards: { norm: 0.9, key: true }, grass_blades: { norm: 0.9, key: true }, blossom_cards: { norm: 0.9, key: true },
+  stone_carved: { norm: 0.9 }, cloth_canvas: { norm: 0.96 }, // 门派建筑：石砖台基 / 粉墙（sectkit TX）
+  thatch_straw: { norm: 0.9, rep: 0.5 }, tree_bark: { norm: 0.9 },  // 御兽宗：茅草顶、原木栅栏
 });
 configureVillage(await loadVillageData().then((d) => (g.villageData = d)));
 // 世界地图数据：坊市 / 宗门所在的地方要先空出来、铺石板（区块生成时就不长树）
 g.mapData = await (await fetch('data/world_map.json')).json();
 configureClearings([
   ...g.mapData.hubs.map((h) => ({ ...polar(h.ang, h.dist), r: 26, plaza: 17 })),
-  ...g.mapData.sects.map((s) => ({ ...polar(s.ang, s.dist), r: 20, plaza: 9 })),
+  ...g.mapData.sects.map((s) => { const S = siteOf(s.name); return { ...polar(s.ang, s.dist), r: S.r, ground: S.ground, tint: S.tint, tintK: S.tintK, terrain: S.terrain }; }),
 ]);
-const world = new World(scene); g.world = world;
+const world = new World(scene); g.world = world; fx.gy = groundY; // 特效、伤害数字等都按「离地高度」给 y，落在台地上要加地面高度
 const enemies = new Enemies(g); g.enemies = enemies;
 const weather = new Weather(scene); g.weather = weather;
 
@@ -157,9 +163,12 @@ const P = {
 };
 const inv = new Inventory(); g.inv = inv;
 const gui = new UI(); g.ui = gui;
+const heroModel = attachHeroModel(P.c); // 换 Q 版武侠模型（?hero=old 退回方块小人）
 P.pos = P.c.root.position;
 P.pos.set(0, 0, 4);
-scene.add(P.c.root);
+// 台地地面高度放在外面这层（lift）：P.pos.y 只是离地高度（跳跃 / 击飞），不能把地面高度写进去，
+// 否则下一帧战斗的重力把它当成跳在半空、再叠一层地面高度，一上台阶就一路飞上天
+const lift = new THREE.Group(); scene.add(lift); lift.add(P.c.root);
 g.player = P;
 // 下水：池塘 / 瀑布脚下的深潭可以涉水、游泳（深度见 world.waterDepth），特效和姿势复用实验场的 swim.js
 const waterFx = createWaterFx(scene);
@@ -280,7 +289,7 @@ const keys = new Set();
 const SKILL_KEYS = ['KeyQ', 'KeyE', 'KeyR', 'KeyC']; // 四个技能槽（F 留给交互）
 const mouse = new THREE.Vector2(), mouseDown = [false, false, false];
 const aim = new THREE.Vector3();
-let camYaw = 0, camYawT = 0, camZoom = 1, camZoomU = 1; // camZoomU：玩家自己滚出来的缩放（0.6 近 … 3 远）
+let camYaw = 0, camYawT = 0, camZoom = 1, camZoomU = 1, camGY = 0; // camZoomU：玩家自己滚出来的缩放（0.6 近 … 3 远）
 addEventListener('keydown', (e) => {
   sfx.unlock();
   if (e.repeat) { keys.add(e.code); return; }
@@ -340,7 +349,19 @@ document.getElementById('questBtn').addEventListener('click', () => quests.openL
 document.getElementById('mapBtn').addEventListener('click', () => landmarks.open());
 touch.bind(document.getElementById('prompt'), tap(interact));
 touch.bind(document.getElementById('mobTime'), { hold: 'time' });
-touch.drag(renderer.domElement, (dx) => { camYawT -= dx * 0.006; });
+// 跑步：速度超过 RUN_FROM 开始从走过渡到跑，到 RUN_FULL 完全是跑（满速 6；摇杆推一点点就是走）
+const RUN_FROM = 3.5, RUN_FULL = 5.5, RUN = (v) => clamp((v - RUN_FROM) / (RUN_FULL - RUN_FROM), 0, 1);
+// 手机：单指在画面上左右拖转镜头，双指捏合缩放（张开拉近、捏拢拉远）
+const pinch = new Map(); let pinchD = 0;
+const pinchDist = () => { const [a, b] = [...pinch.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+renderer.domElement.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pinch.set(e.pointerId, [e.clientX, e.clientY]); if (pinch.size === 2) pinchD = pinchDist(); });
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!pinch.has(e.pointerId)) return; pinch.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pinch.size !== 2) return; const d = pinchDist();
+  if (pinchD > 0 && d > 0) camZoomU = clamp(camZoomU * pinchD / d, 0.6, 3); pinchD = d;
+});
+for (const t of ['pointerup', 'pointercancel']) renderer.domElement.addEventListener(t, (e) => { pinch.delete(e.pointerId); if (pinch.size < 2) pinchD = 0; });
+touch.drag(renderer.domElement, (dx) => { if (pinch.size < 2) camYawT -= dx * 0.006; });
 
 const ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function updateAim() {
@@ -350,7 +371,7 @@ function updateAim() {
     aim.set(P.pos.x + (ix * Math.cos(camYaw) - iy * Math.sin(camYaw)) * 5, 0, P.pos.z + (-ix * Math.sin(camYaw) - iy * Math.cos(camYaw)) * 5);
     return;
   }
-  if (!touch.on && !pad.on) { ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); return; }
+  if (!touch.on && !pad.on) { ground.constant = -(P.gy || 0); ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(ground, aim); return; }
   // 手机：自动瞄准附近最近的敌人（摇杆推着时优先摇杆方向上的），没有就朝移动 / 面朝方向
   const mv = moveInput(), my = mv.lengthSq() > 0.1 ? Math.atan2(mv.x, mv.y) : null;
   let best = null, bs = 1e9;
@@ -482,6 +503,7 @@ function moveInput() {
 // ---------- 日常 / 交互（F）：各系统往 life 里登记可交互的东西，按距离挑最近的 ----------
 const life = new Life(g); g.life = life;
 // 青竹村 21 位村民（village.js / data/villagers.json）
+const town = new Town(g); g.town = town; // 青竹村街景（townplan.js 的 Lynch 五要素布局）
 const village = new Village(g, g.villageData); g.village = village;
 g.sense = () => 20 + P.layer * 8; // 神识：看清别人灵根要够高（境界系统接入前先按层数算）
 life.on((P) => {
@@ -638,7 +660,7 @@ function placeBar(bar, dt, x, y, z) {
   if (!front) bar.el.style.visibility = 'hidden';
 }
 function updateHpBars(dt) {
-  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, barY(e) + e.pos.y, e.pos.z);
+  for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, barY(e) + e.pos.y + groundY(e.pos.x, e.pos.z), e.pos.z);
   for (let i = fadingBars.length - 1; i >= 0; i--) {
     const f = fadingBars[i]; f.t -= dt; placeBar(f.bar, dt, f.x, f.y, f.z);
     f.bar.el.style.opacity = Math.min(1, f.t / 0.4).toFixed(3);
@@ -681,11 +703,52 @@ function padTick() {
     if (b === PAD.LS) realm.toggleFly();
   }
 }
+// 雾外剔除（画面完全不变）：雾的 far 之外只剩雾色，看不见；离玩家远也照不出能看到的影子。
+// 每帧渲染前把这种顶层物体（远处的 NPC、房子、树…）临时藏起来、也不算它们的矩阵，渲染完马上还原，游戏逻辑看不到这件事。
+const fogCull = { n: 0, hidden: [], off: /[?&]cull=0\b/.test(location.search) }; // ?cull=0 关掉对比
+const _fcB = new THREE.Box3(), _fcS = new THREE.Sphere(), _fcV = new THREE.Vector3(), _fcI = new THREE.Matrix4();
+function cullInfo(o) {
+  if (o.userData._cull !== undefined) return o.userData._cull;
+  let ok = !o.isLight && !o.isCamera, any = false;
+  o.traverse((q) => { if (q.isLight || q.isPoints || q.isSprite) ok = false; if (q.isMesh) { any = true; for (const m of [].concat(q.material)) if (!m || m.fog === false) ok = false; } });
+  let info = null;
+  if (ok && any) {
+    o.updateMatrixWorld(true); _fcB.setFromObject(o);
+    if (!_fcB.isEmpty()) { _fcB.getBoundingSphere(_fcS); if (_fcS.radius < 60) info = { c: _fcS.center.clone().applyMatrix4(_fcI.copy(o.matrixWorld).invert()), r: _fcS.radius * 1.1 }; }
+  }
+  return (o.userData._cull = info);
+}
+function fogCullBegin() {
+  const H = fogCull.hidden; H.length = 0;
+  if (!scene.fog || g.debugCam || fogCull.off) return;
+  const far = scene.fog.far, cam = camera.position, pp = P.pos, kids = scene.children;
+  for (let i = 0; i < kids.length; i++) {
+    const o = kids[i]; if (!o.visible || o === lift) continue;
+    const info = cullInfo(o); if (!info) continue;
+    if (o.matrixAutoUpdate) o.updateMatrix(); // 藏起来时不会自动更新，自己算，不然走近的 NPC 永远出不来
+    _fcV.copy(info.c).applyMatrix4(o.matrix);
+    if (_fcV.distanceTo(cam) - info.r > far && Math.hypot(_fcV.x - pp.x, _fcV.z - pp.z) - info.r > 50) { o.visible = false; o.matrixWorldAutoUpdate = false; H.push(o); }
+  }
+  fogCull.n = H.length;
+}
+function fogCullEnd() { for (const o of fogCull.hidden) { o.visible = true; o.matrixWorldAutoUpdate = true; } }
+function drawFrame() { fogCullBegin(); composer.render(); fogCullEnd(); }
+
+// 帧率表（版本号旁边）
+const fpsM = { acc: 0, n: 0, el: null };
+function fpsTick(rdt) {
+  if (rdt > 1) return; fpsM.acc += rdt; fpsM.n++;
+  if (fpsM.acc < 0.5) return;
+  const f = Math.round(fpsM.n / fpsM.acc); fpsM.acc = fpsM.n = 0; g.fps = f;
+  if (!fpsM.el) { const v = document.getElementById('ver'); if (!v) return; fpsM.el = document.createElement('span'); v.append(' · ', fpsM.el); }
+  fpsM.el.textContent = f + ' fps'; fpsM.el.style.color = f >= 50 ? '#8f8' : f >= 30 ? '#ff8' : '#f88';
+}
 function frame(now) {
   requestAnimationFrame(frame);
+  fpsTick((now - last) / 1000);
   padTick();
   tick(Math.min(0.05, (now - last) / 1000)); last = now;
-  composer.render();
+  drawFrame();
 }
 function tick(dt) {
   // 菜单 / 对话 / 标题画面：暂停（GDD：只在菜单和对话时暂停）
@@ -720,6 +783,7 @@ function tick(dt) {
   quests.update(dt);
   jobs.update(dt);
   village.update(dt);
+  town.update(dt);
   enemies.update(dt);
   combat.updateEffects(dt);
   ambientSpawns(dt);
@@ -753,7 +817,12 @@ function updatePlayer(dt) {
     fx.mote(P.pos.x, 0.8 + Math.random() * 0.6, P.pos.z, '#9ef0ff', { life: 0.3, size: 1.2 });
   }
   P.vel.set(vx, 0, vz);
+  const ox = P.pos.x, oz = P.pos.z;
   P.pos.x += (vx + P.kx) * dt; P.pos.z += (vz + P.kz) * dt;
+  // 宗门台地：断崖走不上去也跳不下去（顺着崖边滑开）；御剑飞行不受限
+  if (!realm.fly && !stepOK(ox, oz, P.pos.x, P.pos.z)) {
+    if (stepOK(ox, oz, P.pos.x, oz)) P.pos.z = oz; else if (stepOK(ox, oz, ox, P.pos.z)) P.pos.x = ox; else { P.pos.x = ox; P.pos.z = oz; }
+  }
   const kd = Math.exp(-10 * dt); P.kx *= kd; P.kz *= kd;
   world.resolve(P.pos, P.r);
   if (!st.ghost && P.dashT <= 0) for (const e of enemies.list) {
@@ -772,9 +841,12 @@ function updatePlayer(dt) {
   if (!SW.on && wd > SWIM_IN) SW.on = true; else if (SW.on && wd < SWIM_OUT) SW.on = false;
   SW.k = lerp(SW.k, SW.on ? 1 : 0, 1 - Math.exp(-7 * dt));
   if (SW.on) SW.ph += dt * (1.5 + 4.2 * moveK);
-  P.c.root.position.y = st.y;
-  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work });
+  // 画的时候加上地面高度（台地）；平地起伏直接贴地，飞过崖时平滑追
+  const gy = groundY(P.pos.x, P.pos.z); P.gy = P.gy === undefined || Math.abs(gy - P.gy) < 0.08 ? gy : lerp(P.gy, gy, 1 - Math.exp(-12 * dt));
+  P.c.root.position.y = st.y; lift.position.y = cfxRoot.position.y = P.gy;
+  combat.animate(dt, Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), { work: P.work, rate: 16, run: realm.fly ? 0 : RUN(Math.hypot(vx, vz)) * (1 - SW.k) });
   if (SW.k > 0.002) swimPose(P.c, SW.k, moveK, SW.ph, g.time);
+  if (heroModel.ready) { const rm = runner.move || combat.skill?.m, rt = runner.move ? runner.t : combat.skill?.t; heroModel.sync(P.c, dt, rm, rt); }
   if (wd > 0.03) {
     const fx0 = Math.sin(P.yaw), fz0 = Math.cos(P.yaw);
     if (SW.prev <= 0.03 && moveK > 0.2) { waterFx.splash(P.pos.x + fx0 * 0.2, WATER_Y, P.pos.z + fz0 * 0.2, 10, 2.2, 0.9, 0.04, new THREE.Vector3(fx0, 0, fz0)); waterFx.ring(P.pos.x, WATER_Y, P.pos.z, 0.15, 1.0, 0.9); waterSound('enter', 0.6); }
@@ -805,18 +877,19 @@ function updateCamera(dt) {
   camYawT = clamp(camYawT, -0.8, 0.8);
   camYaw = lerp(camYaw, camYawT, 1 - Math.exp(-8 * dt));
   focus.lerp(P.pos, 1 - Math.exp(-8 * dt));
+  camGY = lerp(camGY, P.gy || 0, 1 - Math.exp(-6 * dt)); // 台地：镜头跟着地面高度升降
   // 手机屏幕小，镜头拉远 1.4 倍看得更远
   camZoom = lerp(camZoom, (touch.on ? 1.4 : 1) * camZoomU, 1 - Math.exp(-6 * dt));
   const farK = 140 * Math.max(1, camZoom); if (Math.abs(camera.far - farK) > 1) { camera.far = farK; camera.updateProjectionMatrix(); }
   const dist = 21 * camZoom, pitch = 0.9;
-  camera.position.set(focus.x + Math.sin(camYaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, focus.z + Math.cos(camYaw) * Math.cos(pitch) * dist);
+  camera.position.set(focus.x + Math.sin(camYaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist + camGY, focus.z + Math.cos(camYaw) * Math.cos(pitch) * dist);
   if (g.shakeV > 0) {
     camera.position.x += (Math.random() - 0.5) * g.shakeV * 0.5;
     camera.position.y += (Math.random() - 0.5) * g.shakeV * 0.5;
     g.shakeV = Math.max(0, g.shakeV - dt * 3);
   }
-  camera.lookAt(focus.x, 1, focus.z);
-  occ.uPlayer.value.set(P.pos.x, 1.0, P.pos.z);
+  camera.lookAt(focus.x, 1 + camGY, focus.z);
+  occ.uPlayer.value.set(P.pos.x, 1.0 + (P.gy || 0), P.pos.z);
   occ.uCam.value.copy(camera.position);
 }
 
@@ -951,20 +1024,33 @@ function newGame() {
   inv.money = 200; inv.add('can'); inv.add('seed_radish', 6); inv.add('lingcao', 3);
   g.weatherToday = 'clear'; weather.setDay(false);
   quests.newDay();
-  P.pos.set(31, 0, 16); P.yaw = -Math.PI / 2; focus.copy(P.pos);
-  g.intro = true;
+  g.intro = startWithQuest() ? 'quest' : 'skip';
+  if (g.intro === 'quest') P.pos.set(31, 0, 16), P.yaw = -Math.PI / 2;
+  else P.pos.set(0, 0, 4), P.yaw = 0;
+  focus.copy(P.pos);
+}
+// 跳过新手任务（默认）：s1–s5 记为完成，教学途中会拿到的种子、灵泉、丹方、狼王线索照给（修为不给），直接接主线「赤枫狼王」
+function skipTutorial() {
+  for (const id of ['s1', 's2', 's3', 's4', 's5']) {
+    const d = quests.defs[id]; quests.done.add(id);
+    for (const r of [d.startReward, d.reward]) if (r) quests.give({ ...r, xp: 0 });
+  }
+  quests.accept('s6', 'story');
 }
 function startPlay() {
   g.title = false; g.paused = false;
   document.getElementById('title').classList.add('hidden');
   gui.renderHotbar(inv);
   if (g.intro) {
-    g.intro = false;
+    const mode = g.intro; g.intro = false;
     // GDD：开局选一种五行灵根（凡品）
     const pickRoot = (e) => {
       P.roots = [{ e, grade: 0 }]; P.elem = e; realm.recalc(true);
-      gui.dialog({ narrate: true, lines: ['你背着包袱，走了三天山路。', '远远地，已经能望见青竹村的炊烟。', '就在这时，路边的林子里传来一阵低吼——'], onClose: () => quests.accept('s1', 'story') });
+      if (mode === 'quest') gui.dialog({ narrate: true, lines: ['你背着包袱，走了三天山路。', '远远地，已经能望见青竹村的炊烟。', '就在这时，路边的林子里传来一阵低吼——'], onClose: () => quests.accept('s1', 'story') });
+      else skipTutorial();
     };
+    // 默认跳过新手：灵根随机一种，不弹选择；作弊面板勾「开局带新手任务」才让玩家自己选
+    if (mode !== 'quest') { const e = '金木水火土'[Math.floor(Math.random() * 5)]; pickRoot(e); g.toast(`测灵石亮起——你是${e}灵根（${ROOT_LIFE[e]}）`, 4); return; }
     gui.dialog({ narrate: true, line: '测灵石上亮起一道光——你的灵根是？', info: '五行相克：金克木、木克土、土克水、水克火、火克金（克制 ×1.5）。每种灵根还带一个生活被动。',
       choices: ['金', '木', '水', '火', '土'].map((e) => ({ label: `${e}（${ROOT_LIFE[e]}）`, fn: () => pickRoot(e) })) });
   }
@@ -979,7 +1065,9 @@ function startPlay() {
 }
 requestAnimationFrame(frame);
 // 调试入口
-window.game = g; g.combo = runner; g.combat = combat;
+g.zoom = () => camZoomU; // 调试用
+window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
-g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) composer.render(); };
+g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) drawFrame(); };
+g.fogCull = fogCull;
 export { flat, glow, mesh };
