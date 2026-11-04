@@ -37,7 +37,8 @@ async function load(c, proxyMeshes) {
   tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const mat = toon('#ffffff', { map: tex, unique: true });
   model.traverse(o => { if (o.isMesh) { o.material = mat; o.castShadow = true; o.frustumCulled = false; } });
-  model.traverse(o => { if (o.isSkinnedMesh) { makeFists(o); sharpenHair(o, tex.image); trimSleeves(o); } });
+  let fist = {};
+  model.traverse(o => { if (o.isSkinnedMesh) { fist = makeFists(o); sharpenHair(o, tex.image); trimSleeves(o); } });
   model.scale.setScalar(HEIGHT / 0.9995); // FBX 里身高约 1.0
   model.updateMatrixWorld(true);
   const find = k => model.getObjectByName('mixamorig' + k) || model.getObjectByName('mixamorig:' + k);
@@ -60,7 +61,10 @@ async function load(c, proxyMeshes) {
     const side = A.s < 0 ? 'Right' : 'Left', a = P(find(side + 'Arm')), e = P(find(side + 'ForeArm')), h = P(find(side + 'Hand'));
     A.sh.position.set(a.x, a.y - 0.55, a.z); // 替身的 body 原点在胯（0.55）
     A.el.position.y = -a.distanceTo(e);
-    A.hand.position.y = -(e.distanceTo(h) + 0.05);
+    // 替身的手放在拳心（不是手腕骨），剑柄才会穿过拳头；剑格 / 剑身往外挪到拳头外面
+    const fl = e.distanceTo(h), F = fist[side] || { u: 0.05 / fl, r: 0.07 / fl };
+    A.hand.position.y = -(fl + F.u * fl); A.fist = F.bone && F; // 先粗放；sync 每帧再钉到模型的拳心上
+    if (A === c.arms[0] && c.sword) { const push = Math.max(0, F.r * fl + 0.02 - 0.075); c.sword.children.forEach((m, i) => { if (i < 2) m.position.y = push; }); }
     A.off = a.clone().sub(P(find(side + 'Shoulder'))); // 锁骨根 → 肩关节，方肩时替身肩位跟着挪
     A.ov = { p: new THREE.Vector3(), q: new THREE.Quaternion(), op: new THREE.Vector3(), oq: new THREE.Quaternion(), on: false };
   }
@@ -142,5 +146,8 @@ async function load(c, proxyMeshes) {
     }
     for (const d of drive) { const r = _sq[d.mine]; if (r) d.b.quaternion.copy(d.wpInv).multiply(r).multiply(d.wp).multiply(d.rest); }
     hips.position.copy(hipR.pos).addScaledVector(hipR.perY, y).addScaledVector(hipR.perZ, z);
+    // 替身的胸 / 肩和模型对不齐（差十几厘米），手上的剑 / 符 / 拳光会落在手腕外面：把替身的手直接钉到模型拳心
+    c.root.updateMatrixWorld(true);
+    for (const A of c.arms) if (A.fist) A.hand.position.copy(A.el.worldToLocal(_v.copy(A.fist.p).applyMatrix4(A.fist.bone.matrixWorld)));
   };
 }

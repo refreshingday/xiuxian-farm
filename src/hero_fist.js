@@ -8,11 +8,12 @@ export function makeFists(mesh, { shorten = 0.62, puff = 1.6, round = 0.8, size 
   sk.bones.forEach(b => b.updateMatrixWorld(true));
   const bindPos = i => new THREE.Vector3().setFromMatrixPosition(sk.boneInverses[i].clone().invert());
   const find = re => sk.bones.findIndex(b => re.test(b.name));
+  const out = {}; // 每只手：拳心离手腕骨多远 / 拳头半径（按前臂长度算比例）、拳心在手骨局部坐标里的位置
   for (const side of ['Left', 'Right']) {
     const isHand = new Set(sk.bones.map((b, i) => (new RegExp(`${side}Hand`).test(b.name) ? i : -1)).filter(i => i >= 0));
     const hand = find(new RegExp(`${side}Hand$`)), fore = find(new RegExp(`${side}ForeArm$`));
     if (hand < 0 || fore < 0) continue;
-    const ph = bindPos(hand), axis = ph.clone().sub(bindPos(fore)).normalize();
+    const ph = bindPos(hand), fa = ph.clone().sub(bindPos(fore)), faLen = fa.length(), axis = fa.normalize();
     const w = new Float32Array(pos.count), v = new THREE.Vector3();
     const cen = new THREE.Vector3(); let wsum = 0, umax = 0;
     for (let i = 0; i < pos.count; i++) {
@@ -33,6 +34,7 @@ export function makeFists(mesh, { shorten = 0.62, puff = 1.6, round = 0.8, size 
       if (w[i] > 0.5) { rsum += nv.distanceTo(hc); rn++; }
     }
     const R = (rsum / rn) * size;
+    out[side] = { u: um / faLen, r: R / faLen, bone: sk.bones[hand], p: hc.clone().applyMatrix4(mesh.bindMatrix).applyMatrix4(sk.boneInverses[hand]) }; // p：拳心在手骨局部坐标
     idxs.forEach((i, j) => {
       const d = nvs[j].clone().sub(hc), len = d.length() || 1e-6;
       const nv = hc.clone().addScaledVector(d, THREE.MathUtils.lerp(len, R, round) / len);
@@ -41,4 +43,5 @@ export function makeFists(mesh, { shorten = 0.62, puff = 1.6, round = 0.8, size 
     });
   }
   pos.needsUpdate = true; g.computeBoundingSphere();
+  return out;
 }
