@@ -31,7 +31,9 @@ function geos() {
   G.pin = new THREE.CylinderGeometry(0.018, 0.018, 0.5, 5).rotateZ(Math.PI / 2);
   G.longBack = sph(0.36, 14, 10).scale(1, 1.25, 0.55);
   G.beard = new THREE.ConeGeometry(0.14, 0.4, 8).rotateX(Math.PI);
-  G.blade = new THREE.BoxGeometry(0.07, 1.0, 0.02).translate(0, 0.62, 0);
+  // 剑身：菱形截面（中间起脊），最后一段收成尖
+  G.blade = new THREE.LatheGeometry([new THREE.Vector2(0, 0.12), new THREE.Vector2(0.036, 0.12), new THREE.Vector2(0.036, 0.96), new THREE.Vector2(0, 1.18)], 4)
+    .scale(1, 1, 0.33).toNonIndexed(); G.blade.computeVertexNormals();
   G.guard = new THREE.BoxGeometry(0.26, 0.05, 0.07).translate(0, 0.1, 0);
   G.grip = new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6);
   return G;
