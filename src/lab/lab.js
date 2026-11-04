@@ -327,16 +327,19 @@ function makeWater(W, hAt, area, masked = false) {
         }
         return r;
       }
+      float waveH(vec2 x) { return vn(x + uTime * vec2(0.5, 0.3)) * 0.6 + vn(x * 2.1 - uTime * vec2(0.7, 0.4) + 7.0) * 0.4; }
       float cloudN(vec2 p) { float a = 0.0, w = 0.5; for (int i = 0; i < 4; i++) { a += w * vn(p); p = p * 2.03 + 5.7; w *= 0.5; } return a; }
       // 假云倒影：把反射方向投到一层云上，用天空球的上下两色上色；云有明暗，闪电时被打亮
       vec3 skyRefl(vec3 r) {
-        r.y = max(r.y, 0.03);
-        vec2 p = r.xz / (r.y + 0.18) * 0.45 + vec2(uTime * 0.025, uTime * 0.012);
+        r.y = max(r.y, 0.1);
+        vec2 p = r.xz / (r.y + 0.18) * 0.9 + vec2(uTime * 0.025, uTime * 0.012);
         float cl = cloudN(p), cl2 = cloudN(p + vec2(0.07, 0.05));
-        float m = smoothstep(0.4, 0.72, cl), shade = clamp(0.55 + (cl - cl2) * 5.0, 0.0, 1.0);
+        float m = smoothstep(0.42, 0.66, cl), shade = clamp(0.55 + (cl - cl2) * 5.0, 0.0, 1.0);
         vec3 sk = mix(uSkyB, uSky, smoothstep(0.0, 0.6, r.y));
-        vec3 cc = mix(sk * 0.5, sk * 1.5 + 0.1, shade);
-        return mix(sk, cc, m) + vec3(0.55, 0.6, 0.85) * uFlash * (0.3 + 0.7 * m);
+        float lum = clamp(dot(uSkyB + uSky, vec3(0.33)) * 1.2 + 0.12, 0.25, 1.0);
+        vec3 cc = mix(vec3(0.62, 0.68, 0.8), vec3(1.0), shade) * lum;
+        sk *= 0.9;
+        return mix(sk, cc, m * 0.95) + vec3(0.55, 0.6, 0.85) * uFlash * (0.3 + 0.7 * m);
       }
       void main() {
         vec2 uv = (vXZ - uOrigin) / uSize;
@@ -380,11 +383,19 @@ function makeWater(W, hAt, area, masked = false) {
           float mk = uMirEn * uOn;
           if (mk > 0.5) {
             vec3 rp = ripples(p) * uRain;
-            vec3 N = normalize(vec3(-rp.x * 0.35 + (vn(q * 2.0) - 0.5) * 0.05, 1.0, -rp.y * 0.35 + (vn(q * 2.0 + 9.0) - 0.5) * 0.05));
+            // 波纹法线：静水是慢慢晃的小波；溪流里沿流向拉长、顺流快速滚动，倒影被拉成一条条流动的条纹
+            vec2 wp = p * 1.5 - drift * 1.5, wfd = fd, wfp = vec2(-fd.y, fd.x);
+            float fk = smoothstep(0.05, 0.4, fs);
+            if (fk > 0.0) wp = mix(wp, vec2(dot(p, wfd) * 0.45 - uTime * fs * 3.2, dot(p, wfp) * 2.4), fk);
+            float e = 0.12, w0 = waveH(wp);
+            vec2 wg = vec2(waveH(wp + vec2(e, 0.0)) - w0, waveH(wp + vec2(0.0, e)) - w0) / e;
+            if (fk > 0.0) wg = mix(wg, wfd * wg.x + wfp * wg.y, fk);
+            float amp = 0.16 + 0.3 * fk;
+            vec3 N = normalize(vec3(-(wg.x * amp + rp.x * 0.35), 1.0, -(wg.y * amp + rp.y * 0.35)));
             vec3 V = normalize(cameraPosition - vW), R = reflect(-V, N);
-            float fr = 0.2 + 0.8 * pow(1.0 - max(dot(N, V), 0.0), 3.0), inner = smoothstep(0.03, 0.2, d);
-            c = mix(c, skyRefl(R), fr * 0.85 * inner);
-            vec4 rc = texture2D(tRef, (texM * vec4(vW, 1.0)).xy / (texM * vec4(vW, 1.0)).w + N.xz * 0.05);
+            float fr = 0.5 + 0.5 * pow(1.0 - max(dot(N, V), 0.0), 3.0), inner = smoothstep(0.03, 0.2, d);
+            c = mix(c, skyRefl(R), fr * 0.9 * inner);
+            vec4 rc = texture2D(tRef, (texM * vec4(vW, 1.0)).xy / (texM * vec4(vW, 1.0)).w + N.xz * 0.12);
             c = mix(c, rc.rgb, rc.a * inner * (0.55 + 0.4 * fr));
             c += rp.z * 0.18 * inner;
           }
