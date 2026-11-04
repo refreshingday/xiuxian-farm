@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   CHUNK, mulberry32, hashInt, hash01, fbm, vnoise, clamp, smooth, approach, angDiff,
-  flat, toon as toonBase, glow, mesh, at, outlineMat, addOutline, canvasTex, boxUV, wind, PNG, weatherU,
+  flat, toon as toonBase, glow, mesh, at, outlineMat, addOutline, canvasTex, boxUV, wind, PNG, weatherU, addOcc,
 } from './util.js';
 import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
 import { buildWall } from './wall.js';
@@ -722,7 +722,11 @@ export class World {
   // 参考画风素材（lab 的 ref）：克隆 + 季节着色 + 墨线跟描边设置走
   ref(id, v, x, z, s = 1, r = 0) {
     const o = getRefAsset(id, v)?.clone(); if (!o) return null;
-    seasonRef(o); o.traverse((c) => { if (c.userData.isLine) { (this.refInk ||= []).push(c); c.visible = !!this.inkOn; } });
+    seasonRef(o); o.traverse((c) => {
+      if (c.userData.isLine) { (this.refInk ||= []).push(c); c.visible = !!this.inkOn; }
+      // 挡在镜头和角色之间时变透（和旧树一样）：v2026.11.04.20 之前参考画风的树没有这个
+      if (c.isMesh) addOcc(c.material);
+    });
     o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = r; this.scene.add(o); return o;
   }
   setInk(on) { this.inkOn = on; for (const c of this.refInk || []) c.visible = on; }

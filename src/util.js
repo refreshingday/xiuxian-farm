@@ -209,6 +209,15 @@ function applyPatches(mat, patches, key) {
   mat.onBeforeCompile = (s) => { for (const f of patches) f(s, mat); };
   mat.customProgramCacheKey = () => key;
 }
+// 给已有材质（lab 参考画风的树、竹、石、墨线）补上「挡住角色时变透」：链在原 onBeforeCompile 后面，只补一次
+export function addOcc(mat) {
+  if (!mat || mat.userData.occ) return;
+  mat.userData.occ = true;
+  const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey ? mat.customProgramCacheKey() : '';
+  mat.onBeforeCompile = (s, r) => { prev?.call(mat, s, r); occPatch(s); };
+  mat.customProgramCacheKey = () => key + 'O';
+  mat.needsUpdate = true;
+}
 function occlude(mat, pre) {
   applyPatches(mat, pre ? [pre, occPatch] : [occPatch], 'occ' + (pre ? 'line' : ''));
 }
