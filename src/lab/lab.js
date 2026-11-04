@@ -260,7 +260,7 @@ function buildWater(b, hAt) {
   makeWater(W, hAt, { x: 0, z: 0, r: R - 0.6 });
   // 台地上的高处水潭：同一种水，只是单独一层水面，用遮罩裁掉崖外部分
   deepPools = (b.terrace?.pools || []).filter((p) => p.deep);
-  for (const p of b.terrace?.pools || []) makeWater({ ...W, level: p.level, mirror: false }, hAt, p, true);
+  for (const p of b.terrace?.pools || []) makeWater({ ...W, level: p.level }, hAt, p, true);
   for (const f of b.terrace?.falls || []) waterfall(f, W);
 }
 let flowLine = null, deepPools = [];
@@ -296,7 +296,7 @@ function makeWater(W, hAt, area, masked = false) {
     uniforms: Object.assign(fogU({
       tDepth: { value: dt }, uTime: U.time, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: sz }, uMask: { value: masked ? 1 : 0 }, uMode: { value: mode },
       cShallow: { value: new THREE.Color(W.shallow) }, cDeep: { value: new THREE.Color(W.deep) }, cFoam: { value: new THREE.Color(W.foam) },
-      uSky: { value: new THREE.Color() }, uMirEn: { value: W.mirror && !masked ? 1 : 0 }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
+      uSky: { value: new THREE.Color() }, uMirEn: { value: W.mirror ? 1 : 0 }, uChar: { value: masked ? 0 : 1 }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
     }), { tRef: MIR.tRef, texM: MIR.texM, uOn: MIR.on, uFlash: MIR.flash, uRain: MIR.rain, uSkyB: MIR.skyB, uLit: MIR.lit }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
@@ -304,7 +304,7 @@ function makeWater(W, hAt, area, masked = false) {
       #include <fog_vertex>
       }`,
     fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky, uSkyB, uLit; uniform vec2 uFlow;
-      uniform sampler2D tRef; uniform mat4 texM; uniform float uMirEn, uOn, uFlash, uRain;
+      uniform sampler2D tRef; uniform mat4 texM; uniform float uMirEn, uOn, uFlash, uRain, uChar;
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -398,7 +398,7 @@ function makeWater(W, hAt, area, masked = false) {
             float fr = 0.5 + 0.5 * pow(1.0 - max(dot(N, V), 0.0), 3.0), inner = smoothstep(0.03, 0.2, d);
             c = mix(c, skyRefl(R), fr * 0.9 * inner * (1.0 - 0.45 * fk));
             vec4 rc = texture2D(tRef, (texM * vec4(vW, 1.0)).xy / (texM * vec4(vW, 1.0)).w + clamp(N.xz * 0.12, -0.05, 0.05));
-            c = mix(c, rc.rgb, rc.a * inner * (0.55 + 0.4 * fr));
+            c = mix(c, rc.rgb, rc.a * inner * uChar * (0.55 + 0.4 * fr));
             c += rp.z * 0.18 * inner;
           }
           a = uClear > 0.5 ? mix(0.55, 0.86, smoothstep(0.0, 0.8, d)) : mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
@@ -443,13 +443,13 @@ function waterfall(f, W) {
   g.computeVertexNormals();
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true,
-    uniforms: fogU({ uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }),
+    uniforms: Object.assign(fogU({ uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }), { uLit: MIR.lit }),
     vertexShader: `varying vec2 vUv;
       #include <fog_pars_vertex>
       void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform float uTime; uniform vec3 cA, cB; varying vec2 vUv;
+    fragmentShader: `uniform float uTime; uniform vec3 cA, cB, uLit; varying vec2 vUv;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -460,7 +460,7 @@ function waterfall(f, W) {
         vec3 c = mix(cA * 1.1, cB, smoothstep(0.45, 0.75, s));
         c = mix(c, cB, smoothstep(0.85, 1.0, vUv.y) * 0.7 + smoothstep(0.2, 0.0, vUv.y) * 0.8);
         float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
-        gl_FragColor = vec4(c * 1.15, (0.78 + 0.2 * s) * edge);
+        gl_FragColor = vec4(c * 1.15 * uLit, (0.78 + 0.2 * s) * edge);
         #include <fog_fragment>
       }`,
   });
@@ -470,11 +470,11 @@ function waterfall(f, W) {
   root.add(m);
   // 落水白沫：一圈向外扩散的波纹
   const foam = new THREE.Mesh(new THREE.CircleGeometry(f.w * 1.1, 24).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms: { uTime: U.time },
+    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uLit: MIR.lit },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float uTime; varying vec2 vUv;
+    fragmentShader: `uniform float uTime; uniform vec3 uLit; varying vec2 vUv;
       void main() { float r = length(vUv - 0.5) * 2.0; float w = fract(r * 2.5 - uTime * 1.2);
-        float a = smoothstep(1.0, 0.55, r) * (0.35 + 0.65 * step(0.6, w)) * 0.85; gl_FragColor = vec4(vec3(0.95, 0.98, 1.0) * 1.3, a); }`,
+        float a = smoothstep(1.0, 0.55, r) * (0.35 + 0.65 * step(0.6, w)) * 0.85; gl_FragColor = vec4(vec3(0.95, 0.98, 1.0) * 1.3 * uLit, a); }`,
   }));
   foam.position.set(f.x + fx * 0.75, f.bottom + 0.02, f.z + fz * 0.75); foam.renderOrder = 2;
   root.add(foam);
@@ -483,13 +483,13 @@ function waterfall(f, W) {
   for (let i = 0; i < n; i++) { pp.set([f.x + fx * 0.75, f.bottom, f.z + fz * 0.75], i * 3); for (let c = 0; c < 4; c++) rnd[i * 4 + c] = Math.random(); }
   const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); mg.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 4));
   const mist = new THREE.Points(mg, new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uW: { value: f.w } },
-    vertexShader: `attribute vec4 aRnd; uniform float uTime, uW; varying float vA;
+    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uW: { value: f.w }, uLit: MIR.lit },
+    vertexShader: `attribute vec4 aRnd; uniform float uTime, uW; uniform vec3 uLit; varying float vA, vL;
       void main() { float t = fract(aRnd.x + uTime * (0.35 + aRnd.y * 0.3));
         vec3 p = position + vec3((aRnd.z - 0.5) * uW * 1.3, t * 1.4, (aRnd.w - 0.3) * 1.2 + t * 0.3);
         vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
-        gl_PointSize = min((6.0 + t * 22.0) * (30.0 / -mv.z), 60.0); vA = (1.0 - t) * smoothstep(0.0, 0.15, t) * 0.5; }`,
-    fragmentShader: 'varying float vA; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(1.0, 1.0, 1.0, smoothstep(0.5, 0.1, d) * vA); }',
+        gl_PointSize = min((6.0 + t * 22.0) * (30.0 / -mv.z), 60.0); vA = (1.0 - t) * smoothstep(0.0, 0.15, t) * 0.5; vL = (uLit.r + uLit.g + uLit.b) / 3.0; }`,
+    fragmentShader: 'varying float vA, vL; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vec3(vL), smoothstep(0.5, 0.1, d) * vA); }',
   }));
   mist.frustumCulled = false; root.add(mist); particleSys.push(mist);
 }
