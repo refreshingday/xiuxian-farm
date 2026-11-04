@@ -681,7 +681,7 @@ export const BIOMES = [
       if (t.k === 'scorch') return mix([40, 36, 44], [70, 50, 90], vnoise(x * 5, z * 5, 66) > 0.7 ? 1 : 0);
       return mix([96, 92, 106], [70, 66, 80], smooth(0.4, 0.7, n2(x, z, 67, 0.35)));
     },
-    water: { level: -0.1, mode: 'water', shallow: '#5a6a8a', deep: '#22283e', foam: '#6a7a9a' }, // 雨水坑：泡沫色接近水色，不出白圈
+    water: { level: -0.1, mirror: true, mode: 'water', shallow: '#5a6a8a', deep: '#22283e', foam: '#6a7a9a' }, // 雨水坑：泡沫色接近水色，不出白圈
     light: { sun: '#a8b0ff', sunI: 0.9, sky: '#7a7aa8', ground: '#2a2834', hemiI: 1.25, fog: '#3a3a52', top: '#14142a', bottom: '#46466a', exposure: 1.15, bloom: 0.8, fogNear: 28, fogFar: 76, warm: 0, fx: 'storm' },
     particles: [{ type: 'rain', n: 1000, color: '#b8c4ff', size: 6 }, { type: 'motes', n: 60, color: '#8ad0ff', size: 5, glow: true }],
     scatter: [

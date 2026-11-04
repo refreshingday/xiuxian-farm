@@ -103,14 +103,15 @@
 { "imports": {
   "three": "./vendor/three@0.160.0/build/three.module.min.js",
   "three/addons/": "./vendor/three@0.160.0/jsm/",
-  "./src/util.js": "./src/util.js?v=20261101s",
-  "./src/chibi.js": "./src/chibi.js?v=20261101s",
-  "./src/touch.js": "./src/touch.js?v=20261101s",
-  "./src/lab/kit.js": "./src/lab/kit.js?v=20261101s",
-  "./src/lab/assets.js": "./src/lab/assets.js?v=20261101s",
-  "./src/lab/biomes.js": "./src/lab/biomes.js?v=20261101s",
-  "./src/lab/ref/index.js": "./src/lab/ref/index.js?v=20261101s",
-  "./src/lab/swim.js": "./src/lab/swim.js?v=20261101s"
+  "./src/util.js": "./src/util.js?v=20261104a",
+  "./src/chibi.js": "./src/chibi.js?v=20261104a",
+  "./src/touch.js": "./src/touch.js?v=20261104a",
+  "./src/lab/kit.js": "./src/lab/kit.js?v=20261104a",
+  "./src/lab/assets.js": "./src/lab/assets.js?v=20261104a",
+  "./src/lab/biomes.js": "./src/lab/biomes.js?v=20261104a",
+  "./src/lab/ref/index.js": "./src/lab/ref/index.js?v=20261104a",
+  "./src/lab/swim.js": "./src/lab/swim.js?v=20261104a",
+  "./src/lab/mirror.js": "./src/lab/mirror.js?v=20261104a"
 } }
 </script>
 </head>
@@ -141,7 +142,7 @@
     <div class="row">
       <button data-t="outline">描边</button><button data-t="shadows">阴影</button><button data-t="bloom">泛光</button>
       <button data-t="grade">调色</button><button data-t="particles">粒子</button>
-      <button data-t="chibi">角色</button><button data-t="labels">标签</button><button data-t="spin">自转</button><button data-t="sound">声音</button><button data-t="refgrad" title="参考画风：渐变层次 + 每棵树随机深浅的绿">渐变</button>
+      <button data-t="chibi">角色</button><button data-t="labels">标签</button><button data-t="spin">自转</button><button data-t="sound">声音</button><button data-t="mirror" title="雨天积水：假云倒影 + 角色倒影（天劫峰）">倒影</button><button data-t="refgrad" title="参考画风：渐变层次 + 每棵树随机深浅的绿">渐变</button>
     </div>
     <label>时间 <b id="timeV"></b></label>
     <input id="time" type="range" min="0" max="24" step="0.05">
@@ -171,7 +172,7 @@
 <button id="gear">⚙ 设置</button>
 
 <!-- 改了实验场代码就改 v，避免浏览器拿旧缓存（上面 importmap 里的版本号一起改） -->
-<script type="module" src="src/lab/lab.js?v=20261101s"></script>
+<script type="module" src="src/lab/lab.js?v=20261104a"></script>
 <script type="module" src="src/version.js"></script>
 </body>
 </html>
