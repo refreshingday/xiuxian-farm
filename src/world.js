@@ -375,16 +375,19 @@ const GROUND_WET = `
     totalEmissiveRadiance += uSky * ring * gPud * 0.6;
     // 水洼倒影：天上的云（假云，按反射方向算）+ 玩家（镜像相机渲的贴图，只在和镜面同高的水洼上）。涟漪把倒影晃开
     if (gPud > 0.01) {
-      vec2 rn = rd / max(rr, 0.001) * ring * 0.25 + vec2(gNoise(vGW * 3.0 + uRainT * 0.6), gNoise(vGW * 3.0 + 5.1 - uRainT * 0.5)) * 0.04 - 0.02;
+      vec2 rn = rd / max(rr, 0.001) * ring * 0.25 + (vec2(gNoise(vGW * 3.0 + uRainT * 0.6), gNoise(vGW * 3.0 + 5.1 - uRainT * 0.5)) - 0.5) * 0.12;
       vec3 Vw = normalize(cameraPosition - vGP), Nw = normalize(vec3(rn.x, 1.0, rn.y)), Rw = reflect(-Vw, Nw);
-      float frw = 0.45 + 0.55 * pow(1.0 - max(dot(Nw, Vw), 0.0), 3.0);
-      vec3 refl = gSkyRefl(Rw, uRainT) * 0.72; // 水洼底是泥，倒影比天空暗一点
+      float frw = 0.35 + 0.65 * pow(1.0 - max(dot(Nw, Vw), 0.0), 3.0);
+      vec3 refl = gSkyRefl(Rw, uRainT);
+      refl = mix(refl, uSky * 0.75, 0.4) * 0.65; // 泥水：云的对比压低、整体压暗，不要像镜子
       if (uPud > 0.5) {
-        vec4 pr = texM * vec4(vGP, 1.0);
-        vec4 rc4 = texture2D(tRef, pr.xy / pr.w + rn * 0.5);
-        refl = mix(refl, rc4.rgb, rc4.a * smoothstep(0.3, 0.08, abs(vGP.y - uPudY)));
+        vec4 pr = texM * vec4(vGP, 1.0); vec2 uv = pr.xy / pr.w + rn * 0.35;
+        vec4 rc4 = vec4(0.0); // 8 点模糊：浑水里的人影是糊的
+        for (int i = 0; i < 8; i++) { float an = float(i) * 0.785 + 0.4; rc4 += texture2D(tRef, uv + vec2(cos(an), sin(an)) * (0.006 + 0.006 * float(i - i / 2 * 2))); }
+        rc4 /= 8.0;
+        refl = mix(refl, rc4.rgb * 0.8, rc4.a * 0.7 * smoothstep(0.3, 0.08, abs(vGP.y - uPudY)));
       }
-      float k = gPud * frw * 0.85;
+      float k = gPud * frw * 0.6;
       reflectedLight.directDiffuse *= 1.0 - k; reflectedLight.indirectDiffuse *= 1.0 - k;
       totalEmissiveRadiance += refl * k;
     }
