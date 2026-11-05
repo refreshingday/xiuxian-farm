@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>妖兽图鉴 · 灵田问道</title>
+<style>
+  :root { --ink: #f4efe2; --line: rgba(214,182,112,.5); --gold: #ffe7a8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a2230; color: var(--ink); font-family: "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif; user-select: none; }
+  #app canvas { display: block; touch-action: none; }
+  #bar { position: fixed; left: 12px; top: 12px; right: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; pointer-events: none; }
+  #bar > * { pointer-events: auto; }
+  #bar h1 { margin: 0 8px 0 0; font: normal 22px "STKaiti","KaiTi",serif; letter-spacing: 2px; color: var(--gold); text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+  button { font: inherit; font-size: 13px; color: var(--ink); background: rgba(14,22,24,.7); border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  button.on { background: rgba(120,92,30,.9); color: #fff6d8; }
+  #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .lb { position: absolute; left: 0; top: 0; transform: translate(-50%, 0); text-align: center; white-space: nowrap; text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,.8); will-change: transform; }
+  .lb b { display: block; font: normal 17px "STKaiti","KaiTi",serif; letter-spacing: 2px; color: var(--gold); }
+  .lb small { display: block; font-size: 11px; opacity: .75; }
+  .lb.boss b { color: #ff9a7a; font-size: 19px; }
+  #tip { position: fixed; left: 12px; bottom: 10px; font-size: 12px; opacity: .65; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="labels"></div>
+<div id="bar"><h1>妖兽图鉴</h1><span id="btns"></span><span id="cnt" style="opacity:.7;font-size:13px"></span></div>
+<div id="tip">拖动旋转 · 滚轮缩放 · 右键 / 双指平移 · 点名字按钮跳转到对应分区</div>
+<script type="module" src="src/monsters.js"></script>
+<script type="module" src="src/version.js"></script>
+</body>
+</html>

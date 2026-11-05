@@ -89,7 +89,7 @@ const GRAV = 26;
 const NIGHT = 0.5; // nightK 超过这个算夜晚：敌人属性 +30%，掉落 +50%（GDD 第 3 节）；血月再 +50% / 掉落翻倍
 
 // ---------- 模型：几种骨架 × 配色 ----------
-function build(T) {
+export function build(T) {
   const g = geos(), mats = [];
   const M = (c, o = {}) => { const m = toon(c, { ...o, unique: true }); mats.push(m); return m; };
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
