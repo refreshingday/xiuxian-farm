@@ -1,4 +1,4 @@
-// 作弊面板：可最小化，按 ` 键开关；一键传送到村子 / 各门派山门，另有回满血蓝。
+// 作弊面板：可最小化，按 ` 键开关；一键传送到村子 / 上次死亡点 / 各门派山门，另有回满血蓝。
 // 「开局带新手任务」：默认关——新开局跳过第一个小时的主线教学（s1–s5），直接接赤枫狼王；勾上则从野猪袭村开始。
 import { polar } from './worldmap.js';
 
@@ -32,6 +32,12 @@ export class Cheat {
     cb.addEventListener('change', () => { try { localStorage.setItem('startQuest', cb.checked ? '1' : '0'); } catch (e) {} g.toast(cb.checked ? '下次「新的开始」从野猪袭村的新手任务开始' : '下次「新的开始」跳过新手任务', 2.5); });
     q.addEventListener('click', (e) => e.stopPropagation()); this.body.appendChild(q);
     add('🏠 回村', () => this.tp(0, 4));
+    add('💀 回到上次死亡点', () => {
+      const d = g.player.lastDeath;
+      if (!d) { g.toast('还没死过', 1.5); return; }
+      if (g.player.dead) { g.toast('等醒来再传', 1.5); return; }
+      g.realm && (g.realm.fly = false); this.tp(d.x, d.z); g.toast('回到上次倒下的地方', 1.5);
+    });
     add('❤ 回满血蓝', () => { const P = g.player; P.hp = P.maxHp; P.qi = P.maxQi; });
     const h = document.createElement('div'); h.textContent = '传送到门派'; h.style.cssText = 'margin:6px 0 2px;opacity:.7'; this.body.appendChild(h);
     for (const s of g.mapData.sects) { const p = polar(s.ang, s.dist); add(`${s.name}${s.hidden ? '*' : ''}`, () => { const f = g.sects?.list.find((q) => q.name === s.name)?.front; this.tp(f ? f.x : p.x, f ? f.z : p.z + 7); }); }
