@@ -214,6 +214,7 @@ P.dot = (dmg) => {
 };
 function die() {
   P.dead = true; P.hp = 0;
+  P.lastDeath = { x: P.pos.x, z: P.pos.z }; // 作弊面板「回到上次死亡点」用
   combat.cancel();
   const lost = life.deathDrop();
   document.getElementById('dead').classList.remove('hidden');
@@ -599,8 +600,8 @@ register('time', () => ({ day: g.day, hours: g.hours }), (s) => {
   g.day = s.day; g.hours = s.hours; world.day = g.day;
   g.weatherToday = rollWeather(g.day); weather.setDay(g.weatherToday === 'rain');
 });
-register('player', () => ({ x: P.pos.x, z: P.pos.z, hp: P.hp, maxHp: P.maxHp, qi: P.qi, maxQi: P.maxQi, layer: P.layer, xp: P.xp, elem: P.elem, kit: combat.kitI, atk: P.atkBonus }), (s) => {
-  P.pos.set(s.x, 0, s.z); focus.copy(P.pos);
+register('player', () => ({ x: P.pos.x, z: P.pos.z, hp: P.hp, maxHp: P.maxHp, qi: P.qi, maxQi: P.maxQi, layer: P.layer, xp: P.xp, elem: P.elem, kit: combat.kitI, atk: P.atkBonus, death: P.lastDeath || null }), (s) => {
+  P.pos.set(s.x, 0, s.z); focus.copy(P.pos); P.lastDeath = s.death || null;
   Object.assign(P, { hp: s.hp, maxHp: s.maxHp, qi: s.qi, maxQi: s.maxQi, layer: s.layer, xp: s.xp, elem: s.elem, atkBonus: s.atk || 0, dead: false });
   P.c.root.visible = true; combat.setKit(s.kit || 0);
   for (const e of [...enemies.list]) enemies.remove(e);
