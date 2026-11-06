@@ -33,6 +33,7 @@ import { Quests, loadQuestData } from './quests.js';
 import { Jobs } from './jobs.js';
 import { Landmarks } from './landmarks.js';
 import { Minimap } from './minimap.js';
+import { BigMap } from './bigmap.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { KE } from './comboKit.js';
@@ -43,6 +44,7 @@ import { DAY_START, dateOf, clockText, rollWeather } from './calendar.js';
 import { loadItems, Inventory, item, itemName } from './items.js';
 import { UI, btn, el } from './ui.js';
 import { Cheat, startWithQuest } from './cheat.js';
+import { Coop } from './coop.js';
 import { siteOf } from './sectsites.js';
 import { Life, near } from './life.js';
 import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
@@ -301,7 +303,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape') { if (gui.panelOpen) gui.closePanel(); else if (gui.dialogOpen) gui.closeDialog(); else if (!g.title) openMenu(); return; }
   if (g.title) return;
   if (gui.dialogOpen) { if (['KeyF', 'Space', 'Enter'].includes(e.code)) gui.advance(); return; }
-  if (gui.panelOpen) { if (e.code === 'Tab' || e.code === 'KeyB') gui.closePanel(); return; }
+  if (gui.panelOpen) { if (e.code === 'Tab' || e.code === 'KeyB' || (e.code === 'KeyM' && g.bigmap.isOpen)) gui.closePanel(); return; }
   if (e.code === 'KeyF') interact();
   if (e.code === 'Tab' || e.code === 'KeyB') openBag();
   if (e.code === 'KeyL') quests.openLog();
@@ -529,6 +531,8 @@ const landmarks = new Landmarks(g, g.mapData); g.landmarks = landmarks;
 // 坊市（hubs.js）：客栈、丹药阁、法器阁、拍卖行
 const hubs = new Hubs(g, landmarks); g.hubs = hubs;
 g.cheat = new Cheat(g); // 作弊面板（` 键开关，可最小化）
+const coop = new Coop(g, scene); // 联机同游（coop.js / net.js，照《一箭双修》的 PeerJS 房间号）
+document.getElementById('mpBtn').addEventListener('click', () => coop.openPanel());
 // 宗门（sects.js + data/sects.json）：拜入、试炼、晋升、贡献、功法、宗门任务、大比
 const sects = new Sects(g, landmarks, await (await fetch('data/sects.json')).json());
 // 秘境（每周五）与独特地点（鬼市、古剑冢、天火陨坑、天劫峰心魔路、矿洞灯火）
@@ -546,7 +550,7 @@ const events = new Events(g); g.events = events;
 // 委托板的进阶委托：护送、守护、寻踪、异象、切磋、精英讨伐 + 词缀（jobs.js）
 const jobs = new Jobs(g); g.jobs = jobs;
 // 小地图 + 任务指针（右上角圆形雷达，N 切换范围）
-const minimap = new Minimap(g); g.minimap = minimap;
+const minimap = new Minimap(g); g.minimap = minimap; g.bigmap = new BigMap(g);
 g.itemName = itemName;
 function interact() {
   if (gui.blocking || P.dead || g.paused) return;
@@ -563,6 +567,7 @@ function openMenu() {
     body.append(btn('📜 任务', () => { gui.closePanel(); quests.openLog(); }, 'wide'));
     body.append(btn('🗺 地图', () => { gui.closePanel(); landmarks.open(); }, 'wide'));
     body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
+    body.append(btn('👥 联机同游', () => coop.openPanel(), 'wide'));
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
@@ -819,6 +824,7 @@ function frame(now) {
   drawFrame();
 }
 function tick(dt) {
+  g.coop?.update(dt, camera); // 联机：暂停时道友也照样在动
   // 菜单 / 对话 / 标题画面：暂停（GDD：只在菜单和对话时暂停）
   if (g.paused || gui.blocking) { updateCamera(dt); updateLights(g.hours % 24); updateUI(); return; }
   if (hitStop > 0) { hitStop -= dt; dt *= 0.08; }
@@ -926,6 +932,7 @@ function updatePlayer(dt) {
   SW.prev = wd;
   SW.sunk = st.y < 0.3 ? SW.k * (lerp(0.78, 0.72, moveK) + Math.sin(g.time * 2.2) * 0.03) + clamp(wd / SWIM_IN, 0, 1) * 0.1 * (1 - SW.k) : 0;
   P.pos.y -= SW.sunk;
+  g.poseOut = { y: P.gy + P.pos.y, move: Math.min(1, Math.hypot(vx, vz) / 6) * (1 - SW.k), run: realm.fly ? 0 : RUN(Math.hypot(vx, vz)) * (1 - SW.k), atk: !!(runner.move || combat.skill) }; // 联机：发给道友
   waterFx.update(dt);
   P.c.root.visible = !P.dead && !(P.iframe > 0 && P.iframe < 0.55 && Math.floor(g.time * 20) % 2 === 0);
 }
