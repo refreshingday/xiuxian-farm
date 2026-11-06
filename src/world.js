@@ -4,7 +4,7 @@ import {
   CHUNK, mulberry32, hashInt, hash01, fbm, vnoise, clamp, smooth, approach, angDiff,
   flat, toon as toonBase, glow, mesh, at, outlineMat, addOutline, canvasTex, boxUV, wind, PNG, weatherU, addOcc,
 } from './util.js';
-import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
+import { sectorAt, biomeK, dangerFor, ringAt, RINGS, edgeR } from './worldmap.js';
 import { buildWall } from './wall.js';
 import { polyDist } from './terrace.js';
 import { makeLabWater, makeLabFall, waterFxU } from './water.js';
@@ -219,6 +219,30 @@ function groundSample(x, z, out) {
   }
   return out;
 }
+
+// ---------- 地图取样（小地图 / 舆图的实时地形，src/maptiles.js 用） ----------
+// 粗采样：地面底色 + 路面程度 / 地面类型 + 这一格的树 / 石概率和树冠色。逐像素的细节（树冠点、房子、水）在 maptiles 里补。
+const CANOPY = { broad: [58, 128, 56], maple: [198, 92, 42], pine: [36, 92, 68], dark: [40, 96, 58], snow: [196, 218, 222] };
+export function mapBase(x, z, o) {
+  groundSample(x, z, o);
+  o[3] = GS.path; o[4] = GS.kind;
+  const dv = Math.hypot(x, z), dm = Math.hypot(x - MINE.x, z - MINE.y);
+  const clear = dv < WALL_R + 4 || roadDist(x, z) < 3 || dm < MINE_R + 7 || pondDist(x, z) < 2 || CLEARINGS.some((c) => Math.hypot(x - c.x, z - c.z) < c.r) || GS.kind === 3 || GS.kind === 4;
+  const sec = sectorAt(x, z), bk = biomeK(x, z), bio = bk > 0.5 ? sec : null, maple = mapleAmount(x, z);
+  const treeK = 1 + (sec.trees - 1) * bk, rockK = 1 + (sec.rocks - 1) * bk;
+  o[5] = clear ? 0 : smooth(0.35, 0.75, fbm(x * 0.035, z * 0.035, 21, 2)) * 0.34 * treeK;
+  o[6] = clear ? 0 : 0.035 * rockK;
+  const dead = bio?.tree === 'dead';
+  const cc = dead ? CANOPY.broad : bio?.tree === 'pine' ? CANOPY.snow : bio?.tree === 'dark' ? CANOPY.dark : (fbm(x * 0.02, z * 0.02, 31, 2) > 0.58 && maple < 0.3) ? CANOPY.pine : CANOPY.broad;
+  mix3(_mc, cc, CANOPY.maple, bio ? 0 : clamp((maple - 0.2) * 2, 0, 1));
+  o[7] = _mc[0]; o[8] = _mc[1]; o[9] = _mc[2]; o[10] = dead ? 1 : 0; // 枯树：只画细枝，不是树冠团
+  o[11] = bio?.rockC ? 1 : 0; // 火山 / 沙漠 / 古战场的石头颜色偏暗
+  return o;
+}
+const _mc = [0, 0, 0];
+// 区域里有没有台地（有才需要逐像素算高度阴影）
+export const terrainHit = (x0, z0, x1, z1) => TERRAINS.some((R) => x0 < R.x1 && x1 > R.x0 && z0 < R.z1 && z1 > R.z0);
+export { edgeR as mapEdgeR };
 
 // 一个区块 → 一张像素地面贴图（每单位 8 像素）
 const RES = 8;

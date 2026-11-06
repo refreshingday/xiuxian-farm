@@ -83,6 +83,13 @@ export class Life {
   }
   newDay() {
     const g = this.g;
+    // 在道友的房间里过夜：只回满状态，自己存档里的日子、农田、委托、村子都不往前走
+    if (g.coop?.visiting) {
+      g.hours = DAY_START; this.tox = {};
+      for (const e of [...g.enemies.list]) if (!e.boss) g.enemies.remove(e);
+      const d = dateOf(g.day);
+      return [...this.dayHooks.filter((f) => f.visit).map((f) => f(d)), '（在道友的世界里过夜，自己的日子不往前走）'].filter(Boolean);
+    }
     g.day++; g.hours = DAY_START; g.world.day = g.day;
     g.weatherToday = rollWeather(g.day); g.weather.setDay(g.weatherToday === 'rain');
     g.inv.newDay(); this.tox = {};

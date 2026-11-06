@@ -97,12 +97,21 @@ function flowerSea(S, skip, rng) {
   }
   const head = mergeGeometries([new THREE.IcosahedronGeometry(0.17, 0).translate(0, 0.44, 0), new THREE.IcosahedronGeometry(0.12, 0).translate(0.14, 0.3, 0.06), new THREE.IcosahedronGeometry(0.1, 0).translate(-0.1, 0.26, -0.1)]);
   const leaf = new THREE.ConeGeometry(0.16, 0.42, 4).translate(0, 0.21, 0).toNonIndexed();
-  const H = new THREE.InstancedMesh(head, toon('#ffffff', { unique: true }), pts.length), Lm = new THREE.InstancedMesh(leaf, M('#5a9a4a'), pts.length);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
-  pts.forEach(([x, z, a, s], i) => { q.setFromEuler(e.set(0, a * TAU, 0)); sc.setScalar(0.9 + s * 0.7); m.compose(v.set(x, S.hy(x, z), z), q, sc); H.setMatrixAt(i, m); Lm.setMatrixAt(i, m); });
-  const c = new THREE.Color(), paint = (se) => { const pal = SEASON_FL[se]; pts.forEach((p, i) => H.setColorAt(i, c.set(pal[p[4]]))); H.instanceColor.needsUpdate = true; };
+  // 切成 20 米一块：每块有自己的包围球，镜头外 / 雾外的块不画（以前整片 6000 多朵、约 44 万个三角形不做剔除，在地图哪里都画）
+  const T = 20, tiles = new Map();
+  for (const p of pts) { const k = Math.floor(p[0] / T) + ',' + Math.floor(p[1] / T); (tiles.get(k) || tiles.set(k, []).get(k)).push(p); }
+  const hm = toon('#ffffff', { unique: true }), lm = M('#5a9a4a');
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+  const parts = [...tiles.values()].map((tp) => {
+    const H = new THREE.InstancedMesh(head, hm, tp.length), Lm = new THREE.InstancedMesh(leaf, lm, tp.length);
+    tp.forEach(([x, z, a, s], i) => { q.setFromEuler(e.set(0, a * TAU, 0)); sc.setScalar(0.9 + s * 0.7); m.compose(v.set(x, S.hy(x, z), z), q, sc); H.setMatrixAt(i, m); Lm.setMatrixAt(i, m); });
+    const grp = new THREE.Group(); grp.position.set(S.x, 0, S.z);
+    for (const o of [H, Lm]) { o.castShadow = false; o.receiveShadow = true; o.computeBoundingSphere(); grp.add(o); }
+    S.g.scene.add(grp);
+    return { H, tp };
+  });
+  const paint = (se) => { const pal = SEASON_FL[se]; for (const { H, tp } of parts) { tp.forEach((p, i) => H.setColorAt(i, c.set(pal[p[4]]))); H.instanceColor.needsUpdate = true; } };
   paint(0);
-  for (const o of [H, Lm]) { o.position.set(S.x, 0, S.z); o.frustumCulled = false; o.castShadow = false; o.receiveShadow = true; S.g.scene.add(o); }
   let last = 0;
   S.anims.push(() => { const se = S.g.farm?.season ?? 0; if (se !== last) { last = se; paint(se); } });
   return pts.length;
