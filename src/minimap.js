@@ -4,11 +4,9 @@
 //   上面叠地标、村民、近处妖兽、任务目的地；选中（追踪）的任务高亮，其余的变淡。
 // 任务指针：目的地在屏幕外就在屏幕边缘出一个箭头 + 距离。追踪中的任务优先，其次主线，否则指最近的。
 import * as THREE from 'three';
-import { KIND } from './landmarks.js';
 import { screenOf } from './hpbar.js';
-import { WALL_R, GATES } from './world.js';
-import { RINGS } from './worldmap.js';
-import { TileMap, project, setWorld, unproject } from './maptiles.js';
+import { TileMap, project, unproject } from './maptiles.js';
+import { paintMap } from './maprender.js';
 
 const PRESETS = [30, 60, 120, 240], MIN_R = 18, MAX_R = 480;
 const $ = (id) => document.getElementById(id);
@@ -90,78 +88,24 @@ export class Minimap {
   draw(P, fx, fz, S, dpr) {
     const g = this.g, c = this.ctx, R = S / 2, range = this.range, mpp = range / (R - 2);
     const v = this.view = { cx: P.pos.x + this.pan.x, cz: P.pos.z + this.pan.z, mpp, rot: -Math.PI / 2 - Math.atan2(fz, fx), W: S, H: S };
-    const at = (x, z) => project(v, x, z), dist = (x, z) => { const [sx, sy] = at(x, z); return Math.hypot(sx - R, sy - R); };
-    const inR = (x, z, m = 8) => dist(x, z) < R - m;
+    const at = (x, z) => project(v, x, z);
+    
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, S, S);
     c.save(); c.beginPath(); c.arc(R, R, R - 1.5, 0, Math.PI * 2); c.clip();
     c.fillStyle = '#141b1a'; c.fillRect(0, 0, S, S);
 
-    // 地形层：世界坐标画，整体旋转到镜头朝向
-    setWorld(c, v, dpr);
-    this.tiles.draw(c, v.cx, v.cz, range * 1.08, mpp);
-    c.lineWidth = 1.2 * mpp;
-    if (range > 90) { // 境界圈（远一点才有意义）
-      c.strokeStyle = 'rgba(255, 231, 168, .35)'; c.setLineDash([6 * mpp, 6 * mpp]);
-      for (const r of RINGS.slice(0, 4)) { c.beginPath(); c.arc(0, 0, r.to, 0, Math.PI * 2); c.stroke(); }
-      c.setLineDash([]);
-    }
-    c.strokeStyle = 'rgba(255, 244, 210, .85)'; c.lineWidth = Math.max(1.4 * mpp, 0.9); c.beginPath(); c.arc(0, 0, WALL_R, 0, Math.PI * 2); c.stroke(); // 村墙
-    for (const gt of GATES) { c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(gt.x, gt.z, Math.max(2.4 * mpp, 1.6), 0, Math.PI * 2); c.fill(); }
-    c.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    // 图标层：屏幕坐标，字不转
-    c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.font = '12px sans-serif';
-    for (const L of g.landmarks.list) {
-      if (!L.found || !inR(L.x, L.z)) continue;
-      const [x, y] = at(L.x, L.z); c.fillStyle = KIND[L.kind].color; c.strokeStyle = 'rgba(0,0,0,.75)'; c.lineWidth = 3; c.strokeText(KIND[L.kind].icon, x, y); c.fillText(KIND[L.kind].icon, x, y);
-    }
-    if (inR(0, 0, 18) && range > 120) { const [x, y] = at(0, 0); c.fillStyle = '#ffe7a8'; c.strokeStyle = '#000'; c.lineWidth = 3; c.font = '10px "STKaiti","KaiTi",serif'; c.strokeText('青竹村', x, y); c.fillText('青竹村', x, y); }
-    for (const vl of g.village.list) {
-      if (vl.away || !inR(vl.pos.x, vl.pos.z, 4)) continue;
-      const [x, y] = at(vl.pos.x, vl.pos.z); c.fillStyle = '#ffd98a'; c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, 2, 0, Math.PI * 2); c.fill(); c.stroke();
-    }
-    for (const e of g.enemies.list) {
-      if (e.alive === false || e.pos.distanceTo(P.pos) > 60 || !inR(e.pos.x, e.pos.z, 4)) continue;
-      const [x, y] = at(e.pos.x, e.pos.z);
-      c.fillStyle = e.boss ? '#d98aff' : '#ff5a5a'; c.beginPath(); c.arc(x, y, e.boss ? 4 : 2.2, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = e.boss ? '#fff' : 'rgba(0,0,0,.7)'; c.lineWidth = 1; c.stroke();
-    }
-    // 村民头上的 ❗ ❓
-    c.font = 'bold 13px sans-serif';
-    const shown = [];
-    for (const p of g.quests?.pins || []) {
-      if (!inR(p.x, p.z, 4)) continue;
-      const [x, y] = at(p.x, p.z);
-      if (shown.some(([a, b]) => Math.hypot(a - x, b - y) < 7)) continue; // 挤在一起的只画一个
-      shown.push([x, y]); c.fillStyle = p.ic === '❓' ? '#7dffb0' : '#ffe14a'; c.strokeStyle = '#000'; c.lineWidth = 3;
-      const t = p.ic === '❓' ? '?' : '!'; c.strokeText(t, x, y); c.fillText(t, x, y);
-    }
-    // 任务目的地：范围内画图钉，范围外贴在圆边变成箭头；追踪中的任务高亮，其余变淡
-    const main = this.primary(P), sel = g.quests?.selected?.(), pulse = 1 + Math.sin(g.time * 5) * 0.18;
-    for (const t of g.quests?.tgt || []) {
-      const [x, y] = at(t.x, t.z), sx = x - R, sy = y - R, d = Math.hypot(sx, sy), isMain = main && t.x === main.x && t.z === main.z;
-      const col = t.ic === '❓' ? '#7dffb0' : '#ffd23a', dim = sel && t.qid !== sel;
-      c.globalAlpha = dim ? 0.5 : 1;
-      if (d < R - 10) {
-        if (isMain) { c.strokeStyle = col; c.lineWidth = 2; c.globalAlpha = 0.8; c.beginPath(); c.arc(x, y, 8 * pulse, 0, Math.PI * 2); c.stroke(); c.globalAlpha = dim ? 0.5 : 1; }
-        c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = 2;
-        c.beginPath(); c.arc(x, y, 4.4, 0, Math.PI * 2); c.stroke(); c.fill();
-      } else {
-        const a = Math.atan2(sy, sx), m = R - 8;
-        c.save(); c.translate(R + Math.cos(a) * m, R + Math.sin(a) * m); c.rotate(a);
-        c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = 2; if (isMain) c.scale(1.25 * pulse, 1.25 * pulse);
-        c.beginPath(); c.moveTo(5, 0); c.lineTo(-4, 4.5); c.lineTo(-4, -4.5); c.closePath(); c.stroke(); c.fill(); c.restore();
-      }
-      c.globalAlpha = 1;
+    const main = this.primary(P), r = paintMap(c, g, this.tiles, v, { dpr, R, main });
+    // 目的地在圈外：贴在圆边变成箭头
+    const pulse = 1 + Math.sin(g.time * 5) * 0.18, sel = g.quests?.selected?.();
+    for (const { t, x, y, col, isMain } of r.out) {
+      const a = Math.atan2(y - R, x - R), m = R - 8;
+      c.globalAlpha = sel && t.qid !== sel ? 0.5 : 1;
+      c.save(); c.translate(R + Math.cos(a) * m, R + Math.sin(a) * m); c.rotate(a);
+      c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = 2; if (isMain) c.scale(1.25 * pulse, 1.25 * pulse);
+      c.beginPath(); c.moveTo(5, 0); c.lineTo(-4, 4.5); c.lineTo(-4, -4.5); c.closePath(); c.stroke(); c.fill(); c.restore(); c.globalAlpha = 1;
     }
     // 北
-    { const [nx, ny] = at(v.cx, v.cz - 100000), a = Math.atan2(ny - R, nx - R); c.fillStyle = 'rgba(255,255,255,.9)'; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 3; c.font = 'bold 10px "STKaiti","KaiTi",serif'; c.strokeText('北', R + Math.cos(a) * (R - 9), R + Math.sin(a) * (R - 9)); c.fillText('北', R + Math.cos(a) * (R - 9), R + Math.sin(a) * (R - 9)); }
-    // 自己：朝向跟着角色，镜头转了也对
-    { const [px, py] = at(P.pos.x, P.pos.z);
-      c.save(); c.translate(px, py); c.rotate(v.rot + Math.PI - P.yaw);
-      c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 1.5;
-      c.beginPath(); c.moveTo(0, -7); c.lineTo(5, 5); c.lineTo(0, 2.5); c.lineTo(-5, 5); c.closePath(); c.stroke(); c.fill(); c.restore(); }
+    { const [nx, ny] = at(v.cx, v.cz - 100000), a = Math.atan2(ny - R, nx - R); r.txt('北', R + Math.cos(a) * (R - 9), R + Math.sin(a) * (R - 9), 'bold 10px "STKaiti","KaiTi",serif', 'rgba(255,255,255,.9)'); }
     c.restore();
     c.strokeStyle = 'rgba(214, 182, 112, .75)'; c.lineWidth = 2; c.beginPath(); c.arc(R, R, R - 1.5, 0, Math.PI * 2); c.stroke();
     c.fillStyle = 'rgba(255,255,255,.75)'; c.font = '9px sans-serif'; c.textAlign = 'left'; c.fillText(Math.round(range) + '米', R * 0.46, S - 9);

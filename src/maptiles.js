@@ -17,7 +17,7 @@ const SHALLOW = [118, 202, 208], DEEP = [30, 94, 148], ICE = [200, 228, 240], FO
 export class TileMap {
   constructor(world) {
     this.w = world; this.c = new Map(); this.want = new Map(); this.stamp = 0; this.iced = false;
-    this.B = new Float32Array((TP / 2) * 12); this.views = Array.from({ length: TP / 2 }, (_, i) => this.B.subarray(i * 12, i * 12 + 12));
+    this.B = new Float32Array(TP * 12); this.views = Array.from({ length: TP }, (_, i) => this.B.subarray(i * 12, i * 12 + 12)); this.idleQ = null;
     this.fx = 0; this.fz = 0; this.rgb = [0, 0, 0];
   }
   lodFor(mpp) { let i = 0; for (let k = 0; k < LODS.length; k++) if (LODS[k] <= mpp * 1.25) i = k; return i; }
@@ -36,7 +36,7 @@ export class TileMap {
   }
   draw(ctx, cx, cz, rad, mpp) {
     this.backdrop(ctx);
-    if (this.w.iced !== this.iced) { this.iced = this.w.iced; this.c.clear(); }
+    if (this.w.iced !== this.iced) { this.iced = this.w.iced; this.c.clear(); this.idleQ = null; }
     this.fx = cx; this.fz = cz; this.stamp++;
     const l = this.lodFor(mpp), sz = TP * LODS[l], eps = mpp * 0.7;
     ctx.imageSmoothingEnabled = true;
@@ -62,14 +62,19 @@ export class TileMap {
     }
     if (this.c.size > 260) { // 淘汰最久没用的
       const old = [...this.c.entries()].sort((a, b) => a[1].used - b[1].used).slice(0, 60);
-      for (const [k, t] of old) if (t.used < this.stamp - 2) this.c.delete(k);
+      for (const [k, t] of old) if (t.used < this.stamp - 2 && t.l < 3) this.c.delete(k);
     }
   }
   // 每帧调用：在预算（毫秒）内按离视野中心近的顺序把要画的瓦片画几行
   pump(ms = 6) {
     const t0 = performance.now();
-    const jobs = [...this.want.values()].filter((j) => !j.done);
+    let jobs = [...this.want.values()].filter((j) => !j.done);
     this.want.clear();
+    if (!jobs.length) { // 闲着就把整个世界的粗瓦片预先画好，放大缩小时先有东西垫底
+      if (!this.idleQ) { this.idleQ = []; for (const l of [4, 3]) { const sz = TP * LODS[l], n = Math.ceil(1250 / sz); for (let tx = -n; tx < n; tx++) for (let tz = -n; tz < n; tz++) this.idleQ.push([l, tx, tz]); } }
+      if (this.idleJob && !this.idleJob.done) jobs = [this.idleJob];
+      while (this.idleQ.length && !jobs.length) { const [l, tx, tz] = this.idleQ.shift(), k = this.key(l, tx, tz); if (!this.c.has(k)) { const t = { l, tx, tz, row: 0, done: false, used: 1e9 }; this.c.set(k, t); jobs = [this.idleJob = t]; } }
+    }
     const d = (j) => { const s = TP * LODS[j.l]; return Math.hypot((j.tx + 0.5) * s - this.fx, (j.tz + 0.5) * s - this.fz); };
     jobs.sort((a, b) => d(a) - d(b));
     for (const j of jobs) {
@@ -83,13 +88,13 @@ export class TileMap {
       j.cv = document.createElement('canvas'); j.cv.width = j.cv.height = TP; j.cx = j.cv.getContext('2d');
       j.img = j.cx.createImageData(TP, TP); j.terr = terrainHit(x0 - 2, z0 - 2, x0 + sz + 2, z0 + sz + 2);
     }
-    const D = j.img.data, zc = z0 + (j.row + 1) * lod;
-    for (let i = 0; i < TP / 2; i++) mapBase(x0 + (2 * i + 1) * lod, zc, this.views[i]);
+    const D = j.img.data, bs = lod <= 2 ? 1 : 2, nb = TP / bs;
     for (let py = j.row; py < j.row + 2; py++) {
       const z = z0 + (py + 0.5) * lod;
+      if ((py - j.row) % bs === 0 || bs === 1) for (let i = 0; i < nb; i++) mapBase(x0 + (bs * i + bs / 2) * lod, bs === 1 ? z : z0 + (j.row + 1) * lod, this.views[i]);
       for (let px = 0; px < TP; px++) {
         const x = x0 + (px + 0.5) * lod, o = (py * TP + px) * 4;
-        this.pixel(x, z, this.views[px >> 1], lod, j.terr, this.rgb);
+        this.pixel(x, z, this.views[px / bs | 0], lod, j.terr, this.rgb);
         D[o] = this.rgb[0]; D[o + 1] = this.rgb[1]; D[o + 2] = this.rgb[2]; D[o + 3] = 255;
       }
     }
@@ -115,7 +120,7 @@ export class TileMap {
       r += (rc[0] * sp - r) * t; g += (rc[1] * sp - g) * t; bl += (rc[2] * sp - bl) * t;
     }
     c[0] = r; c[1] = g; c[2] = bl;
-    let k = 1, hard = path > 0.5 ? 1 : 0;
+    let k = 1 + (hash01(Math.floor(x * 2), Math.floor(z * 2), 2) - 0.5) * (fine ? 0.07 : 0.03) + (vnoise(x * 0.4, z * 0.4, 9) - 0.5) * 0.08, hard = path > 0.5 ? 1 : 0;
     // 台地：高度阴影（西北来光）+ 陡坡露岩
     if (terr && mid) {
       const hx = groundY(x + 0.6, z) - groundY(x - 0.6, z), hz = groundY(x, z + 0.6) - groundY(x, z - 0.6), sl = Math.hypot(hx, hz) / 1.2;
@@ -133,7 +138,7 @@ export class TileMap {
           if (hash01(cx, cz, 5) >= tp) continue;
           const px = (cx + hash01(cx, cz, 6)) * CS, pz = (cz + hash01(cx, cz, 7)) * CS, dead = b[10] > 0, rad = dead ? 0.38 : 1.5 + hash01(cx, cz, 8) * 0.8;
           const ex = x - px, ez = z - pz, d2 = ex * ex + ez * ez;
-          if (d2 < rad * rad) { crown = dead ? 9 : (1.12 - 0.34 * ((ex + ez) / (rad * 1.414) * 0.5 + 0.5)) * (0.86 + hash01(cx, cz, 9) * 0.28); break; }
+          if (d2 < rad * rad) { crown = dead ? 9 : (1.12 - 0.34 * ((ex + ez) / (rad * 1.414) * 0.5 + 0.5)) * (0.86 + hash01(cx, cz, 9) * 0.28) * (d2 > rad * rad * 0.62 ? 0.82 : 1) * (0.94 + 0.12 * hash01(Math.floor(x * 4), Math.floor(z * 4), 15)); break; }
           if (!dead) { const sx = ex - 1.1, sz2 = ez - 1.1; if (sx * sx + sz2 * sz2 < rad * rad * 0.8) shadow = true; }
         }
         if (crown > 8) { c[0] = 92; c[1] = 70; c[2] = 52; k = 1; painted = true; }

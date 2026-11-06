@@ -4,8 +4,9 @@
 //   委托板上还没接的委托如果有固定地点，也能先「看地方」再决定接不接。
 import { KIND } from './landmarks.js';
 import { SECTORS, RINGS, polar } from './worldmap.js';
-import { WALL_R, regionName } from './world.js';
-import { project, unproject, setWorld } from './maptiles.js';
+import { regionName } from './world.js';
+import { project, unproject } from './maptiles.js';
+import { paintMap } from './maprender.js';
 import { el } from './ui.js';
 
 const MIN_MPP = 0.35, MAX_MPP = 10, LIM = 1300;
@@ -182,76 +183,30 @@ export class BigMap {
 
   // ---------- 画 ----------
   frame() {
-    const g = this.g, P = g.player, cv = this.cv, wrap = this.cvWrap, dpr = Math.min(devicePixelRatio || 1, 2);
+    const g = this.g, cv = this.cv, wrap = this.cvWrap, dpr = Math.min(devicePixelRatio || 1, 2);
     const W = wrap.clientWidth, H = wrap.clientHeight; if (!W || !H) return;
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
     const v = this.v; v.W = W; v.H = H;
-    const c = cv.getContext('2d'), mpp = v.mpp, now = performance.now(), pulse = 1 + Math.sin(now / 200) * 0.15;
+    const c = cv.getContext('2d'), mpp = v.mpp, now = performance.now(), Q = g.quests, sel = Q?.selected?.();
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = '#141b1a'; c.fillRect(0, 0, W, H);
-    setWorld(c, v, dpr);
-    this.tiles = g.tiles; this.tiles.draw(c, v.cx, v.cz, Math.hypot(W, H) / 2 * mpp * 1.04, mpp);
-    // 世界坐标的线：扇区分界、境界圈、村墙
-    c.lineWidth = Math.max(1, 1.2 * mpp);
-    if (mpp > 1.2) {
-      c.strokeStyle = 'rgba(255,255,255,.3)';
-      for (let k = 0; k < 6; k++) { const a = (k * 60 + 30 - 90) * Math.PI / 180; c.beginPath(); c.moveTo(Math.cos(a) * 30, Math.sin(a) * 30); c.lineTo(Math.cos(a) * 1010, Math.sin(a) * 1010); c.stroke(); }
-      c.strokeStyle = 'rgba(255,231,168,.5)'; c.setLineDash([6 * mpp, 6 * mpp]);
-      for (const r of RINGS.slice(0, 4)) { c.beginPath(); c.arc(0, 0, r.to, 0, Math.PI * 2); c.stroke(); }
-      c.setLineDash([]);
+    this.tiles = g.tiles;
+    // 和小地图同一套画法（maprender.js），这里只是更大、多显示名字
+    const r = paintMap(c, g, this.tiles, v, { dpr, big: true, main: null, extra: (this.preview || []).map((t) => ({ ...t, pre: true })) });
+    const { px, py, txt } = r, at = (x, z) => project(v, x, z), KAI = '"STKaiti","KaiTi",serif';
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (mpp > 2.2) for (const s of SECTORS) { const p = polar(s.ang, 640), [x, y] = at(p.x, p.z); txt(s.name, x, y, `bold ${Math.round(Math.min(34, 78 / Math.sqrt(mpp) * 1.3))}px ${KAI}`, 'rgba(255,255,255,.75)', 4); }
+    if (mpp > 1.6) RINGS.slice(0, 4).forEach((q) => { const [x, y] = at(0, -q.to + 12); txt(q.realm + '圈', x, y, `12px ${KAI}`, '#ffe7a8'); });
+    // 追踪中的任务：虚线连过去 + 距离；「定位」后闪一下
+    for (const t of this.targets()) {
+      const [x, y] = at(t.x, t.z), mine = t.qid && t.qid === sel, fl = this.flash && now - this.flash.t < 2500 && this.flash.ids.includes(t);
+      if (mine) { c.setLineDash([6, 6]); c.strokeStyle = 'rgba(255,210,58,.85)'; c.lineWidth = 2; c.beginPath(); c.moveTo(px, py); c.lineTo(x, y); c.stroke(); c.setLineDash([]); txt(`${this.distTo(t.x, t.z)} 米`, x, y + 18, '11px sans-serif'); }
+      if (fl) { c.strokeStyle = '#fff'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, 18 + (now % 600) / 30, 0, 7); c.stroke(); }
     }
-    c.strokeStyle = 'rgba(255,244,210,.9)'; c.lineWidth = Math.max(1.5, 2 * mpp); c.beginPath(); c.arc(0, 0, WALL_R, 0, Math.PI * 2); c.stroke();
-    c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const at = (x, z) => project(v, x, z), vis = (x, y, m = 20) => x > -m && y > -m && x < W + m && y < H + m;
-    const txt = (s, x, y, font, fill = '#fff', w = 3) => { c.font = font; c.lineWidth = w; c.strokeStyle = 'rgba(0,0,0,.85)'; c.strokeText(s, x, y); c.fillStyle = fill; c.fillText(s, x, y); };
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
-    const KAI = '"STKaiti","KaiTi",serif';
-    if (mpp > 2.2) {
-      for (const s of SECTORS) { const p = polar(s.ang, 640), [x, y] = at(p.x, p.z); if (vis(x, y, 60)) txt(s.name, x, y, `bold ${Math.round(Math.min(34, 78 / Math.sqrt(mpp) * 1.3))}px ${KAI}`, 'rgba(255,255,255,.7)', 4); }
-    }
-    if (mpp > 1.6) RINGS.slice(0, 4).forEach((r) => { const [x, y] = at(0, -r.to + 12); if (vis(x, y)) txt(r.realm + '圈', x, y, `12px ${KAI}`, '#ffe7a8'); });
-    { const [x, y] = at(0, 0); if (vis(x, y, 60) && mpp > 0.9) txt('青竹村', x, y + (mpp > 3 ? 14 : -WALL_R / mpp - 12), `bold 13px ${KAI}`, '#ffe7a8'); }
-    // 地标
-    for (const L of g.landmarks.list) {
-      if (L.hidden && !L.found) continue;
-      const [x, y] = at(L.x, L.z); if (!vis(x, y)) continue;
-      const K = KIND[L.kind], on = this.pick?.L === L, fs = on ? 20 : 16;
-      c.font = `${fs}px sans-serif`;
-      if (L.found) { txt(K.icon, x, y, c.font, K.color); if ((mpp < 4.5 && L.kind !== 'mine') || on) txt(L.name, x, y + 14, '11px sans-serif', '#fff', 3); }
-      else if (mpp > 0.8) txt('?', x, y, 'bold 14px sans-serif', 'rgba(255,255,255,.55)');
-    }
-    // 村民、近处妖兽、❗❓
-    if (mpp < 1.4) for (const vl of g.village.list) { if (vl.away) continue; const [x, y] = at(vl.pos.x, vl.pos.z); if (!vis(x, y)) continue; c.fillStyle = '#ffd98a'; c.strokeStyle = '#000'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, 3, 0, 7); c.fill(); c.stroke(); if (mpp < 0.7) txt(vl.d?.name || '', x, y + 10, '10px sans-serif', '#ffe7a8', 2.5); }
-    if (mpp < 3) for (const e of g.enemies.list) {
-      if (e.alive === false || e.pos.distanceTo(P.pos) > 60) continue;
-      const [x, y] = at(e.pos.x, e.pos.z); c.fillStyle = e.boss ? '#d98aff' : '#ff5a5a'; c.strokeStyle = '#000'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, e.boss ? 5 : 3, 0, 7); c.fill(); c.stroke();
-    }
-    if (mpp < 2.5) for (const p of g.quests?.pins || []) { const [x, y] = at(p.x, p.z); if (vis(x, y)) txt(p.ic === '❓' ? '?' : '!', x, y - 10, 'bold 16px sans-serif', p.ic === '❓' ? '#7dffb0' : '#ffe14a', 3.5); }
-    // 任务目的地（追踪中的高亮，其余变淡）+ 委托预览
-    const tg = this.targets(), Q = g.quests, sel = Q?.selected?.(), items = [...tg, ...(this.preview || []).map((t) => ({ ...t, pre: true }))];
-    const [px, py] = at(P.pos.x, P.pos.z);
-    for (const t of items) {
-      const [x, y] = at(t.x, t.z), mine = t.qid && t.qid === sel, dim = sel && t.qid && !mine, fl = this.flash && now - this.flash.t < 2500 && this.flash.ids.includes(t);
-      const col = t.pre ? '#8ad8ff' : t.ic === '❓' ? '#7dffb0' : '#ffd23a';
-      if (mine) { c.setLineDash([6, 6]); c.strokeStyle = 'rgba(255,210,58,.85)'; c.lineWidth = 2; c.beginPath(); c.moveTo(px, py); c.lineTo(x, y); c.stroke(); c.setLineDash([]); }
-      if (!vis(x, y, 10)) continue;
-      c.globalAlpha = dim ? 0.5 : 1;
-      if (mine || fl || t.pre) { c.strokeStyle = col; c.lineWidth = 2.5; c.globalAlpha *= 0.85; c.beginPath(); c.arc(x, y, 14 * pulse, 0, 7); c.stroke(); c.globalAlpha = dim ? 0.5 : 1; }
-      c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, mine ? 7 : 5.5, 0, 7); c.stroke(); c.fill();
-      txt(t.title.length > 12 ? t.title.slice(0, 12) + '…' : t.title, x, y - 20, 'bold 12px sans-serif', mine ? '#ffe9a0' : '#fff', 3.5);
-      if (mine) txt(`${this.distTo(t.x, t.z)} 米`, x, y + 20, '11px sans-serif', '#fff', 3);
-      c.globalAlpha = 1;
-    }
-    // 点中的空地
     if (this.pick?.type === 'p') { const [x, y] = at(this.pick.x, this.pick.z); c.strokeStyle = '#fff'; c.lineWidth = 2; c.beginPath(); c.moveTo(x - 7, y); c.lineTo(x + 7, y); c.moveTo(x, y - 7); c.lineTo(x, y + 7); c.stroke(); }
-    // 自己
-    c.save(); c.translate(px, py); c.rotate(Math.PI - P.yaw);
-    c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -10); c.lineTo(7, 7); c.lineTo(0, 3.5); c.lineTo(-7, 7); c.closePath(); c.stroke(); c.fill(); c.restore();
-    txt('你', px, py + 18, `bold 12px ${KAI}`, '#fff', 3);
-    // 比例尺 + 北
+    if (this.pick?.L) { const [x, y] = at(this.pick.L.x, this.pick.L.z); c.strokeStyle = '#fff'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 13, 0, 7); c.stroke(); }
     const nice = [10, 20, 50, 100, 200, 500, 1000].find((n) => n / mpp > 60) || 1000, len = nice / mpp;
     c.strokeStyle = '#fff'; c.lineWidth = 2; c.beginPath(); c.moveTo(12, H - 16); c.lineTo(12, H - 11); c.lineTo(12 + len, H - 11); c.lineTo(12 + len, H - 16); c.stroke();
-    c.textAlign = 'left'; txt(nice + ' 米', 14, H - 24, '11px sans-serif', '#fff', 3);
-    c.textAlign = 'center'; txt('北 ↑', W - 52, 18, `bold 13px ${KAI}`, '#fff', 3);
+    c.textAlign = 'left'; txt(nice + ' 米', 14, H - 24, '11px sans-serif'); c.textAlign = 'center'; txt('北 ↑', W - 52, 18, `bold 13px ${KAI}`);
     this.tiles.pump(this.first ? 14 : 45); this.first = true;
     // 任务有变化就刷新右边的列表
     const sig = (Q?.active || []).map((q) => q.id + ':' + q.prog.join(',')).join('|') + (Q?.sel || '') + (Q?.board?.length || 0);
