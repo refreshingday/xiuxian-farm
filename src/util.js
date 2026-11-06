@@ -247,10 +247,15 @@ export function toon(color, o = {}) {
 const lineUniform = { value: 1 };
 export const outlineK = lineUniform;
 const lineCache = new Map();
+// 描边关掉时不只是厚度归零，连这一遍都不画：封闭的模型，厚度 0 的背面壳被它自己的正面挡住，看不见，只白占绘制次数（村里约三分之一）。
+// 例外（照旧画，keep）：开口的模型（树下石圈、井沿这类没封底的圆筒）——壳正好充当了内壁，藏了就露空；会透视淡化的（occ）也不动。
+export function setOutline(on) { lineUniform.value = on ? 1 : 0; for (const m of lineCache.values()) m.visible = on || !!m.userData.keep; }
 export function outlineMat(color = '#2b1d14', thick = 0.03, o = {}) {
-  const key = `${color}|${thick}|${o.occ ? 1 : 0}`;
+  const key = `${color}|${thick}|${o.occ ? 1 : 0}|${o.open ? 1 : 0}`;
   if (lineCache.has(key)) return lineCache.get(key);
   const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+  m.userData.lineArgs = [color, thick, !!o.occ]; m.userData.keep = !!(o.occ || o.open);
+  m.visible = lineUniform.value > 0 || m.userData.keep;
   const pre = (s) => {
     s.uniforms.uThick = { value: thick };
     s.uniforms.uLineK = lineUniform;
@@ -278,13 +283,25 @@ function lineNormals(geo) {
   }
   geo.setAttribute('lineNormal', new THREE.BufferAttribute(out, 3));
 }
+// 模型是否封闭（每条边正好两个三角形共用，顶点按位置焊接）。判错只会多画一遍描边壳，不会少画东西。
+function isClosed(geo) {
+  if (geo.userData._closed !== undefined) return geo.userData._closed;
+  const p = geo.attributes.position, idx = geo.index, ids = new Map(), vid = new Int32Array(p.count);
+  for (let i = 0; i < p.count; i++) { const k = `${Math.round(p.getX(i) * 1000)},${Math.round(p.getY(i) * 1000)},${Math.round(p.getZ(i) * 1000)}`; let v = ids.get(k); if (v === undefined) ids.set(k, v = ids.size); vid[i] = v; }
+  const n = idx ? idx.count : p.count, at = idx ? (i) => vid[idx.getX(i)] : (i) => vid[i], edges = new Map();
+  const add = (a, b) => { if (a === b) return; const k = a < b ? a * 1048576 + b : b * 1048576 + a; edges.set(k, (edges.get(k) || 0) + 1); };
+  for (let i = 0; i + 2 < n; i += 3) { const a = at(i), b = at(i + 1), c = at(i + 2); add(a, b); add(b, c); add(c, a); }
+  let ok = edges.size > 0; for (const c of edges.values()) if (c !== 2) { ok = false; break; }
+  return (geo.userData._closed = ok);
+}
 export function addOutline(obj, mat, skip = () => false) {
   const list = [];
   obj.traverse((m) => { if (m.isMesh && !m.userData.isLine && !skip(m)) list.push(m); });
   for (const m of list) {
     if (!m.geometry.attributes.normal) continue;
     lineNormals(m.geometry);
-    const l = m.isInstancedMesh ? new THREE.InstancedMesh(m.geometry, mat, m.count) : new THREE.Mesh(m.geometry, mat);
+    const A = mat.userData.lineArgs, lm = A && !mat.userData.keep && !isClosed(m.geometry) ? outlineMat(A[0], A[1], { occ: A[2], open: true }) : mat;
+    const l = m.isInstancedMesh ? new THREE.InstancedMesh(m.geometry, lm, m.count) : new THREE.Mesh(m.geometry, lm);
     if (m.isInstancedMesh) { l.instanceMatrix = m.instanceMatrix; l.count = m.count; l.boundingSphere = m.boundingSphere; }
     l.userData.isLine = true; l.castShadow = false; l.receiveShadow = false;
     m.add(l);
