@@ -49,6 +49,8 @@ import { Coop } from './coop.js';
 import { siteOf } from './sectsites.js';
 import { Life, near } from './life.js';
 import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
+import { CloudSync } from './cloud/sync.js';
+import { openCloudPanel, askConflict, titleCloudLine } from './cloud/ui.js';
 
 // ---------- 渲染 ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -135,6 +137,8 @@ function sample(h, idx, out) {
   return lerp(a[idx], b[idx], t);
 }
 
+// 云存档：一开始就连（和加载贴图、数据并行），标题画面等它最多 4 秒
+const cloud = new CloudSync();
 // ---------- 游戏状态 ----------
 const g = {
   scene, camera, time: 0, hours: DAY_START, day: 1, weatherToday: 'clear', nightK: 0, scheduled: [], paused: true,
@@ -533,6 +537,8 @@ g.onKill = (e) => g.emit('kill', e);
 const landmarks = new Landmarks(g, g.mapData); g.landmarks = landmarks;
 // 坊市（hubs.js）：客栈、丹药阁、法器阁、拍卖行
 const hubs = new Hubs(g, landmarks); g.hubs = hubs;
+g.cloud = cloud;
+cloud.canPull = () => !g.coop?.visiting;   // 在道友的房间里不换存档（内存里的状态会对不上）
 g.cheat = new Cheat(g); // 作弊面板（` 键开关，可最小化）
 const coop = new Coop(g, scene); // 联机同游（coop.js / net.js，照《一箭双修》的 PeerJS 房间号）
 document.getElementById('mpBtn').addEventListener('click', () => coop.openPanel());
@@ -572,6 +578,7 @@ function openMenu() {
     body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
     body.append(btn('👥 联机同游', () => coop.openPanel(), 'wide'));
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
+    body.append(btn('☁ 云存档 · ' + (cloud.state === 'ok' ? (cloud.user?.anon ? '游客' : '已登录') : cloud.state === 'conflict' ? '要选存档' : cloud.state === 'off' ? '关' : '未连上'), () => openCloudPanel(gui, cloud, g), 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
     body.append(btn('❓ 操作说明', () => { gui.closePanel(); document.getElementById('help').classList.remove('hidden'); }, 'wide'));
@@ -1201,12 +1208,36 @@ function startPlay() {
   }
   g.toast(touch.on ? '左下摇杆移动 · 右下按钮出招（自动瞄准）· 拖动画面转镜头 · 点提示交互' : '左键连招（松开出招，快慢分支）· QERC 技能 · X 换武 · F 交互 · Tab 背包 · H 操作说明', 4);
 }
+// 标题画面：先等云存档对一下（最多 4 秒，连不上就用本机的），再出「继续 / 新的开始」
 {
   g.title = true;
-  const box = document.getElementById('titleBtns'), info = saveInfo();
-  if (info) box.append(btn(`继续 · ${info.text}`, () => { readSave(); startPlay(); }, 'wide'));
-  box.append(btn(info ? '新的开始（覆盖存档）' : '开始问道', () => { if (info) clearSave(); newGame(); startPlay(); }, 'wide'));
-  if (new URLSearchParams(location.search).has('skipTitle')) { if (info) readSave(); else newGame(); startPlay(); }
+  const box = document.getElementById('titleBtns');
+  let shown = false;
+  const build = () => {
+    if (!g.title) return;
+    shown = true;
+    box.innerHTML = '';
+    const info = saveInfo();
+    if (info?.future) box.append(btn(`存档来自更新的版本（${info.game || '?'}），点这里刷新`, () => location.reload(), 'wide'));
+    else {
+      if (info) box.append(btn(`继续 · ${info.text}`, () => { if (readSave()) startPlay(); else g.toast('存档读不出来'); }, 'wide'));
+      box.append(btn(info ? '新的开始（覆盖存档）' : '开始问道', () => { if (info) clearSave(); newGame(); startPlay(); }, 'wide'));
+    }
+    box.append(titleCloudLine(cloud, g, build));
+  };
+  box.append(el('div', '', '☁ 正在连接云存档…'));
+  // 云同步的事件：标题画面上就重画；游戏里被换成云端存档就直接读档；要选存档就弹窗
+  cloud.sub((ev) => {
+    if (g.title && shown) build();
+    if (ev === 'pulled' && !g.title && readSave()) g.toast('已换成云端的存档');
+    if (ev === 'conflict') askConflict(cloud, build);
+    if (gui.panelOpen?.title === '云存档') gui.refresh();
+  });
+  cloud.whenReady(4000).then(() => {
+    build();
+    if (cloud.state === 'conflict') askConflict(cloud, build);   // 启动时就冲突了（那时还没订阅）
+    if (new URLSearchParams(location.search).has('skipTitle')) { if (saveInfo() && !saveInfo().future) readSave(); else newGame(); startPlay(); }
+  });
 }
 requestAnimationFrame(frame);
 // 调试入口
