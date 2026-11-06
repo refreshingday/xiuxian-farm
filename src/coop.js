@@ -2,13 +2,17 @@
 // 每人用自己的存档和世界，联机后能：看到道友（模型、名字、境界、血条、动作）、小地图上的蓝点、
 // 传音（Enter 打字）、传送到道友身边、互相赠送物品 / 文 / 灵石；时辰和天气跟房主走；
 // 有人睡觉，大家一起睡到天亮（在原地醒来，在自家洞府才有打坐修为）。
-// 邀请链接：…/index.html#ABCD 打开就直接加入。妖兽暂时各打各的（下一步：房主统一刷怪、同步血量）。
+// 邀请链接：…/index.html#ABCD 打开就直接加入。妖兽也同步（coopmobs.js）：大家看到同一批、一起打、打过的都有份。
+// 进别人的房间（当道友）时用的还是自己的角色：修为、物品照拿，但自己存档里的日子不往前走——
+// 睡觉只回满状态、不过天，农田 / 委托 / 村子都停着；离开房间就回到自己的时辰，接着玩。
 import * as THREE from 'three';
 import { createChibi, animChibi } from './chibi.js';
 import { attachHeroModel } from './hero_model.js';
 import { Net, normalizeCode, MAX_PLAYERS } from './net.js';
 import { btn, el } from './ui.js';
 import { item, itemName } from './items.js';
+import { CoopMobs } from './coopmobs.js';
+import { rollWeather } from './calendar.js';
 
 const SEND_DT = 0.1, CLOCK_DT = 1, STALE = 6;
 // 道友的衣服配色（按 peer id 挑一套，和主角的白衣蓝边区分开）
@@ -29,7 +33,10 @@ export class Coop {
     try { this.name = localStorage.getItem('mpName') || ''; } catch (e) { this.name = ''; }
     if (!this.name) this.name = '道友' + Math.floor(100 + Math.random() * 900);
     this.status = '';
+    this.visiting = null; // 在别人的房间里：{ hours } = 进房前自己的时辰（存档时用它，日子也不往前走）
     g.coop = this;
+    this.mobs = new CoopMobs(g);
+    addEventListener('pagehide', () => { if (this.visiting) g.save?.(); }); // 在道友那边直接关页面：修为、物品先存下
 
     // 道友头顶的名字 / 境界 / 血条 / 传音气泡（DOM，跟着相机投影）
     const tags = this.tags = document.createElement('div');
@@ -54,10 +61,12 @@ export class Coop {
     });
 
     // 有人睡觉（新的一天开始）→ 告诉大家一起睡；被别人叫睡的那次不再往外发，免得来回踢皮球
-    g.life.dayHooks.push(() => {
+    const slept = () => {
       if (!this.remoteSleep && this.connected) this.net.send({ t: 'slept', nm: this.name });
       this.remoteSleep = false; return '';
-    });
+    };
+    slept.visit = true; // 在别人的房间里过夜也要喊大家一起睡
+    g.life.dayHooks.push(slept);
 
     // 邀请链接 #ABCD：直接加入
     const code = normalizeCode(location.hash.slice(1));
@@ -73,7 +82,7 @@ export class Coop {
     net.on('hosting', (code) => { this.setStatus('房间已开，把房间号或邀请链接发给道友'); this.g.toast(`房间号 ${code}`, 3); history.replaceState(null, '', '#' + code); });
     net.on('open', (id) => {
       if (net.isHost) { this.g.toast('有道友加入了房间', 2.5); this.sendClock(); }
-      else { this.g.toast(`进入了房间 ${net.code}`, 2.5); this.setStatus('已连上房主'); history.replaceState(null, '', '#' + net.code); }
+      else { this.visit(); this.g.toast(`进入了房间 ${net.code}\n用的是你自己的角色：修为、物品照拿，自己的日子不往前走`, 4); this.setStatus('已连上房主'); history.replaceState(null, '', '#' + net.code); }
       this.sendT = 0; this.refresh();
     });
     net.on('left', (id) => {
@@ -93,8 +102,25 @@ export class Coop {
   leave(quiet) {
     if (this.net) { this.net.close(); this.net = null; }
     for (const k of [...this.peers.keys()]) this.drop(k);
+    this.mobs.clearMirrors();
+    this.unvisit();
     if (!quiet) { this.g.toast('离开了房间', 1.5); this.setStatus(''); history.replaceState(null, '', location.pathname + location.search); }
     this.refresh();
+  }
+  // 当道友：先把自己的存档存好，记下自己的时辰
+  visit() {
+    if (this.visiting) return;
+    this.g.save?.();
+    this.visiting = { hours: this.g.hours };
+  }
+  // 回到自己的世界：时辰、天气还原，存一次（修为、物品都在）
+  unvisit() {
+    const g = this.g, v = this.visiting; if (!v) return;
+    this.visiting = null;
+    g.hours = v.hours;
+    g.weatherToday = rollWeather(g.day); g.weather.setDay(g.weatherToday === 'rain');
+    g.save?.();
+    setTimeout(() => g.toast('回到了自己的世界（修为、物品都带回来了）', 3), 1600);
   }
   setStatus(s) { this.status = s; this.refresh(); }
   refresh() { if (this.g.ui.panelOpen?.title === '联机') this.g.ui.refresh(); }
@@ -102,6 +128,7 @@ export class Coop {
   // ---------- 收消息 ----------
   onMsg(d) {
     const g = this.g, P = g.player;
+    if (this.mobs.onMsg(d)) return;
     switch (d.t) {
       case 'full': g.toast(`房间满了（最多 ${MAX_PLAYERS} 人）`, 2.5); this.leave(true); break;
       case 'st': this.onState(d); break;
@@ -158,6 +185,7 @@ export class Coop {
   drop(id, say) {
     const p = this.peers.get(id); if (!p) return;
     this.scene.remove(p.c.root); p.tag.remove(); this.peers.delete(id);
+    this.mobs.peerLeft(id);
     if (say) this.g.toast(`${p.name} 离开了`, 2);
   }
 
@@ -212,6 +240,7 @@ export class Coop {
       this.clockT -= dt;
       if (this.clockT <= 0) { this.clockT = CLOCK_DT; this.sendClock(); }
     }
+    if (!g.title) this.mobs.update(dt); // 暂停时也照发快照，免得自己开个背包、道友那边的妖兽就没了
     const W = innerWidth, H = innerHeight, v = new THREE.Vector3();
     for (const p of this.peers.values()) {
       const s = p.st, R = p.c.root;
@@ -263,7 +292,7 @@ export class Coop {
         codeIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.code === 'Enter') { saveName(); this.join(codeIn.value); } }); codeIn.addEventListener('keyup', (e) => e.stopPropagation());
         r.append(codeIn, btn('加入', () => { saveName(); this.join(codeIn.value); }));
         body.append(r);
-        body.append(el('div', 'pempty', `最多 ${MAX_PLAYERS} 人同游。每人用自己的存档；时辰、天气跟房主走，一人睡觉大家一起睡。<br>也可以把邀请链接（网址后面带 #房间号）直接发给道友。<br>手机用 4G/5G 连不上时换 Wi-Fi 试试。`));
+        body.append(el('div', 'pempty', `最多 ${MAX_PLAYERS} 人同游。每人用自己的存档；时辰、天气跟房主走，一人睡觉大家一起睡。妖兽大家一起打，打过的都有修为和掉落。<br>进别人的房间时用自己的角色，修为、物品照拿，但自己的日子不往前走，离开房间就回到自己的世界。<br>也可以把邀请链接（网址后面带 #房间号）直接发给道友。<br>手机用 4G/5G 连不上时换 Wi-Fi 试试。`));
       } else {
         const code = net.code || '····';
         body.append(el('div', 'pcat', `房间号　<b style="font-size:26px;letter-spacing:6px;color:#ffe7a8">${code}</b>　${net.isHost ? '（你是房主）' : ''}`));

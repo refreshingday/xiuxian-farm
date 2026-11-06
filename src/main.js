@@ -260,7 +260,7 @@ world.onSpawn = (cx, cz, rng) => {
   for (let i = 0; i < n; i++) {
     const x = x0 + 4 + rng() * 24, z = z0 + 4 + rng() * 24;
     if (!okSpawn(x, z) || Math.hypot(x - P.pos.x, z - P.pos.z) < 16) continue;
-    enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)));
+    enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z))).amb = true; // amb：普通野怪，联机时可以交给更近的道友
   }
 };
 let spawnT = 4, golemT = 0;
@@ -272,7 +272,7 @@ function ambientSpawns(dt) {
     if (near < 11 + g.nightK * 7 && !P.dead) {
       const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * Math.min(camZoom, 1.6);
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
-      if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)));
+      if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z))).amb = true;
     }
   }
   const dm = Math.hypot(P.pos.x - MINE.x, P.pos.z - MINE.y);
@@ -592,9 +592,10 @@ function openSettings() {
     body.append(el('div', 'pempty', '手柄：左摇杆移动 · 右摇杆瞄准 · A 普攻 · B 闪避 · X / Y / LB / RB 技能 · LT 换武 · RT 交互 · 十字键换快捷栏 / 用 / 背包 · Start 菜单 · Back 地图 · 按左摇杆 御剑'));
   });
 }
-const metaText = () => { const d = dateOf(g.day); return `${d.seasonName}季第${d.dayOfSeason}天 ${clockText(g.hours)} · ${levelInfo(P.layer).name}`; };
+const myHours = () => g.coop?.visiting ? g.coop.visiting.hours : g.hours; // 在道友的房间里：存档用自己进房前的时辰
+const metaText = () => { const d = dateOf(g.day); return `${d.seasonName}季第${d.dayOfSeason}天 ${clockText(myHours())} · ${levelInfo(P.layer).name}`; };
 g.save = () => writeSave({ text: metaText() });
-register('time', () => ({ day: g.day, hours: g.hours }), (s) => {
+register('time', () => ({ day: g.day, hours: myHours() }), (s) => {
   g.day = s.day; g.hours = s.hours; world.day = g.day;
   g.weatherToday = rollWeather(g.day); weather.setDay(g.weatherToday === 'rain');
 });
@@ -645,6 +646,7 @@ g.onEnemyHit = (e, amt, crit) => {
     e.bar.hp = e.hp + amt; e.bar.damage(amt, crit);
   }
   if (enemies.boss && e !== enemies.boss) return;   // 妖王在场时大血条只跟妖王
+  if (enemies.by && focusE !== e) return;           // 道友打的：不抢自己的目标血条
   if (focusE !== e) focusOn(e, e.hp + amt);
   targetBar.damage(amt, crit); focusT = 5;
 };
@@ -845,7 +847,7 @@ function tick(dt) {
   realm.update(dt);
   landmarks.update(dt);
   minimap.update();
-  events.update(dt);
+  if (!g.coop?.visiting) events.update(dt); // 在道友的房间里：自己村子的兽潮、妖虫这些不触发
   hubs.update(dt);
   sects.update(dt);
   secrets.update(dt);
