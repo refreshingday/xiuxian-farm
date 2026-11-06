@@ -1,11 +1,12 @@
 // 作弊面板：可最小化，按 ` 键开关。分几组：
 //   开关（无敌 / 无限灵力 / 必掉落 / 一击必杀 / 跑得快，记在 localStorage）
 //   传送（回村 / 上次死亡点 / 地点下拉 / 村民下拉 / 各门派山门）
-//   资源（钱、灵石、物品、修为、突破）、时间天气、灵田、妖兽
+//   资源（钱、灵石、物品、修为、突破）、时间天气、灵田、妖兽、云存档（模拟换设备）
 // 「开局带新手任务」：默认关——新开局跳过第一个小时的主线教学（s1–s5），直接接赤枫狼王；勾上则从野猪袭村开始。
 import { polar } from './worldmap.js';
 import { ITEMS, CROPS } from './items.js';
 import { TYPES } from './enemies.js';
+import { CloudSync } from './cloud/sync.js';
 
 export function startWithQuest() { try { return localStorage.getItem('startQuest') === '1'; } catch (e) { return false; } }
 
@@ -129,6 +130,18 @@ export class Cheat {
       const p = P(), a = p.yaw ?? 0;
       g.enemies.spawn(id, p.pos.x + Math.sin(a) * 6, p.pos.z + Math.cos(a) * 6, 0); g.toast('召唤了 ' + TYPES[id].name, 1.2);
     });
+
+    // ---- 云存档（模拟）：没接 Firebase 时用来试「游客 → 登录 → 换设备接着玩」----
+    head('☁ 云存档（模拟）');
+    const mockOnly = (fn) => () => { if (g.cloud?.mode !== 'mock') return g.toast('只有模拟云端能用（现在是 ' + (g.cloud?.mode || '关') + '）', 2); fn(); };
+    add('📱 模拟换一台设备', mockOnly(async () => {
+      if (!confirm('模拟换一台设备：先存档并传到云端，再清掉这台设备上的存档和登录状态，「云端」留着。\n之后在标题画面用同一个邮箱登录，就能把进度接回来（游客没登录的话进度就找不回来了）。')) return;
+      if (!g.title) g.save();
+      await g.cloud.flush(); g.cloud.halt();
+      CloudSync.forgetDevice(); location.reload();
+    }));
+    pair('🔍 云端状况', mockOnly(() => { const s = CloudSync.mockStats(); g.toast(`模拟云端：${s.docs} 份存档 · ${s.accounts} 个登录账号 · ${(s.bytes / 1024).toFixed(1)} KB\n${g.cloud.statusText()}`, 3); }),
+      '🧹 清空云端', mockOnly(() => { if (confirm('清空模拟云端（所有账号和云端存档）？本机存档不动。')) { g.cloud.halt(); CloudSync.wipeMock(); location.reload(); } }));
   }
 
   // 每帧（main.js tick 调用）：无限灵力 / 无敌兜底（溺水、天劫这类不走 hurt 的伤害）
