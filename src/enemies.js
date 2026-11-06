@@ -92,7 +92,7 @@ const NIGHT = 0.5; // nightK 超过这个算夜晚：敌人属性 +30%，掉落 
 export function build(T) {
   const g = geos(), mats = [];
   const M = (c, o = {}) => { const m = toon(c, { ...o, unique: true }); mats.push(m); return m; };
-  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); root.userData.anim = true; // 阴影合批跳过
   const parts = { body, legs: [], arms: [], wings: [], segs: [] };
   const part = (geo, mat, sx, sy, sz, x, y, z, parent = body) => { const m = mesh(geo, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); parent.add(m); return m; };
   const [ca, cb, ce] = T.c, a = M(ca), b = M(cb), eye = glow(ce, 3);
