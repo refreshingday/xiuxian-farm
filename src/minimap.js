@@ -105,6 +105,10 @@ export class Minimap {
       if (v.away || !inR(v.pos.x, v.pos.z, 4)) continue;
       const [x, y] = at(v.pos.x, v.pos.z); c.fillStyle = '#ffd98a'; c.beginPath(); c.arc(x, y, 2, 0, Math.PI * 2); c.fill();
     }
+    for (const d of g.coop?.dots() || []) { // 联机道友
+      if (!inR(d.x, d.z, 4)) continue;
+      const [x, y] = at(d.x, d.z); c.fillStyle = d.color; c.strokeStyle = '#000'; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, 3.5, 0, Math.PI * 2); c.fill(); c.stroke();
+    }
     for (const e of g.enemies.list) {
       if (e.alive === false || e.pos.distanceTo(P.pos) > 60 || !inR(e.pos.x, e.pos.z, 4)) continue;
       const [x, y] = at(e.pos.x, e.pos.z);

@@ -249,7 +249,7 @@
 
 <div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
 <div id="money" class="panel"></div>
-<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
+<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="mpBtn">👥<span> 联机</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
 <div id="qtrack" hidden></div><div id="markLayer"></div>
 <div id="miniWrap"><canvas id="mini"></canvas><button id="miniZ" title="小地图范围（N）">⊕</button></div>
 <div id="qptr" hidden><i>➤</i><b></b></div>
@@ -285,7 +285,7 @@
   <b>空格 / Shift</b> 身法闪避（无敌，冷却 2.5 秒）<br>
   <b>1–8</b> 快捷栏（灵草 / 丹药直接吃）<br>
   <b>F</b> 交谈 / 种田 / 采集 / 睡觉 / 炼丹<br>
-  <b>Tab</b> 背包　<b>L</b> 任务　<b>M</b> 地图　<b>K</b> 灵根　<b>Esc</b> 菜单<br>
+  <b>Tab</b> 背包　<b>L</b> 任务　<b>M</b> 地图　<b>K</b> 灵根　<b>Esc</b> 菜单　<b>Enter</b> 传音（联机时）<br>
   <b>V</b> 神识扫描　<b>G</b> 御剑飞行（筑基后）<br>
   <b>滚轮</b> 缩放　<b>按住右键拖</b> 转镜头　<b>按住 T</b> 加速时间　<b>H</b> 隐藏说明<br>
   东北方的大路通往 <b>玄晶矿洞</b>，深处有妖王。
@@ -301,6 +301,7 @@
 <div id="title"><h1>灵田问道</h1><div class="sub">SPIRIT FIELDS</div><div id="titleBtns"></div></div>
 <div id="loading">灵气汇聚中…</div>
 
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module" src="src/main.js"></script>
 <script type="module" src="src/version.js"></script>
 </body>
