@@ -4,7 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
+import { loadTextures, weatherU, setOutline, CHUNK, occ, clamp, lerp, smooth, angDiff, lerpAngle, flat, glow, mesh } from './util.js';
 import { createChibi, animChibi } from './chibi.js';
 import { attachHeroModel } from './hero_model.js';
 import { Weather } from './weather.js';
@@ -58,6 +58,9 @@ renderer.toneMappingExposure = 1.12;
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
+// 场景根节点自己从不移动。默认 matrixAutoUpdate 会让它每帧标「脏」，连带强制重算全部 6 万多个物体的矩阵（手机上每帧几十毫秒），
+// 雾外剔除里「藏起来的不算矩阵」也因此失效。关掉以后只有真的会动的物体才重算——画面完全不变。
+scene.matrixAutoUpdate = false;
 scene.fog = new THREE.Fog(0xcfe6f0, 30, 60);
 scene.background = new THREE.Color(0xcfe6f0);
 const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.5, 140);
@@ -570,7 +573,7 @@ function openMenu() {
 // 设置（存在本机）：音量、震屏、连招节奏提示（GDD 第 12 节：F/S 提示可以在设置里开关）
 const settings = { vol: 0.7, shake: true, rhythm: false, outline: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
-const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; outlineK.value = settings.outline ? 1 : 0; world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
+const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; setOutline(settings.outline); world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
 function openSettings() {
   gui.panel('设置', (body) => {
@@ -736,13 +739,66 @@ function mirrorPass() {
   // 水洼不再跟池塘二选一（以前离池塘 16 米内水洼倒影会突然没了）：同一面镜子，池塘边镜面在水面高度 0.03，地面水洼按和镜面的高差决定能不能用（world.js uPudY）
   const pud = ok && weatherU.wet.value > 0.05 && weatherU.snow.value < 0.5 && !SW.on;
   waterFxU.on.value = near ? 1 : 0; waterFxU.pud.value = pud ? 1 : 0;
+  shCull.mir = null;
   if (!near && !pud) return;
   P.c.root.traverse(o => o.layers.enable(1));
   // 周围会投影的东西（树、房子、墙、石头、NPC）也进倒影，不然水洼只照天空、看着像一块白斑。地面本身、描边不进。半秒刷新一次（新刷出来的 NPC / 怪）
   if (!(mirrorScan++ % 30)) scene.traverse(o => { if (o.isMesh && o.castShadow && !o.userData.isLine && !o.userData.ground) o.layers.enable(1); });
   hemi.layers.enable(1); sun.layers.enable(1); for (const l of pool) l.layers.enable(1);
-  const lvl = near ? 0.03 : (P.gy || 0) + 0.01; waterFxU.pudY.value = lvl;
+  const lvl = near ? 0.03 : (P.gy || 0) + 0.01; waterFxU.pudY.value = lvl; shCull.mir = lvl;
   mirror.render(scene, lvl);
+}
+// 阴影剔除（画面完全不变）：太阳从高处斜照，影子顺着光线落到脚下。把每个顶层物体的包围球沿光线方向「拖」到地面，
+// 这段胶囊要是碰不到镜头视锥（池塘边 / 雨后积水时，再算一遍倒影里看得到的范围），它的影子就不可能出现在画面里——
+// 只在画阴影贴图那一下临时藏起来，画完马上还原。村里主要省的是镜头外村民、房子、摊子的阴影绘制。
+const shCull = { n: 0, hidden: [], mir: null, off: /[?&]shcull=0\b/.test(location.search) }; // ?shcull=0 关掉对比
+const _scF = new THREE.Frustum(), _scM = new THREE.Matrix4(), _scA = new THREE.Vector3(), _scB = new THREE.Vector3(), _scL = new THREE.Vector3();
+function shadowInfo(o) {
+  const c = o.userData._sh; if (c !== undefined) return c;
+  let ok = !o.isLight && !o.isCamera && o !== P.c.root, any = false;
+  o.traverse((q) => { if (q.isMesh || q.isPoints || q.isLine) { if (q.isSkinnedMesh || !q.frustumCulled) ok = false; if (q.isMesh && !q.userData.isLine) any = true; } });
+  if (!any) return null; // 还没装东西的空组：先不藏，下回再算
+  let info = null;
+  if (ok) {
+    o.updateMatrixWorld(true); _fcB.setFromObject(o);
+    if (!_fcB.isEmpty()) { _fcB.getBoundingSphere(_fcS); if (_fcS.radius < 60) info = { c: _fcS.center.clone().applyMatrix4(_fcI.copy(o.matrixWorld).invert()), r: _fcS.radius * 1.15 + 0.5 }; } // 余量：村民甩手、灵草上下浮
+  }
+  return (o.userData._sh = info);
+}
+// 胶囊 a→b（半径 r）是否和视锥相交（保守：只有整段都在某个面外侧才算不相交）
+function capsuleIn(a, b, r) {
+  for (const pl of _scF.planes) if (pl.distanceToPoint(a) < -r && pl.distanceToPoint(b) < -r) return false;
+  return true;
+}
+const SH_FLOOR = -3; // 影子最低落到哪（比池底、台地底都低，宁可多画）
+function shadowCullBegin() {
+  const H = shCull.hidden; H.length = 0;
+  if (shCull.off || g.debugCam) return;
+  camera.updateMatrixWorld(); _scF.setFromProjectionMatrix(_scM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  _scL.subVectors(sun.position, sun.target.position).normalize(); // 指向太阳
+  if (_scL.y < 0.05) return;
+  const mir = shCull.mir, kids = scene.children;
+  for (let i = 0; i < kids.length; i++) {
+    const o = kids[i]; if (!o.visible) continue;
+    const info = shadowInfo(o); if (!info) continue;
+    if (o.matrixAutoUpdate) o.updateMatrix();
+    _scA.copy(info.c).applyMatrix4(o.matrix);
+    const r = info.r, down = (_scA.y + r - SH_FLOOR) / _scL.y;
+    _scB.copy(_scA).addScaledVector(_scL, -Math.max(0, down));
+    if (capsuleIn(_scA, _scB, r)) continue;
+    if (mir !== null) { _scA.y = 2 * mir - _scA.y; _scB.y = 2 * mir - _scB.y; if (capsuleIn(_scA, _scB, r)) continue; } // 倒影：镜像过水面后在视锥里也算看得到
+    o.visible = false; H.push(o);
+  }
+  shCull.n = H.length;
+}
+function shadowCullEnd() { for (const o of shCull.hidden) o.visible = true; shCull.hidden.length = 0; }
+{
+  const sm = renderer.shadowMap, render0 = sm.render;
+  sm.render = function (lights, sc, cam) {
+    if (!this.enabled || (!this.autoUpdate && !this.needsUpdate) || sc !== scene) return render0.call(this, lights, sc, cam);
+    shadowCullBegin();
+    try { render0.call(this, lights, sc, cam); } finally { shadowCullEnd(); }
+  };
 }
 function drawFrame() { fogCullBegin(); mirrorPass(); composer.render(); fogCullEnd(); }
 
@@ -1083,5 +1139,5 @@ g.zoom = () => camZoomU; // 调试用
 window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
 g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) drawFrame(); };
-g.fogCull = fogCull;
+g.fogCull = fogCull; g.shCull = shCull;
 export { flat, glow, mesh };
