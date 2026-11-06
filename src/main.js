@@ -190,7 +190,7 @@ g.atkMul = () => atkMul();
 const atkMul = () => (1 + P.layer * 0.25 + levelInfo(P.layer).realm * 0.5) * (1 + P.atkBonus);
 
 P.hurt = (dmg, fx0, fz0, knock = 6) => {
-  if (P.iframe > 0 || P.dead) return false;
+  if (P.iframe > 0 || P.dead || g.cheatOn?.god) return false;
   const M = P.mods;
   dmg = Math.round(dmg * Math.max(0.3, 1 - (M.dmgTaken || 0) - (g.nightK > 0.5 ? M.nightDef || 0 : 0)));
   P.hp -= dmg; P.iframe = 0.6; P.c.flash = 0.12;
@@ -535,7 +535,7 @@ g.onKill = (e) => g.emit('kill', e);
 const landmarks = new Landmarks(g, g.mapData); g.landmarks = landmarks;
 // 坊市（hubs.js）：客栈、丹药阁、法器阁、拍卖行
 const hubs = new Hubs(g, landmarks); g.hubs = hubs;
-new Cheat(g); // 作弊面板（` 键开关，可最小化）
+g.cheat = new Cheat(g); // 作弊面板（` 键开关，可最小化）
 // 宗门（sects.js + data/sects.json）：拜入、试炼、晋升、贡献、功法、宗门任务、大比
 const sects = new Sects(g, landmarks, await (await fetch('data/sects.json')).json());
 // 秘境（每周五）与独特地点（鬼市、古剑冢、天火陨坑、天劫峰心魔路、矿洞灯火）
@@ -788,6 +788,7 @@ function tick(dt) {
 
   weather.update(dt, dh, P.pos, g.time, world.mineFactor, g.nightK);
   updatePlayer(dt);
+  g.cheat.update();
   world.update(P.pos, dt, g.nightK, g.day * 24 + g.hours);
   life.update(dt);
   realm.update(dt);
@@ -830,7 +831,7 @@ function updatePlayer(dt) {
   if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
   // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里；御剑飞行时走得快、悬在半空
   const wd0 = realm.fly ? 0 : world.waterDepth(P.pos.x, P.pos.z), wadeK = SW.on ? 0.62 : lerp(1, WADE_SLOW, clamp(wd0 / SWIM_IN, 0, 1));
-  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0)) * (P.slowT > 0 ? 0.55 : 1) * wadeK);
+  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0)) * (P.slowT > 0 ? 0.55 : 1) * wadeK * (g.cheatOn.fast ? 2 : 1));
   if (realm.fly) { st.y = 1.1 + Math.sin(g.time * 3) * 0.08; P.vy = 0; st.ghost = true; }
   flySword.visible = realm.fly;
   let vx = st.vx, vz = st.vz;

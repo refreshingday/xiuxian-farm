@@ -260,6 +260,7 @@ export class Enemies {
     if (e.boss && e.state === 'down') { amt *= 1.5; tag ||= '倒'; }
     if (h?.skill && e.boss && e.state === 'open') this.knockDown(e);
     else if (h?.skill && !e.boss && e.state === 'windup') { this.stagger(e, 0.8); this.game.fx.num(e.pos, '打断', 'crit'); }
+    if (this.game.cheatOn?.ohk) amt = Math.max(amt, e.hp); // 作弊：一击必杀
     e.hp -= amt;
     e.flash = 0.12;
     this.game.onEnemyHit?.(e, amt, crit);
@@ -339,7 +340,7 @@ export class Enemies {
     g.addXP(e.T.xp * (1 + e.lvl * 0.3) * (g.killXpK?.(e.lvl) ?? 1), e.pos);
     const luck = (e.night || g.nightK > NIGHT ? 1.5 : 1) * (e.blood ? 2 : 1) * (1 + (g.player.mods?.luck || 0));
     let k = 0;
-    for (const [id, p] of e.T.drops) if (Math.random() < p * luck) g.addItem(id, Math.random() < p * luck - 1 ? 2 : 1, { x: e.pos.x, z: e.pos.z + 0.5 * k++ });
+    for (const [id, p] of e.T.drops) if (g.cheatOn?.drop || Math.random() < p * luck) g.addItem(id, Math.random() < p * luck - 1 ? 2 : 1, { x: e.pos.x, z: e.pos.z + 0.5 * k++ });
     if (e.T.stones) { const [a, b] = e.T.stones; g.addStones(Math.round((a + Math.random() * (b - a)) * luck), e.pos); }
     if (e.boss) {
       g.addItem(e.T.drop, e.doubleDrop ? 2 : 1, e.pos); g.addItem('yaodan', 2 + Math.floor(e.lvl / 4), { x: e.pos.x, z: e.pos.z + 0.5 });
