@@ -46,14 +46,14 @@ export class BigMap {
     css();
     this.preview = opts.preview || null; this.sel = null; this.info = ''; this.pointers = new Map(); this.sig = ''; this.first = false;
     const targets = opts.quest ? this.targets().filter((t) => t.qid === opts.quest) : this.preview || [];
-    this.v.cx = P.pos.x; this.v.cz = P.pos.z; this.v.mpp = 2;
-    this.fitWorld = !targets.length; // 默认先看整个世界，要细看再放大
+    this.v.cx = P.pos.x; this.v.cz = P.pos.z; this.v.mpp = 0.5; // 默认：以自己为中心、最细
+    this.fitWorld = false;
     if (targets.length) this.fit([...targets, { x: P.pos.x, z: P.pos.z }]);
     if (opts.quest) { g.quests.sel = opts.quest; g.quests.dirty = true; }
     this.root = el('div', 'bm');
     this.cvWrap = el('div', 'bmCv'); this.cv = document.createElement('canvas'); this.cvWrap.append(this.cv);
     const tools = el('div', 'bmTools');
-    for (const [t, f, tip] of [['＋', () => this.zoomAt(1.5), '放大'], ['－', () => this.zoomAt(1 / 1.5), '缩小'], ['⌖', () => this.center(P.pos.x, P.pos.z, 1), '回到自己（放大）'], ['🌐', () => { this.fitWorld = true; }, '看整个世界']]) {
+    for (const [t, f, tip] of [['＋', () => this.zoomAt(1.5), '放大'], ['－', () => this.zoomAt(1 / 1.5), '缩小'], ['⌖', () => this.center(P.pos.x, P.pos.z, 0.5), '回到自己（最细）'], ['🌐', () => { this.fitWorld = true; }, '看整个世界']]) {
       const b = el('button', '', t); b.title = tip; b.addEventListener('click', f); b.addEventListener('pointerdown', (e) => e.stopPropagation()); tools.append(b);
     }
     this.cvWrap.append(tools);
