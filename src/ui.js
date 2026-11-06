@@ -153,6 +153,7 @@ export class UI {
       s.title = it ? it.name : '';
       s.classList.toggle('sel', i === inv.sel);
       s.classList.toggle('empty', !it);
+      s.classList.toggle('heal', !!(it && (it.heal || it.qiHeal)));   // 战斗中补血 / 回灵的格子保持可用
     });
     const id = inv.selId;
     $('hotName').textContent = id ? item(id).name : '';
