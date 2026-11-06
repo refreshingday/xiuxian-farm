@@ -576,7 +576,7 @@ function openMenu() {
   });
 }
 // 设置（存在本机）：音量、震屏、连招节奏提示（GDD 第 12 节：F/S 提示可以在设置里开关）
-const settings = { vol: 0.7, shake: true, rhythm: false, outline: false };
+const settings = { vol: 0.7, shake: true, rhythm: false, outline: false, fps30: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
 const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; setOutline(settings.outline); world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
@@ -586,8 +586,8 @@ function openSettings() {
     const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings.vol; r.style.flex = '1';
     r.addEventListener('input', () => { settings.vol = +r.value; applySettings(); });
     row.append(el('span', 'pic', '🔊'), el('div', 'ptxt', '<b>音量</b>'), r); body.append(row);
-    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）']]) {
-      body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
+    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）'], ['fps30', '锁 30 帧', '帧率固定在 30，不忽高忽低（默认开；关掉 = 不限帧率）']]) {
+      body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : k === 'fps30' ? '🎞' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
     }
     body.append(el('div', 'pempty', '手柄：左摇杆移动 · 右摇杆瞄准 · A 普攻 · B 闪避 · X / Y / LB / RB 技能 · LT 换武 · RT 交互 · 十字键换快捷栏 / 用 / 背包 · Start 菜单 · Back 地图 · 按左摇杆 御剑'));
   });
@@ -818,8 +818,17 @@ function fpsTick(rdt) {
   if (!fpsM.el) { const v = document.getElementById('ver'); if (!v) return; fpsM.el = document.createElement('span'); v.append(' · ', fpsM.el); }
   fpsM.el.textContent = f + ' fps'; fpsM.el.style.color = f >= 50 ? '#8f8' : f >= 30 ? '#ff8' : '#f88';
 }
+// 帧率上限：手机上 40–70 来回跳比稳定 30 更难受，默认锁 30（设置里可关）。地址栏 ?fps=60 / ?fps=0（不限）可临时覆盖
+const FPS_Q = new URLSearchParams(location.search).get('fps');
+let nextDraw = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  const cap = FPS_Q !== null ? +FPS_Q : settings.fps30 ? 30 : 0;
+  if (cap > 0) {
+    const iv = 1000 / cap;
+    if (now + 4 < nextDraw) return; // 4ms 余量：屏幕刷新的时间点有抖动（60Hz 屏隔一帧画一帧，90 / 120Hz 也一样均匀）
+    nextDraw = now - nextDraw > iv ? now + iv : nextDraw + iv;
+  }
   fpsTick((now - last) / 1000);
   padTick();
   tick(Math.min(0.05, (now - last) / 1000)); last = now;
