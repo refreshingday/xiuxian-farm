@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { flat, toon, glow, mesh, at, angDiff, lerpAngle, setFlash, clamp } from './util.js';
 import { ARENA, GATES, WALL_R, groundY, stepOK } from './world.js';
-import { SIG } from './bossmoves.js';
+import { SIG, tele, ghostTele } from './bossmoves.js';
 
 const G = {};
 function geos() {
@@ -318,7 +318,10 @@ export class Enemies {
     const m = new THREE.Mesh(g.fx.circleGeo, new THREE.MeshBasicMaterial({ color: col.multiplyScalar(1.4), transparent: true, opacity: 0, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
     m.position.set(o.x, 0.06 + this.zones.length % 8 * 0.002, o.z); m.scale.setScalar(o.r); g.scene.add(m);
     this.zones.push({ ...o, m, t: 0, tick: 0 });
+    if (!this.ghostShot) g.mobs?.zone(o); // 联机：道友那边也留一片
   }
+  // 道友那边的妖王出招（联机）：这边也画预警、落下打得到自己
+  ghostTele(d) { this.ghostShot = true; try { ghostTele(this, d); } finally { this.ghostShot = false; } }
   updateZones(dt) {
     const g = this.game, P = g.player;
     for (let i = this.zones.length - 1; i >= 0; i--) {
@@ -558,6 +561,10 @@ export class Enemies {
   mirrorStep(e, dt) {
     const n = e.net; if (!n) return;
     this.game.mobs?.status(e); // 定身 / 减速交给主人
+    // 妖王冲锋 / 旋风撞到自己（主人那边只撞得到主人）
+    const P = this.game.player;
+    if (e.boss && e.touch && !P.dead && !(e.touchCd > 0) && Math.hypot(P.pos.x - e.pos.x, P.pos.z - e.pos.z) < e.r + P.r + 0.6) { e.touchCd = 0.8; P.hurt(e.dmg, e.pos.x, e.pos.z, 12); }
+    e.touchCd = (e.touchCd || 0) - dt;
     const k = 1 - Math.exp(-12 * dt), ox = e.pos.x, oz = e.pos.z;
     if (Math.hypot(n.x - ox, n.z - oz) > 8) { e.pos.x = n.x; e.pos.z = n.z; }
     else { e.pos.x += (n.x - ox) * k; e.pos.z += (n.z - oz) * k; }
@@ -640,7 +647,7 @@ export class Enemies {
         if (e.st <= 0) { e.state = 'charge'; e.st = 0.85; e.hitOnce = false; g.shake(0.3); }
         break;
       case 'charge':
-        mv.face = e.chargeDir; mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = 17;
+        mv.face = e.chargeDir; mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = 17; e.touchT = g.time + 0.2;
         g.fx.mote(e.pos.x + (Math.random() - 0.5) * 2, 0.3, e.pos.z + (Math.random() - 0.5) * 2, e.T.c[2], { life: 0.5, size: 1.5 });
         if (!e.hitOnce && dist < e.r + P.r + 0.3 && !g.tryClash?.(e)) { e.hitOnce = true; P.hurt(e.dmg * 1.2, e.pos.x, e.pos.z, 14); }
         if (e.st <= 0) this.openUp(e, p2 ? 0.7 : 1.0); // 冲过头了，收不住脚
@@ -663,6 +670,7 @@ export class Enemies {
       for (let i = 0; i < n; i++) g.after(i * 0.45, () => {
         if (!e.alive) return;
         const x = P.pos.x + P.vel.x * 0.3, z = P.pos.z + P.vel.z * 0.3;
+        g.mobs?.tele({ k: 'c', x, z, r: 2.8, dur, dmg: e.dmg, kn: 8, col, sh: 0.5, n: 20 });
         fx.circle(x, z, 2.8, dur, () => {
           if (!e.alive) return;
           fx.shockRing(x, z, 3.2, col); fx.burst({ x, z }, col, 20, { speed: 6, y: 0.2, up: 4 });
@@ -681,7 +689,7 @@ export class Enemies {
       });
     } else if (a === 'charge') {
       e.state = 'windupCharge'; e.st = p2 ? 0.7 : 0.9; e.chargeDir = toP;
-      fx.line(e.pos.x, e.pos.z, toP, 16, 3.2, e.st);
+      tele(this, e.pos.x, e.pos.z, toP, 16, 3.2, e.st);
     } else if (a === 'summon') {
       e.state = 'summon'; e.st = 1.2;
       const n = e.T.moon ? 2 + Math.round((g.moonK?.() ?? 0) * 2) : 2;

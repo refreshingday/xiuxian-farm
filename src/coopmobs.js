@@ -3,7 +3,7 @@
 // 打死后所有打过它的人都拿修为和掉落。普通野怪会交给离它最近的道友来算（这样它才会去追那个人）。
 // 妖王：谁先叫醒算谁的，同一个妖王两边都叫醒了就留房主（或 id 小的）那只。
 // 妖王也会交接：主人走远 / 倒下、道友正贴着它打，就交给道友算（妖王只追算它的那个人）。
-// 消息：en 快照（10Hz）· ehit 伤害 → 主人 · efx 定身 / 减速 → 主人 · ekill 死了 · erm 消失了 · eown 交接 · eshot 妖兽放的弹
+// 消息：en 快照（10Hz）· ehit 伤害 → 主人 · efx 定身 / 减速 → 主人 · ekill 死了 · erm 消失了 · eown 交接 · eshot 妖兽放的弹 · etele 妖王的预警圈 / 线（落下时打得到那边的人）· ezone 地上留的一片
 const SNAP_DT = 0.1, OWN_DT = 0.5, SEND_R = 70, STALE = 2.5;
 const r2 = (v) => Math.round(v * 100) / 100;
 
@@ -63,6 +63,18 @@ export class CoopMobs {
     if (!this.on || !this.peers().some((p) => Math.hypot(p.x - x, p.z - z) < SEND_R)) return;
     this.send({ t: 'eshot', x: r2(x), z: r2(z), yaw: r2(yaw), s, c, sz, y: r2(y), d: r2(d || 0) });
   }
+  // 自己的妖王出招 / 地上留一片：附近的道友那边也有
+  near(x, z) { return this.on && this.peers().some((p) => Math.hypot(p.x - x, p.z - z) < SEND_R); }
+  tele(o) {
+    if (!this.near(o.x, o.z)) return;
+    const d = { t: 'etele' };
+    for (const k in o) d[k] = typeof o[k] === 'number' ? r2(o[k]) : o[k];
+    this.send(d);
+  }
+  zone(o) {
+    if (!this.near(o.x, o.z)) return;
+    this.send({ t: 'ezone', z: { x: r2(o.x), z: r2(o.z), r: r2(o.r), life: r2(o.life), dmg: r2(o.dmg || 0), slow: !!o.slow, pull: o.pull || 0, color: o.color } });
+  }
   // 自己离太远、本来要删掉的野怪：附近有道友就交给他
   handoffFar(e) {
     if (!this.on || !canHand(e)) return false;
@@ -104,7 +116,7 @@ export class CoopMobs {
         if (!far.some((p) => Math.hypot(p.x - e.pos.x, p.z - e.pos.z) < SEND_R)) continue;
         e.sent = true;
         l.push([this.nidOf(e), e.type, e.lvl, r2(e.pos.x), r2(e.pos.z), r2(e.pos.y), r2(e.yaw), Math.round(e.hp * 10) / 10, Math.round(e.maxHp), e.state,
-          (e.boss ? 1 : 0) | (e.fake ? 2 : 0) | (e.hidden ? 4 : 0) | (e.night ? 8 : 0) | (e.blood ? 16 : 0) | (e.boss && e.phase === 2 ? 32 : 0), e.title || '']);
+          (e.boss ? 1 : 0) | (e.fake ? 2 : 0) | (e.hidden ? 4 : 0) | (e.night ? 8 : 0) | (e.blood ? 16 : 0) | (e.boss && e.phase === 2 ? 32 : 0) | (e.touchT > g.time ? 64 : 0), e.title || '']);
       }
       if (l.length) this.send({ t: 'en', l });
     }
@@ -195,6 +207,8 @@ export class CoopMobs {
         }
         return true;
       }
+      case 'etele': en.ghostTele(d); return true;
+      case 'ezone': if (d.z) { en.ghostShot = true; try { en.zone(d.z); } finally { en.ghostShot = false; } } return true;
       case 'eshot':
         en.ghostShot = true;
         try { en.shoot(d.x, d.z, d.yaw, d.s, d.d, d.c, d.sz, d.y); } finally { en.ghostShot = false; }
@@ -231,6 +245,7 @@ export class CoopMobs {
     e.maxHp = maxHp; e.state = state;
     e.night = !!(fl & 8); e.blood = !!(fl & 16); if (title) e.title = title;
     e.hidden = !!(fl & 4); e.root.visible = !e.hidden;
+    e.touch = !!(fl & 64); // 妖王正在冲 / 转：撞到这边的人也算
     if (fl & 32 && e.phase !== 2) { e.phase = 2; en.rage(e); }
   }
   // 妖王冲突时谁留下：房主优先，否则 id 小的
