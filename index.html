@@ -97,7 +97,9 @@
   /* 小地图 + 任务指针（minimap.js） */
   #miniWrap { position: fixed; right: 16px; top: 172px; width: 220px; height: 220px; z-index: 2; }
   #mini { display: block; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; background: rgba(14, 22, 24, .6); box-shadow: 0 3px 12px rgba(0, 0, 0, .55); }
-  #miniZ { position: absolute; right: -3px; bottom: -3px; width: 26px; height: 26px; padding: 0; font: inherit; font-size: 14px; line-height: 1; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+  #miniB { position: absolute; right: -3px; bottom: -3px; display: flex; gap: 4px; }
+  #miniB button { width: 26px; height: 26px; padding: 0; font: inherit; font-size: 14px; line-height: 1; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+  #miniB button[hidden] { display: none; }
   #qptr { position: fixed; left: 0; top: 0; z-index: 3; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(14, 22, 24, .72); border: 2px solid #ffd23a; color: #ffd23a; pointer-events: none; animation: qptr 1.2s ease-in-out infinite; }
   #qptr[hidden] { display: none; }
   #qptr i { font-style: normal; font-size: 20px; line-height: 1; }
@@ -174,7 +176,7 @@
   body.mobile .hs { width: 38px; height: 38px; } body.mobile .hs kbd { display: none; } body.mobile .hs .hi { font-size: 19px; }
   body.mobile #hotName { display: none; }
   body.mobile #miniWrap { width: 88px; height: 88px; left: calc(10px + env(safe-area-inset-left)); right: auto; top: 160px; }
-  body.mobile #miniZ { width: 22px; height: 22px; font-size: 12px; }
+  body.mobile #miniB button { width: 22px; height: 22px; font-size: 12px; }
   body.mobile #qtrack { top: 256px; left: calc(10px + env(safe-area-inset-left)); width: 210px; font-size: 11px; } body.mobile .qt b { font-size: 13px; }
   body.mobile .hb.big { top: 54px; }
   body.mobile #stickZone { display: block; position: fixed; left: 0; bottom: 0; width: 45vw; height: 65vh; z-index: 3; touch-action: none; }
@@ -216,7 +218,7 @@
     body.mobile .hs { width: 32px; height: 32px; } body.mobile .hs .hi { font-size: 16px; } body.mobile .hs .hn { font-size: 9px; right: 2px; }
     body.mobile #qtrack { top: calc(142px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); width: 170px; font-size: 10px; } body.mobile .qt b { font-size: 12px; }
     body.mobile #miniWrap { left: auto; right: calc(46px + env(safe-area-inset-right)); top: calc(142px + env(safe-area-inset-top)); width: 72px; height: 72px; }
-    body.mobile #miniZ { width: 18px; height: 18px; font-size: 10px; }
+    body.mobile #miniB button { width: 18px; height: 18px; font-size: 10px; }
     body.mobile .hb.big { top: calc(226px + env(safe-area-inset-top)); }
     body.mobile #skills { transform: scale(.8); transform-origin: 100% 100%; right: calc(8px + env(safe-area-inset-right)); bottom: 10px; }
     body.mobile #prompt { bottom: 250px; right: calc(10px + env(safe-area-inset-right)); left: auto; transform: none; font-size: 13px; padding: 7px 12px; }
@@ -248,7 +250,7 @@
 <div id="money" class="panel"></div>
 <div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
 <div id="qtrack" hidden></div><div id="markLayer"></div>
-<div id="miniWrap"><canvas id="mini"></canvas><button id="miniZ" title="小地图范围（N）">⊕</button></div>
+<div id="miniWrap"><canvas id="mini"></canvas><div id="miniB"><button id="miniC" title="回到自己" hidden>◎</button><button id="miniIn" title="放大（滚轮）">＋</button><button id="miniOut" title="缩小（滚轮）">－</button></div></div>
 <div id="qptr" hidden><i>➤</i><b></b></div>
 <div id="hotbar"></div><div id="hotName"></div>
 <div id="hpLayer"></div>

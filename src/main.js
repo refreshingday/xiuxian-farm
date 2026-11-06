@@ -33,6 +33,7 @@ import { Quests, loadQuestData } from './quests.js';
 import { Jobs } from './jobs.js';
 import { Landmarks } from './landmarks.js';
 import { Minimap } from './minimap.js';
+import { BigMap } from './bigmap.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { KE } from './comboKit.js';
@@ -298,7 +299,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape') { if (gui.panelOpen) gui.closePanel(); else if (gui.dialogOpen) gui.closeDialog(); else if (!g.title) openMenu(); return; }
   if (g.title) return;
   if (gui.dialogOpen) { if (['KeyF', 'Space', 'Enter'].includes(e.code)) gui.advance(); return; }
-  if (gui.panelOpen) { if (e.code === 'Tab' || e.code === 'KeyB') gui.closePanel(); return; }
+  if (gui.panelOpen) { if (e.code === 'Tab' || e.code === 'KeyB' || (e.code === 'KeyM' && g.bigmap.isOpen)) gui.closePanel(); return; }
   if (e.code === 'KeyF') interact();
   if (e.code === 'Tab' || e.code === 'KeyB') openBag();
   if (e.code === 'KeyL') quests.openLog();
@@ -543,7 +544,7 @@ const events = new Events(g); g.events = events;
 // 委托板的进阶委托：护送、守护、寻踪、异象、切磋、精英讨伐 + 词缀（jobs.js）
 const jobs = new Jobs(g); g.jobs = jobs;
 // 小地图 + 任务指针（右上角圆形雷达，N 切换范围）
-const minimap = new Minimap(g); g.minimap = minimap;
+const minimap = new Minimap(g); g.minimap = minimap; g.bigmap = new BigMap(g);
 g.itemName = itemName;
 function interact() {
   if (gui.blocking || P.dead || g.paused) return;
