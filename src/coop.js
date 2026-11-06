@@ -111,13 +111,14 @@ export class Coop {
   visit() {
     if (this.visiting) return;
     this.g.save?.();
-    this.visiting = { hours: this.g.hours };
+    this.visiting = { hours: this.g.hours, lairs: this.g.enemies.lairs.map((L) => L.deadDay) }; // 在别人那边打死的妖王不算自己世界的
   }
   // 回到自己的世界：时辰、天气还原，存一次（修为、物品都在）
   unvisit() {
     const g = this.g, v = this.visiting; if (!v) return;
     this.visiting = null;
     g.hours = v.hours;
+    v.lairs.forEach((d, i) => { if (g.enemies.lairs[i]) g.enemies.lairs[i].deadDay = d; });
     g.weatherToday = rollWeather(g.day); g.weather.setDay(g.weatherToday === 'rain');
     g.save?.();
     setTimeout(() => g.toast('回到了自己的世界（修为、物品都带回来了）', 3), 1600);

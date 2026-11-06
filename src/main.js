@@ -618,7 +618,7 @@ register('sects', () => sects.save(), (s) => sects.load(s));
 register('secrets', () => secrets.save(), (s) => secrets.load(s));
 register('places', () => places.save(), (s) => places.load(s));
 register('social', () => social.save(), (s) => social.load(s));
-register('events', () => ({ ...events.save(), lairs: enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
+register('events', () => ({ ...events.save(), lairs: g.coop?.visiting?.lairs || enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
 

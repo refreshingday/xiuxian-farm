@@ -557,6 +557,7 @@ export class Enemies {
   // 联机：道友那边算的妖兽，只追同步过来的位置 / 朝向，动画照常
   mirrorStep(e, dt) {
     const n = e.net; if (!n) return;
+    this.game.mobs?.status(e); // 定身 / 减速交给主人
     const k = 1 - Math.exp(-12 * dt), ox = e.pos.x, oz = e.pos.z;
     if (Math.hypot(n.x - ox, n.z - oz) > 8) { e.pos.x = n.x; e.pos.z = n.z; }
     else { e.pos.x += (n.x - ox) * k; e.pos.z += (n.z - oz) * k; }
@@ -580,6 +581,13 @@ export class Enemies {
     else { e.vy = 0; e.airSpin = 0; e.airRot = Math.atan2(Math.sin(e.airRot), Math.cos(e.airRot)); e.spiked = false; }
   }
 
+  // 狂暴：身上发红光（二阶段；联机镜像 / 交接过来的也要变）
+  rage(e) {
+    if (e.raged) return; e.raged = true;
+    for (const m of e.mats) { m.userData.baseE?.set('#ff2a00'); m.userData.baseEI = 0.12; }
+    setFlash(e.mats, 0);
+  }
+
   // ---------- 妖王：多阶段，前摇清晰、以闪避为主 ----------
   bossAI(e, dt, dist, toP) {
     const g = this.game, P = g.player;
@@ -588,8 +596,7 @@ export class Enemies {
       e.phase = 2; e.state = 'roar'; e.st = 1.4; e.queue = ['summon']; e.gen++; e.tick = null; e.hop = 0;
       if (e.hidden) { e.hidden = false; e.root.visible = true; }
       g.toast(`${e.T.name} 狂暴了！`, 2.5); g.shake(1);
-      for (const m of e.mats) { m.userData.baseE?.set('#ff2a00'); m.userData.baseEI = 0.12; }
-      setFlash(e.mats, 0);
+      this.rage(e);
     }
     const p2 = e.phase === 2;
     switch (e.state) {
