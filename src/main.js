@@ -106,6 +106,7 @@ scene.add(sun, sun.target);
 const pool = [];
 for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xffaa66, 0, 13, 1.6); scene.add(l); pool.push(l); }
 const aura = new THREE.PointLight(0x9fdcff, 0, 9, 1.4); scene.add(aura);
+const mineFill = new THREE.PointLight(0xb8a8ff, 0, 26, 1.2); scene.add(mineFill); // 矿洞基础补光：跟着玩家走，洞里不会黑到看不见
 
 const KEYS = [ // 时, 日光色, 日光强度, 天空色, 地面色, 环境强度, 雾色
   [0, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
@@ -928,7 +929,7 @@ function updateLights(h) {
   sample(h, 1, sun.color);
   sun.intensity = sample(h, 2) * (1 - m * 0.92);
   sample(h, 3, hemi.color); sample(h, 4, hemi.groundColor);
-  hemi.intensity = sample(h, 5) * (1 - m * 0.7);
+  hemi.intensity = Math.max(sample(h, 5) * (1 - m * 0.7), 0.5 * m); // 矿洞里环境光不低于 0.5
   if (m > 0) hemi.color.lerp(_ca.setHex(0x3a3070), m * 0.6);
   sample(h, 6, _fog).lerp(MINE_FOG, m);
   scene.fog.color.copy(_fog); scene.background.copy(_fog);
@@ -969,6 +970,10 @@ function updateLights(h) {
     l.intensity = c.lv * 10;
   });
   aura.position.set(P.pos.x, 2.2, P.pos.z);
+  // 角色自带一点小光：白天很淡，夜里 / 矿洞里更明显（灯灭了也不会全黑）
+  aura.intensity = (0.8 + Math.max(g.nightK * 0.6, m) * 6) * (m > 0.5 && g.lampOn === false ? 0.6 : 1);
+  mineFill.position.set(P.pos.x, 4.5, P.pos.z);
+  mineFill.intensity = m * 14;
   aura.intensity = Math.max(g.nightK * 0.6, m) * 6 * (m > 0.5 && g.lampOn === false ? 0.25 : 1); // 矿洞里灯灭了只剩一点微光
 }
 
