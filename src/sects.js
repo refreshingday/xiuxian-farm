@@ -243,13 +243,13 @@ export class Sects {
     K.last.copy(P.pos);
     if (P.dead || this.trial || Math.hypot(P.pos.x - s.yard.x, P.pos.z - s.yard.z) > 7) { this.endPeek(); g.toast('走远了，没看全……', 2); return; }
     if (!moved) K.t += dt;
-    // 弟子时不时回头张望：被看到那一下有几成露馅（夜里、神识强、站着不动都更安全）
+    // 弟子时不时回头张望：被看到那一下有几成露馅（夜里、站着不动更安全）
     K.look -= dt;
     if (K.look <= 0) {
       const night = isNight(g.hours), dsc = s.disciples[Math.floor(Math.random() * s.disciples.length)];
       K.look = (night ? 3.5 : 2.2) + Math.random() * 2; dsc.glance = 1.1;
       g.fx.num(dsc.c.root.position, '？');
-      if (Math.random() < (moved ? 0.5 : night ? 0.08 : 0.14) * (P.mods.sense ? 0.6 : 1)) { this.caught(s, '练功的弟子回头看见了你：「你在偷看什么？！」'); return; }
+      if (Math.random() < (moved ? 0.5 : night ? 0.08 : 0.14)) { this.caught(s, '练功的弟子回头看见了你：「你在偷看什么？！」'); return; }
     }
     document.body.classList.add('trib');
     document.getElementById('tribBar').textContent = `偷师 · ${s.name.replace(/\s.*$/, '')}　${Math.min(99, Math.floor(K.t / K.need * 100))}%${moved ? '　别乱动' : ''}`;
@@ -257,7 +257,7 @@ export class Sects {
   }
   endPeek() { this.peek = null; if (!this.trial) document.body.classList.remove('trib'); }
   sneak(s) {
-    const g = this.g, night = isNight(g.hours), chance = Math.min(0.85, (night ? 0.55 : 0.25) + (g.player.mods.sense ? 0.15 : 0));
+    const g = this.g, night = isNight(g.hours), chance = Math.min(0.85, (night ? 0.55 : 0.25));
     g.ui.dialog({ narrate: true, line: night ? '夜深了，藏经阁里黑漆漆的，守阁弟子在门口打盹。' : '藏经阁里有弟子在抄经，不时抬头看一眼。',
       hint: `大约 ${Math.round(chance * 100)}% 不被发现。被抓到：${s.name}好感 −40，被追杀三天。`, choices: [
         { label: '📜 偷偷翻看秘籍', fn: () => { this.R(s).peek = g.day; if (Math.random() < chance) this.steal(s, '翻到了'); else this.caught(s, '守阁弟子撞见你在翻秘籍：「抓贼啊！」'); } },

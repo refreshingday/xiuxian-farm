@@ -227,20 +227,12 @@ function die() {
     g.toast('你在家中醒来，伤势已愈' + (lost ? '\n' + lost : ''), 4);
   });
 }
-// 境界、灵根、神识、天劫、御剑（realm.js）
+// 境界、灵根、天劫、御剑（realm.js）
 const realm = new Realm(g); g.realm = realm;
 g.addXP = (n, p, quiet) => realm.addXP(n, p, quiet);
 // 御剑：脚下一把发光的飞剑
 const flySword = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 1.6), glow('#9ef0ff', 2.2));
 flySword.position.y = -0.05; flySword.visible = false; P.c.root.add(flySword);
-// 神识扫描：10 秒内周围 40 米的妖兽和野生灵草冒出灵光
-let scanTick = 0;
-function scanMarks(dt) {
-  if (realm.scanT <= 0 || (scanTick -= dt) > 0) return;
-  scanTick = 0.25;
-  for (const e of enemies.list) if (e.pos.distanceTo(P.pos) < 40) fx.mote(e.pos.x, 2.4, e.pos.z, '#ff6a8a', { life: 0.5, size: 2.2, vy: 0.4, bright: 3 });
-  for (const ch of world.chunks.values()) for (const h of ch.herbs) if (Math.hypot(h.x - P.pos.x, h.z - P.pos.z) < 40) fx.mote(h.x, 1.4, h.z, '#7dffe0', { life: 0.5, size: 1.6, vy: 1, bright: 3 });
-}
 g.addItem = (id, n, p) => { inv.add(id, n); if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} ${itemName(id)}`, 'item'); };
 g.addStones = (n, p) => { inv.stones += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 灵石`, 'item'); };
 g.addMoney = (n, p) => { inv.money += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 文`, 'item'); };
@@ -313,7 +305,6 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') landmarks.open();
   if (e.code === 'KeyK') realm.openRoots();
   if (e.code === 'KeyG') realm.toggleFly();
-  if (e.code === 'KeyV') realm.scan();
   if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
   const si = SKILL_KEYS.indexOf(e.code);
@@ -346,7 +337,6 @@ touch.bind(document.getElementById('sk0'), { down: () => { sfx.unlock(); mouseDo
 const slotEls = [...document.querySelectorAll('#skills [data-slot]')];
 for (const el of slotEls) touch.bind(el, tap(() => useSkill(+el.dataset.slot)));
 touch.bind(document.getElementById('skDash'), tap(dash));
-touch.bind(document.getElementById('skScan'), tap(() => realm.scan()));
 touch.bind(document.getElementById('skFly'), tap(() => realm.toggleFly()));
 touch.bind(document.getElementById('skWeap'), tap(cycleWeapon));
 // 快捷栏：点一下选中（能吃的直接吃）；背包 / 菜单按钮
@@ -513,7 +503,6 @@ const life = new Life(g); g.life = life;
 // 青竹村 21 位村民（village.js / data/villagers.json）
 const town = new Town(g); g.town = town; // 青竹村街景（townplan.js 的 Lynch 五要素布局）
 const village = new Village(g, g.villageData); g.village = village;
-g.sense = () => 20 + P.layer * 8; // 神识：看清别人灵根要够高（境界系统接入前先按层数算）
 life.on((P) => {
   const cx = Math.floor(P.pos.x / CHUNK), cz = Math.floor(P.pos.z / CHUNK);
   for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
@@ -592,7 +581,7 @@ function openSettings() {
     for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）']]) {
       body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
     }
-    body.append(el('div', 'pempty', '手柄：左摇杆移动 · 右摇杆瞄准 · A 普攻 · B 闪避 · X / Y / LB / RB 技能 · LT 换武 · RT 交互 · 十字键换快捷栏 / 用 / 背包 · Start 菜单 · Back 地图 · 按右摇杆 神识 · 按左摇杆 御剑'));
+    body.append(el('div', 'pempty', '手柄：左摇杆移动 · 右摇杆瞄准 · A 普攻 · B 闪避 · X / Y / LB / RB 技能 · LT 换武 · RT 交互 · 十字键换快捷栏 / 用 / 背包 · Start 菜单 · Back 地图 · 按左摇杆 御剑'));
   });
 }
 const metaText = () => { const d = dateOf(g.day); return `${d.seasonName}季第${d.dayOfSeason}天 ${clockText(g.hours)} · ${levelInfo(P.layer).name}`; };
@@ -627,7 +616,7 @@ register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s)
 // ---------- 主循环 ----------
 let hitStop = 0, last = performance.now();
 const focus = new THREE.Vector3().copy(P.pos);
-const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'senseFill', 'senseText', 'rootTag', 'timeText', 'regionText', 'money', 'prompt', 'skDash', 'skFly', 'atkName', 'weapName', 'hotbar'].map((k) => [k, document.getElementById(k)]));
+const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill', 'realm', 'rootTag', 'timeText', 'regionText', 'money', 'prompt', 'skDash', 'skFly', 'atkName', 'weapName', 'hotbar'].map((k) => [k, document.getElementById(k)]));
 
 world.update(P.pos, 0, 0, g.day * 24 + g.hours, true);
 document.getElementById('loading').classList.add('hidden');
@@ -707,7 +696,6 @@ function padTick() {
     if (b === PAD.DOWN) openBag();
     if (b === PAD.START) openMenu();
     if (b === PAD.BACK) landmarks.open();
-    if (b === PAD.RS) realm.scan();
     if (b === PAD.LS) realm.toggleFly();
   }
 }
@@ -802,7 +790,6 @@ function tick(dt) {
   places.update(dt);
   social.update(dt);
   home.update(dt);
-  scanMarks(dt);
   farm.update();
   alchemy.update(dt);
   quests.update(dt);
@@ -1000,8 +987,6 @@ function updateUI() {
   const L = levelInfo(P.layer), full = L.top && P.xp >= xpNeed();
   ui.xpFill.style.width = Math.min(100, P.xp / xpNeed() * 100) + '%';
   ui.realm.textContent = L.name + (full ? '（圆满 · 待渡劫）' : `　修为 ${Math.floor(P.xp)}/${xpNeed()}`);
-  ui.senseFill.style.width = (P.sense / realm.senseMax * 100) + '%';
-  ui.senseText.textContent = `神识 ${Math.floor(P.sense)} / ${realm.senseMax}`;
   ui.rootTag.textContent = P.roots.map((r) => r.e).join('') + '灵根 · ' + ['凡品', '良品', '上品', '极品'][P.roots[0].grade];
   ui.skFly.classList.toggle('hidden', L.realm < 1); ui.skFly.classList.toggle('on', realm.fly);
   const d = dateOf(g.day);

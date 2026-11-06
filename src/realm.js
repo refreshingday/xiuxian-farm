@@ -1,4 +1,4 @@
-// 境界、灵根、神识、天劫（GDD 第 5 / 11 / 4 节）。
+// 境界、灵根、天劫（GDD 第 5 / 11 / 4 节）。
 // 等级 L：炼气 1–9 层（L 1–9），之后筑基 / 金丹 / 元婴 / 化神各分初期、中期、后期、圆满（L 10–25），渡劫 L 26。
 // 小境界只要修为够就自动突破；大境界要在圆满后服破境丹、渡过天劫。
 // 灵根：每条只有品级（凡 20 / 良 45 / 上 80 / 极 150），修炼倍率 = 1 + 2 × (1 − e^(−S/300))，S = 已激活灵根值之和。
@@ -41,17 +41,15 @@ export class Realm {
   constructor(g) {
     this.g = g;
     this.trib = null; this.dark = 0; this.cool = 0; this.fly = false;
-    this.senseMax = 0; this.scanT = 0;
     const P = g.player;
     P.roots = P.roots || [{ e: '金', grade: 0 }];
-    P.hpBonus = P.hpBonus || 0; P.sense = 0; P.karma = P.karma || 0; P.stolen = P.stolen || [];
+    P.hpBonus = P.hpBonus || 0; P.karma = P.karma || 0; P.stolen = P.stolen || [];
     for (const e of ['金', '木', '水', '火', '土', '雷', '冰', '风', '暗']) ITEMS['root_' + e].use = () => this.acquireRoot(e);
     ITEMS.pill_purify.use = () => { if (!P.karma) { g.toast('你心中没有戾气', 1.4); return false; } g.inv.take('pill_purify'); this.addKarma(-50); g.toast(`洗去戾气，业力 ${P.karma}`, 2); return true; };
     for (const k of ['pill_break', 'pill_break2', 'pill_break3', 'pill_break4', 'pill_break5']) ITEMS[k].use = () => this.tryBreak(k);
     ITEMS.pill_avert.use = () => this.takeAvert();
     g.rootMul = () => this.mul();
     g.rootPassive = (e) => this.passive(e);
-    g.sense = () => this.senseMax;
     this.recalc(true);
   }
   get info() { return levelInfo(this.g.player.layer); }
@@ -153,8 +151,6 @@ export class Realm {
     if (full) { P.hp = hp; P.qi = qi; }
     P.hp = Math.min(P.hp + Math.max(0, hp - P.maxHp), hp); P.qi = Math.min(P.qi + Math.max(0, qi - P.maxQi), qi);
     P.maxHp = hp; P.maxQi = qi;
-    this.senseMax = 20 + L * 8 + r * 20 + (M.sense || 0);
-    P.sense = Math.min(P.sense || this.senseMax, this.senseMax);
   }
   // 修为：打坐、斩妖、服丹都走这里，乘灵根倍率；小境界自动突破，大境界卡在圆满
   addXP(n, p, quiet) {
@@ -173,16 +169,6 @@ export class Realm {
       g.toast(`突破！${levelInfo(P.layer).name}`, 3);
       g.emit?.('layer', P.layer);
     }
-  }
-
-  // ---------- 神识：V 扫描周围的妖兽和野生灵草（耗神识，慢慢恢复）----------
-  scan() {
-    const g = this.g, P = g.player;
-    const cost = 20 * (1 - (P.mods?.scanCost || 0));
-    if (P.sense < cost) { g.toast('神识不足', 1.2); return; }
-    P.sense -= cost; this.scanT = 10;
-    g.fx.shockRing(P.pos.x, P.pos.z, 30, '#c8b8ff', 0.8);
-    this.sfx((s) => s.chant(0));
   }
 
   // ---------- 天劫（GDD「天劫」）----------
@@ -312,8 +298,6 @@ export class Realm {
 
   update(dt) {
     const g = this.g, P = g.player;
-    P.sense = Math.min(this.senseMax, P.sense + dt * 1.5);
-    this.scanT -= dt;
     if (this.fly) { P.qi -= dt * 3 * (1 - (P.mods?.flyQi || 0)); if (P.qi <= 0) { P.qi = 0; this.fly = false; g.toast('灵力耗尽，落地', 1.2); } }
     this.updateTrib(dt);
   }

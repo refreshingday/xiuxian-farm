@@ -143,11 +143,10 @@ class Villager {
     const h = this.hearts;
     return '♥'.repeat(h) + '♡'.repeat(Math.max(0, 10 - h));
   }
-  // 灵根要神识够才看得清（GDD：村民灵根，神识够高才能看到）
-  rootText(sense) {
+  rootText() {
     const d = this.d;
     if (!d.root) return '灵根：已被夺去，成了凡人';
-    if (sense < d.sense) return d.hidden ? '灵根：深不可测' : `灵根：看不清（神识 ${d.sense}）`;
+    if (d.hidden) return '灵根：深不可测';
     return `灵根：${d.root.e}·${GRADE[d.root.grade]} ｜ 修为：${realmText(d.realm[0], d.realm[1])}`;
   }
 }
@@ -194,7 +193,7 @@ export class Village {
     choices.push({ label: '离开' });
     g.ui.dialog({
       name: v.name, sub: `${v.d.role} · ${v.d.pers}　${v.heartText()}`,
-      line: line || g.social?.spouseLine(v) || v.line(), info: v.rootText(g.sense?.() ?? 20), hint: g.social?.spouse === v.d.id ? '你的道侣' : v.d.bio, choices,
+      line: line || g.social?.spouseLine(v) || v.line(), info: v.rootText(), hint: g.social?.spouse === v.d.id ? '你的道侣' : v.d.bio, choices,
     });
   }
   giftMenu(v) {
