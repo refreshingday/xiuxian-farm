@@ -208,18 +208,24 @@
     body.mobile #skFly { right: 232px; bottom: 146px; }
   }
   @media (max-width: 700px) {
-    /* 竖屏手机：顶部一条（状态 | 时钟），右边一列小按钮，热键栏 / 任务 / 小地图排在下面，中间留给人物 */
-    body.mobile #status { transform: scale(.58); top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); }
-    body.mobile #clock { transform: scale(.6); min-width: 0; top: calc(6px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); }
-    body.mobile #money { top: calc(52px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); font-size: 11px; padding: 3px 7px; }
-    body.mobile #menuBtns { flex-direction: column; gap: 4px; top: calc(80px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); }
-    body.mobile #menuBtns button, body.mobile #mobTime { font-size: 14px; padding: 3px 0; width: 34px; height: 30px; text-align: center; }
-    body.mobile #hotbar { top: calc(104px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); transform: none; gap: 3px; }
-    body.mobile .hs { width: 32px; height: 32px; } body.mobile .hs .hi { font-size: 16px; } body.mobile .hs .hn { font-size: 9px; right: 2px; }
-    body.mobile #qtrack { top: calc(142px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); width: 170px; font-size: 10px; } body.mobile .qt b { font-size: 12px; }
-    body.mobile #miniWrap { left: auto; right: calc(46px + env(safe-area-inset-right)); top: calc(142px + env(safe-area-inset-top)); width: 72px; height: 72px; }
-    body.mobile #miniB button { width: 18px; height: 18px; font-size: 10px; }
-    body.mobile .hb.big { top: calc(226px + env(safe-area-inset-top)); }
+    /* 竖屏手机（重排）：第一行 = 左边细状态条 + 右边一排图标；第二行 = 热键栏 | 大小地图；地图下面挂地名/时间/钱；任务在左，中间留给人物 */
+    body.mobile #status { transform: none; width: min(46vw, 180px); padding: 5px 8px 6px; display: flex; flex-wrap: wrap; align-items: baseline; top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); }
+    body.mobile #status .name { font-size: 15px; letter-spacing: 1px; margin-right: 6px; } body.mobile #status .name .tag { display: none; }
+    body.mobile #status .realm { order: 1; margin: 0; font-size: 10px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body.mobile #status .bar { order: 2; flex: 0 0 100%; height: 11px; margin-top: 4px; } body.mobile #status .bar span { font-size: 9px; line-height: 11px; }
+    body.mobile #status .bar.qi { height: 8px; margin-top: 3px; } body.mobile #status .bar.qi span { font-size: 8px; line-height: 8px; }
+    body.mobile #status .bar.xp { height: 3px; margin-top: 3px; }
+    body.mobile #menuBtns { flex-direction: row; gap: 3px; top: calc(6px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); left: auto; transform: none; }
+    body.mobile #menuBtns button, body.mobile #mobTime { font-size: 15px; padding: 0; width: 30px; height: 30px; line-height: 28px; text-align: center; }
+    body.mobile #hotbar { top: calc(70px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); transform: none; gap: 2px; }
+    body.mobile .hs { width: 27px; height: 27px; } body.mobile .hs .hi { font-size: 15px; } body.mobile .hs .hn { font-size: 9px; right: 2px; }
+    body.mobile #qtrack { top: calc(106px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); width: min(44vw, 170px); font-size: 10px; } body.mobile .qt b { font-size: 12px; }
+    body.mobile #miniWrap { --ms: clamp(110px, calc(100vw - 252px), 150px); left: auto; right: calc(6px + env(safe-area-inset-right)); top: calc(42px + env(safe-area-inset-top)); width: var(--ms); height: var(--ms); }
+    body.mobile #miniB button { width: 22px; height: 22px; font-size: 12px; }
+    body.mobile #clock { transform: none; min-width: 0; padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; text-shadow: 0 1px 3px #000, 0 0 6px #000; top: calc(42px + clamp(110px, calc(100vw - 252px), 150px) + 6px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); }
+    body.mobile #timeText { font-size: 10px; opacity: .9; } body.mobile #regionText { font-size: 14px; margin-top: 0; }
+    body.mobile #money { padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; text-shadow: 0 1px 3px #000, 0 0 6px #000; font-size: 11px; top: calc(42px + clamp(110px, calc(100vw - 252px), 150px) + 42px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); }
+    body.mobile .hb.big { top: calc(272px + env(safe-area-inset-top)); width: min(62vw, 260px); }
     body.mobile #skills { transform: scale(.8); transform-origin: 100% 100%; right: calc(8px + env(safe-area-inset-right)); bottom: 10px; }
     body.mobile #prompt { bottom: 250px; right: calc(10px + env(safe-area-inset-right)); left: auto; transform: none; font-size: 13px; padding: 7px 12px; }
     body.mobile #comboName { bottom: 290px; font-size: 18px; }

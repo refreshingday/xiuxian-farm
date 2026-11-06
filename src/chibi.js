@@ -50,7 +50,7 @@ export function createChibi(a) {
   const hair = M(a.hair), pants = M(a.pants || '#3a3f4a'), dark = M('#2a1a18');
   const white = toon('#ffffff'), blush = toon('#ff9e94'), inner = M(a.inner || '#f4f1ea');
 
-  const root = new THREE.Group();
+  const root = new THREE.Group(); root.userData.anim = true; // 会动的角色：阴影合批跳过（shadowbatch.js）
   const rig = new THREE.Group(); root.add(rig);
   const hips = new THREE.Group(); hips.position.y = 0.55; rig.add(hips);
   const body = new THREE.Group(); hips.add(body);
