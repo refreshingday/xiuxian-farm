@@ -111,7 +111,7 @@ scene.add(sun, sun.target);
 const pool = [];
 for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xffaa66, 0, 13, 1.6); scene.add(l); pool.push(l); }
 const aura = new THREE.PointLight(0x9fdcff, 0, 9, 1.4); scene.add(aura);
-const mineFill = new THREE.PointLight(0xb8a8ff, 0, 26, 1.2); scene.add(mineFill); // 矿洞基础补光：跟着玩家走，洞里不会黑到看不见
+const mineFill = new THREE.PointLight(0xc8baff, 0, 40, 1.0); scene.add(mineFill); // 矿洞基础补光：跟着玩家走，洞里不会黑到看不见
 
 const KEYS = [ // 时, 日光色, 日光强度, 天空色, 地面色, 环境强度, 雾色
   [0, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
@@ -124,7 +124,7 @@ const KEYS = [ // 时, 日光色, 日光强度, 天空色, 地面色, 环境强�
   [20, 0x7f98ff, 0.4, 0x2a3058, 0x1a1a24, 0.45, 0x1a1e38],
   [24, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
 ];
-const _ca = new THREE.Color(), _cb = new THREE.Color(), MINE_FOG = new THREE.Color(0x07060c);
+const _ca = new THREE.Color(), _cb = new THREE.Color(), MINE_FOG = new THREE.Color(0x1c1830);
 function sample(h, idx, out) {
   let i = 0; while (KEYS[i + 1][0] < h) i++;
   const a = KEYS[i], b = KEYS[i + 1], t = (h - a[0]) / (b[0] - a[0]);
@@ -576,7 +576,7 @@ function openMenu() {
   });
 }
 // 设置（存在本机）：音量、震屏、连招节奏提示（GDD 第 12 节：F/S 提示可以在设置里开关）
-const settings = { vol: 0.7, shake: true, rhythm: false, outline: false };
+const settings = { vol: 0.7, shake: true, rhythm: false, outline: false, fps30: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
 const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; setOutline(settings.outline); world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
@@ -586,8 +586,8 @@ function openSettings() {
     const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings.vol; r.style.flex = '1';
     r.addEventListener('input', () => { settings.vol = +r.value; applySettings(); });
     row.append(el('span', 'pic', '🔊'), el('div', 'ptxt', '<b>音量</b>'), r); body.append(row);
-    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）']]) {
-      body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
+    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）'], ['fps30', '锁 30 帧', '帧率固定在 30，不忽高忽低（默认开；关掉 = 不限帧率）']]) {
+      body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : k === 'fps30' ? '🎞' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
     }
     body.append(el('div', 'pempty', '手柄：左摇杆移动 · 右摇杆瞄准 · A 普攻 · B 闪避 · X / Y / LB / RB 技能 · LT 换武 · RT 交互 · 十字键换快捷栏 / 用 / 背包 · Start 菜单 · Back 地图 · 按左摇杆 御剑'));
   });
@@ -818,8 +818,17 @@ function fpsTick(rdt) {
   if (!fpsM.el) { const v = document.getElementById('ver'); if (!v) return; fpsM.el = document.createElement('span'); v.append(' · ', fpsM.el); }
   fpsM.el.textContent = f + ' fps'; fpsM.el.style.color = f >= 50 ? '#8f8' : f >= 30 ? '#ff8' : '#f88';
 }
+// 帧率上限：手机上 40–70 来回跳比稳定 30 更难受，默认锁 30（设置里可关）。地址栏 ?fps=60 / ?fps=0（不限）可临时覆盖
+const FPS_Q = new URLSearchParams(location.search).get('fps');
+let nextDraw = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  const cap = FPS_Q !== null ? +FPS_Q : settings.fps30 ? 30 : 0;
+  if (cap > 0) {
+    const iv = 1000 / cap;
+    if (now + 4 < nextDraw) return; // 4ms 余量：屏幕刷新的时间点有抖动（60Hz 屏隔一帧画一帧，90 / 120Hz 也一样均匀）
+    nextDraw = now - nextDraw > iv ? now + iv : nextDraw + iv;
+  }
   fpsTick((now - last) / 1000);
   padTick();
   tick(Math.min(0.05, (now - last) / 1000)); last = now;
@@ -979,10 +988,10 @@ function updateLights(h) {
   sun.position.set(focus.x + sx * 30, 45, focus.z + 22);
   sun.target.position.copy(focus);
   sample(h, 1, sun.color);
-  sun.intensity = sample(h, 2) * (1 - m * 0.92);
+  sun.intensity = Math.max(sample(h, 2) * (1 - m * 0.92), 0.5 * m);
   sample(h, 3, hemi.color); sample(h, 4, hemi.groundColor);
-  hemi.intensity = Math.max(sample(h, 5) * (1 - m * 0.7), 0.5 * m); // 矿洞里环境光不低于 0.5
-  if (m > 0) hemi.color.lerp(_ca.setHex(0x3a3070), m * 0.6);
+  hemi.intensity = Math.max(sample(h, 5) * (1 - m * 0.7), 1.5 * m); // 矿洞里环境光不低于 1.5
+  if (m > 0) hemi.color.lerp(_ca.setHex(0x8a80d0), m * 0.7); hemi.groundColor.lerp(_ca.setHex(0x4a4670), m * 0.7);
   sample(h, 6, _fog).lerp(MINE_FOG, m);
   scene.fog.color.copy(_fog); scene.background.copy(_fog);
   // 下雨：日光变弱、雾更近更灰、颜色更淡
@@ -1023,9 +1032,9 @@ function updateLights(h) {
   });
   aura.position.set(P.pos.x, 2.2, P.pos.z);
   // 角色自带一点小光：白天很淡，夜里 / 矿洞里更明显（灯灭了也不会全黑）
-  aura.intensity = (0.8 + Math.max(g.nightK * 0.6, m) * 6) * (m > 0.5 && g.lampOn === false ? 0.6 : 1);
+  aura.intensity = (1.5 + Math.max(g.nightK * 0.8, m) * 9) * (m > 0.5 && g.lampOn === false ? 0.6 : 1);
   mineFill.position.set(P.pos.x, 4.5, P.pos.z);
-  mineFill.intensity = m * 14;
+  mineFill.intensity = m * 45;
   aura.intensity = Math.max(g.nightK * 0.6, m) * 6 * (m > 0.5 && g.lampOn === false ? 0.25 : 1); // 矿洞里灯灭了只剩一点微光
 }
 
