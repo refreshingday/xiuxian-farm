@@ -47,12 +47,13 @@ export class BigMap {
     this.preview = opts.preview || null; this.sel = null; this.info = ''; this.pointers = new Map(); this.sig = ''; this.first = false;
     const targets = opts.quest ? this.targets().filter((t) => t.qid === opts.quest) : this.preview || [];
     this.v.cx = P.pos.x; this.v.cz = P.pos.z; this.v.mpp = 2;
+    this.fitWorld = !targets.length; // 默认先看整个世界，要细看再放大
     if (targets.length) this.fit([...targets, { x: P.pos.x, z: P.pos.z }]);
     if (opts.quest) { g.quests.sel = opts.quest; g.quests.dirty = true; }
     this.root = el('div', 'bm');
     this.cvWrap = el('div', 'bmCv'); this.cv = document.createElement('canvas'); this.cvWrap.append(this.cv);
     const tools = el('div', 'bmTools');
-    for (const [t, f, tip] of [['＋', () => this.zoomAt(1.5), '放大'], ['－', () => this.zoomAt(1 / 1.5), '缩小'], ['⌖', () => this.center(P.pos.x, P.pos.z, 2), '回到自己']]) {
+    for (const [t, f, tip] of [['＋', () => this.zoomAt(1.5), '放大'], ['－', () => this.zoomAt(1 / 1.5), '缩小'], ['⌖', () => this.center(P.pos.x, P.pos.z, 1), '回到自己（放大）'], ['🌐', () => { this.fitWorld = true; }, '看整个世界']]) {
       const b = el('button', '', t); b.title = tip; b.addEventListener('click', f); b.addEventListener('pointerdown', (e) => e.stopPropagation()); tools.append(b);
     }
     this.cvWrap.append(tools);
@@ -187,6 +188,7 @@ export class BigMap {
     const W = wrap.clientWidth, H = wrap.clientHeight; if (!W || !H) return;
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
     const v = this.v; v.W = W; v.H = H;
+    if (this.fitWorld) { this.fitWorld = false; v.cx = 0; v.cz = -80; v.mpp = Math.min(MAX_MPP, 2440 / Math.min(W, H)); }
     const c = cv.getContext('2d'), mpp = v.mpp, now = performance.now(), Q = g.quests, sel = Q?.selected?.();
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = '#141b1a'; c.fillRect(0, 0, W, H);
     this.tiles = g.tiles;
