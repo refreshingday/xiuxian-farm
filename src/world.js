@@ -882,7 +882,7 @@ export class World {
         m.depthWrite = h.t < 0.02;
       }
       h.wallsG.scale.y = 1 - h.t * 0.68;
-      h.roof.traverse((o) => { if (o.isMesh && !o.userData.isLine) o.castShadow = h.t < 0.5; });
+      h.roof.traverse((o) => { if (o.isMesh && !o.userData.isLine && !o.userData.shProxied) o.castShadow = h.t < 0.5; }); // shProxied：投影交给合批网格（它也在屋顶下，一起开关）
       for (const o of h.hideWhenCut) o.visible = h.t < 0.5;
     }
 
@@ -1308,6 +1308,7 @@ export class World {
       const sign = mesh(new THREE.PlaneGeometry(1.6, 0.45), toon('#ffffff', { map: tex }), { cast: false });
       sign.position.set(cx, H + 0.05, z1 + T / 2 + 0.06); root.add(sign); hideWhenCut.push(sign);
     }
+    for (const o of hideWhenCut) o.userData.noBatch = true; // 进门时会藏起来：阴影合批不碰（shadowbatch.js）
     const A = W(x0, z0), B = W(x1, z1);
     const house = { id: opt.id, name: opt.name, x0: Math.min(A.x, B.x), x1: Math.max(A.x, B.x), z0: Math.min(A.z, B.z), z1: Math.max(A.z, B.z), cx: CX, cz: CZ, yaw, w, d, wallsG, roof, roofMats, hideWhenCut, t: 0,
       door: W(0, z1 + 1.2), inside: W(0, 0.6), local: W, player: !!opt.player };

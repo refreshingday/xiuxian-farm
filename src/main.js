@@ -9,6 +9,7 @@ import { createChibi, animChibi } from './chibi.js';
 import { attachHeroModel } from './hero_model.js';
 import { Weather } from './weather.js';
 import { createMirror } from './lab/mirror.js';
+import { batchShadows, showBatches } from './shadowbatch.js';
 import { waterFxU } from './water.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
 import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist, POND } from './world.js';
@@ -667,7 +668,7 @@ function warmShaders() {
   }
   g.warm = { ms: Math.round(performance.now() - t0), programs: renderer.info.programs.length - n0 };
 }
-if (OPT && !/[?&]warm=0\b/.test(location.search)) setTimeout(warmShaders, 50); // ?warm=0 关掉对比
+setTimeout(() => { batchAll(); if (OPT && !/[?&]warm=0\b/.test(location.search)) warmShaders(); }, 50); // ?warm=0 关掉对比
 
 // ---------- 血条：头顶小血条 + 顶部目标大血条（与试炼场同一套 hpbar.js） ----------
 const hpLayer = document.getElementById('hpLayer');
@@ -789,7 +790,7 @@ function mirrorPass() {
   if (!near && !pud) return;
   P.c.root.traverse(o => o.layers.enable(1));
   // 周围会投影的东西（树、房子、墙、石头、NPC）也进倒影，不然水洼只照天空、看着像一块白斑。地面本身、描边不进。半秒刷新一次（新刷出来的 NPC / 怪）
-  if (!(mirrorScan++ % 30)) scene.traverse(o => { if (o.isMesh && o.castShadow && !o.userData.isLine && !o.userData.ground) o.layers.enable(1); });
+  if (!(mirrorScan++ % 30)) scene.traverse(o => { if (o.isMesh && (o.castShadow || o.userData.shProxied) && !o.userData.isLine && !o.userData.ground && !o.userData.shProxy) o.layers.enable(1); }); // shProxied：投影交给合批网格了，倒影里照样要有
   hemi.layers.enable(1); sun.layers.enable(1); for (const l of pool) l.layers.enable(1);
   const lvl = near ? 0.03 : (P.gy || 0) + 0.01; waterFxU.pudY.value = lvl; shCull.mir = lvl;
   mirror.render(scene, lvl);
@@ -797,7 +798,7 @@ function mirrorPass() {
 // 阴影剔除（画面完全不变）：太阳从高处斜照，影子顺着光线落到脚下。把每个顶层物体的包围球沿光线方向「拖」到地面，
 // 这段胶囊要是碰不到镜头视锥（池塘边 / 雨后积水时，再算一遍倒影里看得到的范围），它的影子就不可能出现在画面里——
 // 只在画阴影贴图那一下临时藏起来，画完马上还原。村里主要省的是镜头外村民、房子、摊子的阴影绘制。
-const shCull = { n: 0, hidden: [], mir: null, off: !OPT || /[?&]shcull=0\b/.test(location.search) }; // ?shcull=0 关掉对比
+const shCull = { n: 0, hidden: [], shown: [], mir: null, off: !OPT || /[?&]shcull=0\b/.test(location.search) }; // ?shcull=0 关掉对比
 const _scF = new THREE.Frustum(), _scM = new THREE.Matrix4(), _scA = new THREE.Vector3(), _scB = new THREE.Vector3(), _scL = new THREE.Vector3();
 function shadowInfo(o) {
   const c = o.userData._sh; if (c !== undefined) return c;
@@ -818,26 +819,43 @@ function capsuleIn(a, b, r) {
 }
 const SH_FLOOR = -3; // 影子最低落到哪（比池底、台地底都低，宁可多画）
 function shadowCullBegin() {
-  const H = shCull.hidden; H.length = 0;
-  if (shCull.off || g.debugCam) return;
-  camera.updateMatrixWorld(); _scF.setFromProjectionMatrix(_scM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-  _scL.subVectors(sun.position, sun.target.position).normalize(); // 指向太阳
-  if (_scL.y < 0.05) return;
+  const H = shCull.hidden, S = shCull.shown; H.length = 0; S.length = 0;
+  let cull = !shCull.off && !g.debugCam;
+  if (cull) {
+    camera.updateMatrixWorld(); _scF.setFromProjectionMatrix(_scM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    _scL.subVectors(sun.position, sun.target.position).normalize(); // 指向太阳
+    if (_scL.y < 0.05) cull = false;
+  }
   const mir = shCull.mir, kids = scene.children;
+  let lazy = shBatch.on ? 1 : 0; // 后来才加进场景的组：每帧最多合批一个
   for (let i = 0; i < kids.length; i++) {
     const o = kids[i]; if (!o.visible) continue;
-    const info = shadowInfo(o); if (!info) continue;
-    if (o.matrixAutoUpdate) o.updateMatrix();
-    _scA.copy(info.c).applyMatrix4(o.matrix);
-    const r = info.r, down = (_scA.y + r - SH_FLOOR) / _scL.y;
-    _scB.copy(_scA).addScaledVector(_scL, -Math.max(0, down));
-    if (capsuleIn(_scA, _scB, r)) continue;
-    if (mir !== null) { _scA.y = 2 * mir - _scA.y; _scB.y = 2 * mir - _scB.y; if (capsuleIn(_scA, _scB, r)) continue; } // 倒影：镜像过水面后在视锥里也算看得到
-    o.visible = false; H.push(o);
+    if (cull) {
+      const info = shadowInfo(o);
+      if (info) {
+        if (o.matrixAutoUpdate) o.updateMatrix();
+        _scA.copy(info.c).applyMatrix4(o.matrix);
+        const r = info.r, down = (_scA.y + r - SH_FLOOR) / _scL.y;
+        _scB.copy(_scA).addScaledVector(_scL, -Math.max(0, down));
+        let vis = capsuleIn(_scA, _scB, r);
+        if (!vis && mir !== null) { _scA.y = 2 * mir - _scA.y; _scB.y = 2 * mir - _scB.y; vis = capsuleIn(_scA, _scB, r); } // 倒影：镜像过水面后在视锥里也算看得到
+        if (!vis) { o.visible = false; H.push(o); continue; }
+      }
+    }
+    if (o.userData._batches) showBatches(o, S);
+    else if (lazy > 0 && !o.userData._noBatch && !o.isLight) { lazy--; if (batchShadows(o)) showBatches(o, S); }
   }
   shCull.n = H.length;
 }
-function shadowCullEnd() { for (const o of shCull.hidden) o.visible = true; shCull.hidden.length = 0; }
+function shadowCullEnd() { for (const o of shCull.hidden) o.visible = true; shCull.hidden.length = 0; for (const p of shCull.shown) p.visible = false; shCull.shown.length = 0; }
+// 阴影合批（shadowbatch.js）：开局把静止物体的投影零件合起来；?batch=0 关掉对比
+const shBatch = { on: OPT && !/[?&]batch=0\b/.test(location.search), groups: 0, meshes: 0, ms: 0 };
+function batchAll() {
+  if (!shBatch.on) return;
+  const t0 = performance.now();
+  for (const o of scene.children) { const n = batchShadows(o); if (n) { shBatch.groups++; shBatch.meshes += n; } }
+  shBatch.ms = Math.round(performance.now() - t0);
+}
 {
   const sm = renderer.shadowMap, render0 = sm.render;
   sm.render = function (lights, sc, cam) {
@@ -1196,5 +1214,5 @@ g.zoom = () => camZoomU; // 调试用
 window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
 g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) drawFrame(); };
-g.fogCull = fogCull; g.shCull = shCull; g.scene = scene; g.camera = camera;
+g.fogCull = fogCull; g.shCull = shCull; g.shBatch = shBatch; g.scene = scene; g.camera = camera;
 export { flat, glow, mesh };
