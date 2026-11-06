@@ -11,7 +11,7 @@ export function startWithQuest() { try { return localStorage.getItem('startQuest
 
 const FLAGS = [
   ['god', '🛡 无敌（不掉血）'],
-  ['infQi', '♾ 无限灵力 / 神识'],
+  ['infQi', '♾ 无限灵力'],
   ['drop', '🎯 必掉落（獠牙等全掉）'],
   ['ohk', '⚔ 一击必杀'],
   ['fast', '🏃 跑速 ×2'],
@@ -96,7 +96,7 @@ export class Cheat {
 
     // ---- 资源 / 修为 ----
     head('资源 / 修为');
-    add('❤ 回满血蓝', () => { const p = P(); p.hp = p.maxHp; p.qi = p.maxQi; if (g.realm) p.sense = g.realm.senseMax; });
+    add('❤ 回满血蓝', () => { const p = P(); p.hp = p.maxHp; p.qi = p.maxQi; });
     pair('💰 +1000文', () => g.addMoney(1000, P().pos), '💎 +100灵石', () => g.addStones(100, P().pos));
     add('🎒 每样东西 +5（工具除外）', () => {
       let n = 0;
@@ -134,7 +134,7 @@ export class Cheat {
   // 每帧（main.js tick 调用）：无限灵力 / 无敌兜底（溺水、天劫这类不走 hurt 的伤害）
   update() {
     const g = this.g, P = g.player, on = g.cheatOn;
-    if (on.infQi) { P.qi = P.maxQi; if (g.realm) P.sense = g.realm.senseMax; }
+    if (on.infQi) { P.qi = P.maxQi; }
     if (on.god && !P.dead && P.hp < P.maxHp) P.hp = P.maxHp;
   }
 
