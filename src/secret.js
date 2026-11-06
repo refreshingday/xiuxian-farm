@@ -1,7 +1,7 @@
 // 秘境（GDD 第 4 / 7 节）：每周五开启，5 处轮流；就地升起结界围住一块地，里面每次重新随机生成（像 roguelite 的一局）。
 // 走进结界就开始：三波妖兽（比外面强，带精英）→ 宝箱。出了结界这一局就结束。
 // 流沙地宫：一层层往下，沙漏一直在流，时间到就塌——这一局拿到的东西全丢；每层开完宝箱都要选：带宝撤，还是继续往下赌。
-// 万竹迷阵：竹墙乱阵，真路靠神识（V）看；最后一波是复制你装备和技能的镜像。
+// 万竹迷阵：竹墙乱阵，真路靠自己摸索；最后一波是复制你装备和技能的镜像。
 import * as THREE from 'three';
 import { TYPES, SECTOR_MOBS } from './enemies.js';
 import { sectorAt, ringAt, dangerFor } from './worldmap.js';
@@ -65,7 +65,7 @@ export class SecretRealms {
     this.layout();
     if (L.name === '古战场秘境' && !this.history) { this.chooseSide(); return; }
     this.spawnWave();
-    g.toast(`进入秘境：${L.name}${sand ? '\n沙漏开始流了——别贪' : maze ? '\n竹阵重排……用神识（V）看清真路' : ''}`, 3.5);
+    g.toast(`进入秘境：${L.name}${sand ? '\n沙漏开始流了——别贪' : maze ? '\n竹阵重排……小心辨认真路' : ''}`, 3.5);
   }
   // 古战场秘境（GDD 独特地点 11）：历史重演，选一边参战；表现改变「历史」，解锁不同奖励（只能改一次）
   chooseSide() {

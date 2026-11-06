@@ -104,8 +104,8 @@ export class Jobs {
         J.thing = itemName(J.herb);
       }
       title = `寻踪 · ${J.thing}`;
-      desc = J.herb ? `${poster}：听说${J.place}一带（${where(s)}）长着${J.thing}，${J.cond === 'night' ? '只在夜里显形，' : J.cond === 'rain' ? '要下雨天才冒头，' : ''}得用神识（V）仔细找。`
-        : `${poster}：${J.thing}进了${J.place}（${where(s)}），到现在还没回来！用神识（V）找找吧。`;
+      desc = J.herb ? `${poster}：听说${J.place}一带（${where(s)}）长着${J.thing}，${J.cond === 'night' ? '只在夜里显形，' : J.cond === 'rain' ? '要下雨天才冒头，' : ''}得到了地方仔细找。`
+        : `${poster}：${J.thing}进了${J.place}（${where(s)}），到现在还没回来！到那一带找找吧。`;
     } else if (kind === 'omen') {
       if (!(s = this.site(90))) return null;
       at(s); J.type = pick(Object.keys(OMEN)); exp = g.day + 1;
@@ -282,20 +282,18 @@ export class Jobs {
     const g = this.g, J = R.J;
     if (R.stage === 'go') {
       if (Math.hypot(P.pos.x - J.x, P.pos.z - J.z) < 40) {
-        R.stage = 'search'; R.engaged = true; R.scan0 = g.realm.scanT;
+        R.stage = 'search'; R.engaged = true; R.hintT = 0;
         const types = SECTOR_MOBS[sectorAt(J.x, J.z).id];
         for (let i = 0; i < 1 + J.ring; i++) this.mob(R, pick(types), J.tx + rnd(-5, 5), J.tz + rnd(-5, 5), J.lvl, { idle: true });
         if (J.aff.includes('rival')) this.rival(R, J.x + rnd(-8, 8), J.z + rnd(-8, 8), { x: J.tx, z: J.tz });
-        g.toast(`到了。按 V 放出神识，搜寻${J.thing}`, 2.5);
+        g.toast(`到了。四处找找${J.thing}`, 2.5);
       }
       return;
     }
     if (R.stage !== 'search') return;
-    const s = g.realm.scanT, fresh = s > (R.scan0 ?? 0) + 1; R.scan0 = s;
-    if (!fresh) return;
-    const d = Math.hypot(P.pos.x - J.tx, P.pos.z - J.tz);
-    if (J.cond && !(J.cond === 'night' ? g.nightK > 0.5 : g.weather.raining)) { g.toast(`神识里什么也没有……${J.cond === 'night' ? '这东西只在夜里显形' : '这东西要下雨才冒头'}`, 2.5); return; }
-    if (d > 24) { g.toast(`神识隐约感到：在${dirOf(J.tx - P.pos.x, J.tz - P.pos.z)}边，约 ${Math.round(d / 5) * 5} 米`, 2.5); return; }
+    const d = Math.hypot(P.pos.x - J.tx, P.pos.z - J.tz), hint = (R.hintT = (R.hintT || 0) - dt) <= 0;
+    if (J.cond && !(J.cond === 'night' ? g.nightK > 0.5 : g.weather.raining)) { if (hint && d < 30) { R.hintT = 8; g.toast(`附近什么也没有……${J.cond === 'night' ? '这东西只在夜里显形' : '这东西要下雨才冒头'}`, 2.5); } return; }
+    if (d > 12) { if (hint && d < 60) { R.hintT = 8; g.toast(`线索指向${dirOf(J.tx - P.pos.x, J.tz - P.pos.z)}边，约 ${Math.round(d / 5) * 5} 米`, 2.5); } return; }
     this.reveal(R);
   }
   reveal(R) {
@@ -504,7 +502,7 @@ export class Jobs {
     } else if (J.kind === 'guard') t = R.stage === 'go' ? `前往${J.name}${far(x, z)}` : `守住${J.name}：第 ${R.wave}/3 波 · 阵眼 ${pct(R.node)}`;
     else if (J.kind === 'track') {
       if (R.stage === 'go') t = `去${J.place}一带找${J.thing}${far(x, z)}`;
-      else if (R.stage === 'search') t = `按 V 用神识搜寻${J.thing}${J.cond === 'night' ? '（夜里才显形）' : J.cond === 'rain' ? '（下雨才冒头）' : ''}`;
+      else if (R.stage === 'search') t = `到附近搜寻${J.thing}${J.cond === 'night' ? '（夜里才显形）' : J.cond === 'rain' ? '（下雨才冒头）' : ''}`;
       else { t = `${J.herb ? '采下' : '扶起'}${J.thing}${far(J.tx, J.tz)}`; x = J.tx; z = J.tz; }
     } else if (J.kind === 'omen') t = R.stage === 'go' ? `赶去${J.type}${far(x, z)}` : R.stage === 'fight' ? `打跑抢${J.type}的散修（剩 ${this.alive(R).length}）` : OMEN[J.type].verb.slice(2);
     else if (J.kind === 'duel') t = R.stage === 'go' ? `去${J.place}找${FOES[J.foe].name}${far(x, z)}` : `切磋：${this.ruleText(J)}${J.rule === 'time' ? ` · ${Math.ceil(R.clock)} 秒` : J.rule === 'nohit' ? ` · 挨打 ${R.hits}/2` : ''}`;
