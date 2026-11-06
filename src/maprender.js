@@ -35,6 +35,10 @@ export function paintMap(c, g, tiles, v, o) {
     if (vl.away) continue; const [x, y] = at(vl.pos.x, vl.pos.z); if (!vis(x, y, 4)) continue;
     c.fillStyle = '#ffd98a'; c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, 2, 0, Math.PI * 2); c.fill(); c.stroke();
   }
+  for (const d of g.coop?.dots() || []) { // 联机道友
+    const [x, y] = at(d.x, d.z); if (!vis(x, y, 4)) continue;
+    c.fillStyle = d.color; c.strokeStyle = '#000'; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, 3.5, 0, Math.PI * 2); c.fill(); c.stroke();
+  }
   for (const e of g.enemies.list) {
     if (e.alive === false || e.pos.distanceTo(P.pos) > 60) continue; const [x, y] = at(e.pos.x, e.pos.z); if (!vis(x, y, 4)) continue;
     c.fillStyle = e.boss ? '#d98aff' : '#ff5a5a'; c.beginPath(); c.arc(x, y, e.boss ? 4 : 2.2, 0, Math.PI * 2); c.fill();
