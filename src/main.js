@@ -9,6 +9,7 @@ import { createChibi, animChibi } from './chibi.js';
 import { attachHeroModel } from './hero_model.js';
 import { Weather } from './weather.js';
 import { createMirror } from './lab/mirror.js';
+import { batchShadows, showBatches } from './shadowbatch.js';
 import { waterFxU } from './water.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
 import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist, POND } from './world.js';
@@ -62,9 +63,11 @@ renderer.toneMappingExposure = 1.12;
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
+// 地址栏 ?opt=0：关掉这几轮的性能优化（矩阵、阴影剔除、着色器预热、远处区块分帧），用来对比前后帧率
+const OPT = !/[?&]opt=0\b/.test(location.search);
 // 场景根节点自己从不移动。默认 matrixAutoUpdate 会让它每帧标「脏」，连带强制重算全部 6 万多个物体的矩阵（手机上每帧几十毫秒），
 // 雾外剔除里「藏起来的不算矩阵」也因此失效。关掉以后只有真的会动的物体才重算——画面完全不变。
-scene.matrixAutoUpdate = false;
+scene.matrixAutoUpdate = !OPT;
 scene.fog = new THREE.Fog(0xcfe6f0, 30, 60);
 scene.background = new THREE.Color(0xcfe6f0);
 const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.5, 140);
@@ -112,7 +115,7 @@ scene.add(sun, sun.target);
 // 光源池：固定 8 盏点光，每帧分配给离玩家最近的灯笼/火把/晶石（shader 不重编译）
 const pool = [];
 for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xffaa66, 0, 13, 1.6); scene.add(l); pool.push(l); }
-const aura = new THREE.PointLight(0x9fdcff, 0, 9, 1.4); scene.add(aura);
+const aura = new THREE.PointLight(0x9fdcff, 0, 12, 1.2); scene.add(aura);
 const mineFill = new THREE.PointLight(0xc8baff, 0, 40, 1.0); scene.add(mineFill); // 矿洞基础补光：跟着玩家走，洞里不会黑到看不见
 
 const KEYS = [ // 时, 日光色, 日光强度, 天空色, 地面色, 环境强度, 雾色
@@ -126,7 +129,7 @@ const KEYS = [ // 时, 日光色, 日光强度, 天空色, 地面色, 环境强�
   [20, 0x7f98ff, 0.4, 0x2a3058, 0x1a1a24, 0.45, 0x1a1e38],
   [24, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
 ];
-const _ca = new THREE.Color(), _cb = new THREE.Color(), MINE_FOG = new THREE.Color(0x1c1830);
+const _ca = new THREE.Color(), _cb = new THREE.Color(), MINE_FOG = new THREE.Color(0x0f0c1a);
 function sample(h, idx, out) {
   let i = 0; while (KEYS[i + 1][0] < h) i++;
   const a = KEYS[i], b = KEYS[i + 1], t = (h - a[0]) / (b[0] - a[0]);
@@ -165,7 +168,7 @@ configureClearings([
   ...g.mapData.hubs.map((h) => ({ ...polar(h.ang, h.dist), r: 26, plaza: 17 })),
   ...g.mapData.sects.map((s) => { const S = siteOf(s.name); return { ...polar(s.ang, s.dist), r: S.r, ground: S.ground, tint: S.tint, tintK: S.tintK, terrain: S.terrain }; }),
 ]);
-const world = new World(scene); g.world = world; fx.gy = groundY; // 特效、伤害数字等都按「离地高度」给 y，落在台地上要加地面高度
+const world = new World(scene); g.world = world; if (!OPT) world.noSlice = true; fx.gy = groundY; // 特效、伤害数字等都按「离地高度」给 y，落在台地上要加地面高度
 const enemies = new Enemies(g); g.enemies = enemies;
 const weather = new Weather(scene); g.weather = weather;
 
@@ -583,7 +586,7 @@ function openMenu() {
   });
 }
 // 设置（存在本机）：音量、震屏、连招节奏提示（GDD 第 12 节：F/S 提示可以在设置里开关）
-const settings = { vol: 0.7, shake: true, rhythm: false, outline: false, fps30: true };
+const settings = { vol: 0.7, shake: true, rhythm: false, outline: false, fpsCap: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
 const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; setOutline(settings.outline); world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
@@ -593,8 +596,8 @@ function openSettings() {
     const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings.vol; r.style.flex = '1';
     r.addEventListener('input', () => { settings.vol = +r.value; applySettings(); });
     row.append(el('span', 'pic', '🔊'), el('div', 'ptxt', '<b>音量</b>'), r); body.append(row);
-    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）'], ['fps30', '锁 30 帧', '帧率固定在 30，不忽高忽低（默认开；关掉 = 不限帧率）']]) {
-      body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : k === 'fps30' ? '🎞' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
+    for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）'], ['fpsCap', '锁 30 帧', '帧率固定在 30，不忽高忽低（默认关 = 不限帧率）']]) {
+      body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : k === 'fpsCap' ? '🎞' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
     }
     body.append(el('div', 'pempty', '手柄：左摇杆移动 · 右摇杆瞄准 · A 普攻 · B 闪避 · X / Y / LB / RB 技能 · LT 换武 · RT 交互 · 十字键换快捷栏 / 用 / 背包 · Start 菜单 · Back 地图 · 按左摇杆 御剑'));
   });
@@ -625,7 +628,7 @@ register('sects', () => sects.save(), (s) => sects.load(s));
 register('secrets', () => secrets.save(), (s) => secrets.load(s));
 register('places', () => places.save(), (s) => places.load(s));
 register('social', () => social.save(), (s) => social.load(s));
-register('events', () => ({ ...events.save(), lairs: enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
+register('events', () => ({ ...events.save(), lairs: g.coop?.visiting?.lairs || enemies.lairs.map((L) => L.deadDay) }), (s) => { events.load(s); (s.lairs || []).forEach((d, i) => { if (enemies.lairs[i]) enemies.lairs[i].deadDay = d; }); });
 register('world', () => ({ picked: [...world.picked] }), (s) => { world.picked = new Map(s.picked); });
 register('farm', () => farm.save(), (s) => { if (!Array.isArray(s)) farm.load(s); });
 
@@ -636,6 +639,43 @@ const ui = Object.fromEntries(['hpFill', 'hpText', 'qiFill', 'qiText', 'xpFill',
 
 world.update(P.pos, 0, 0, g.day * 24 + g.hours, true);
 document.getElementById('loading').classList.add('hidden');
+// 着色器预热（标题画面出来后做一次）：着色器第一次用到时才编译，手机上每个要几十毫秒，
+// 以前第一次走近宗门、走到池塘边 / 雨后积水、新东西进画面时会卡一下。现在开局把整个世界要用的一次编好：
+// 普通的、倒影用的（带水面裁剪）、阴影深度用的（临时把阴影范围放大到整个世界画一张阴影图）。画面不变。
+function warmShaders() {
+  const t0 = performance.now(), n0 = renderer.info.programs.length;
+  scene.updateMatrixWorld(true);
+  const rt0 = renderer.getRenderTarget(), clip0 = renderer.clippingPlanes, plane = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)];
+  // 倒影（池塘边 / 雨后积水）：镜头只看第 1 层，灯光里只有日光、天光和 8 盏灯笼光，外加一张水面裁剪
+  const mc = camera.clone(); mc.layers.set(1);
+  hemi.layers.enable(1); sun.layers.enable(1); for (const l of pool) l.layers.enable(1);
+  // 场景实际画在后期处理的缓冲上（不做色调映射、线性色彩），着色器版本和画到屏幕上的不一样
+  renderer.setRenderTarget(composer.renderTarget1);
+  // compile() 不会更新裁剪面的状态（只有真的 render 才会），先对一个空场景 render 一下再编
+  const empty = new THREE.Scene();
+  const comp = (cam, clip) => { renderer.clippingPlanes = clip ? plane : clip0; renderer.render(empty, cam); renderer.compile(scene, cam); };
+  comp(camera, false); comp(mc, true);
+  renderer.clippingPlanes = clip0;
+  // 阴影深度：three 画阴影时用的是「上一次」设好的灯光（主画面 11 盏 / 倒影 8 盏都可能），两种都画一遍。
+  // 临时把阴影范围放大到整个世界，画到 1×1 的图上，只为了让每个物体都过一次阴影
+  const sc = sun.shadow.camera, keep = { left: sc.left, right: sc.right, top: sc.top, bottom: sc.bottom, near: sc.near, far: sc.far }, sp = sun.position.clone(), off0 = shCull.off;
+  Object.assign(sc, { left: -1400, right: 1400, top: 1400, bottom: -1400, near: 1, far: 5000 }); sc.updateProjectionMatrix();
+  sun.position.copy(sun.target.position).add(new THREE.Vector3(400, 2000, 300)); sun.updateMatrixWorld(); sun.target.updateMatrixWorld();
+  shCull.off = true;
+  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  try {
+    renderer.setRenderTarget(rt);
+    renderer.render(scene, camera); // 设好主画面的灯光
+    renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); // 阴影：上一次是主画面
+    comp(mc, true); renderer.setRenderTarget(rt);
+    renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); // 阴影：上一次是倒影
+  } finally {
+    renderer.setRenderTarget(rt0); renderer.clippingPlanes = clip0; rt.dispose();
+    shCull.off = off0; Object.assign(sc, keep); sc.updateProjectionMatrix(); sun.position.copy(sp); sun.updateMatrixWorld(); renderer.shadowMap.needsUpdate = true;
+  }
+  g.warm = { ms: Math.round(performance.now() - t0), programs: renderer.info.programs.length - n0 };
+}
+setTimeout(() => { batchAll(); if (OPT && !/[?&]warm=0\b/.test(location.search)) warmShaders(); }, 50); // ?warm=0 关掉对比
 
 // ---------- 血条：头顶小血条 + 顶部目标大血条（与试炼场同一套 hpbar.js） ----------
 const hpLayer = document.getElementById('hpLayer');
@@ -757,7 +797,7 @@ function mirrorPass() {
   if (!near && !pud) return;
   P.c.root.traverse(o => o.layers.enable(1));
   // 周围会投影的东西（树、房子、墙、石头、NPC）也进倒影，不然水洼只照天空、看着像一块白斑。地面本身、描边不进。半秒刷新一次（新刷出来的 NPC / 怪）
-  if (!(mirrorScan++ % 30)) scene.traverse(o => { if (o.isMesh && o.castShadow && !o.userData.isLine && !o.userData.ground) o.layers.enable(1); });
+  if (!(mirrorScan++ % 30)) scene.traverse(o => { if (o.isMesh && (o.castShadow || o.userData.shProxied) && !o.userData.isLine && !o.userData.ground && !o.userData.shProxy) o.layers.enable(1); }); // shProxied：投影交给合批网格了，倒影里照样要有
   hemi.layers.enable(1); sun.layers.enable(1); for (const l of pool) l.layers.enable(1);
   const lvl = near ? 0.03 : (P.gy || 0) + 0.01; waterFxU.pudY.value = lvl; shCull.mir = lvl;
   mirror.render(scene, lvl);
@@ -765,7 +805,7 @@ function mirrorPass() {
 // 阴影剔除（画面完全不变）：太阳从高处斜照，影子顺着光线落到脚下。把每个顶层物体的包围球沿光线方向「拖」到地面，
 // 这段胶囊要是碰不到镜头视锥（池塘边 / 雨后积水时，再算一遍倒影里看得到的范围），它的影子就不可能出现在画面里——
 // 只在画阴影贴图那一下临时藏起来，画完马上还原。村里主要省的是镜头外村民、房子、摊子的阴影绘制。
-const shCull = { n: 0, hidden: [], mir: null, off: /[?&]shcull=0\b/.test(location.search) }; // ?shcull=0 关掉对比
+const shCull = { n: 0, hidden: [], shown: [], mir: null, off: !OPT || /[?&]shcull=0\b/.test(location.search) }; // ?shcull=0 关掉对比
 const _scF = new THREE.Frustum(), _scM = new THREE.Matrix4(), _scA = new THREE.Vector3(), _scB = new THREE.Vector3(), _scL = new THREE.Vector3();
 function shadowInfo(o) {
   const c = o.userData._sh; if (c !== undefined) return c;
@@ -786,26 +826,43 @@ function capsuleIn(a, b, r) {
 }
 const SH_FLOOR = -3; // 影子最低落到哪（比池底、台地底都低，宁可多画）
 function shadowCullBegin() {
-  const H = shCull.hidden; H.length = 0;
-  if (shCull.off || g.debugCam) return;
-  camera.updateMatrixWorld(); _scF.setFromProjectionMatrix(_scM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-  _scL.subVectors(sun.position, sun.target.position).normalize(); // 指向太阳
-  if (_scL.y < 0.05) return;
+  const H = shCull.hidden, S = shCull.shown; H.length = 0; S.length = 0;
+  let cull = !shCull.off && !g.debugCam;
+  if (cull) {
+    camera.updateMatrixWorld(); _scF.setFromProjectionMatrix(_scM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    _scL.subVectors(sun.position, sun.target.position).normalize(); // 指向太阳
+    if (_scL.y < 0.05) cull = false;
+  }
   const mir = shCull.mir, kids = scene.children;
+  let lazy = shBatch.on ? 1 : 0; // 后来才加进场景的组：每帧最多合批一个
   for (let i = 0; i < kids.length; i++) {
     const o = kids[i]; if (!o.visible) continue;
-    const info = shadowInfo(o); if (!info) continue;
-    if (o.matrixAutoUpdate) o.updateMatrix();
-    _scA.copy(info.c).applyMatrix4(o.matrix);
-    const r = info.r, down = (_scA.y + r - SH_FLOOR) / _scL.y;
-    _scB.copy(_scA).addScaledVector(_scL, -Math.max(0, down));
-    if (capsuleIn(_scA, _scB, r)) continue;
-    if (mir !== null) { _scA.y = 2 * mir - _scA.y; _scB.y = 2 * mir - _scB.y; if (capsuleIn(_scA, _scB, r)) continue; } // 倒影：镜像过水面后在视锥里也算看得到
-    o.visible = false; H.push(o);
+    if (cull) {
+      const info = shadowInfo(o);
+      if (info) {
+        if (o.matrixAutoUpdate) o.updateMatrix();
+        _scA.copy(info.c).applyMatrix4(o.matrix);
+        const r = info.r, down = (_scA.y + r - SH_FLOOR) / _scL.y;
+        _scB.copy(_scA).addScaledVector(_scL, -Math.max(0, down));
+        let vis = capsuleIn(_scA, _scB, r);
+        if (!vis && mir !== null) { _scA.y = 2 * mir - _scA.y; _scB.y = 2 * mir - _scB.y; vis = capsuleIn(_scA, _scB, r); } // 倒影：镜像过水面后在视锥里也算看得到
+        if (!vis) { o.visible = false; H.push(o); continue; }
+      }
+    }
+    if (o.userData._batches) showBatches(o, S);
+    else if (lazy > 0 && !o.userData._noBatch && !o.isLight) { lazy--; if (batchShadows(o)) showBatches(o, S); }
   }
   shCull.n = H.length;
 }
-function shadowCullEnd() { for (const o of shCull.hidden) o.visible = true; shCull.hidden.length = 0; }
+function shadowCullEnd() { for (const o of shCull.hidden) o.visible = true; shCull.hidden.length = 0; for (const p of shCull.shown) p.visible = false; shCull.shown.length = 0; }
+// 阴影合批（shadowbatch.js）：开局把静止物体的投影零件合起来；?batch=0 关掉对比
+const shBatch = { on: OPT && !/[?&]batch=0\b/.test(location.search), groups: 0, meshes: 0, ms: 0 };
+function batchAll() {
+  if (!shBatch.on) return;
+  const t0 = performance.now();
+  for (const o of scene.children) { const n = batchShadows(o); if (n) { shBatch.groups++; shBatch.meshes += n; } }
+  shBatch.ms = Math.round(performance.now() - t0);
+}
 {
   const sm = renderer.shadowMap, render0 = sm.render;
   sm.render = function (lights, sc, cam) {
@@ -825,12 +882,12 @@ function fpsTick(rdt) {
   if (!fpsM.el) { const v = document.getElementById('ver'); if (!v) return; fpsM.el = document.createElement('span'); v.append(' · ', fpsM.el); }
   fpsM.el.textContent = f + ' fps'; fpsM.el.style.color = f >= 50 ? '#8f8' : f >= 30 ? '#ff8' : '#f88';
 }
-// 帧率上限：手机上 40–70 来回跳比稳定 30 更难受，默认锁 30（设置里可关）。地址栏 ?fps=60 / ?fps=0（不限）可临时覆盖
+// 帧率上限：设置里「锁 30 帧」打开后固定 30（默认关，方便看优化前后的真实帧率）。地址栏 ?fps=30 / ?fps=0（不限）可临时覆盖
 const FPS_Q = new URLSearchParams(location.search).get('fps');
 let nextDraw = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const cap = FPS_Q !== null ? +FPS_Q : settings.fps30 ? 30 : 0;
+  const cap = FPS_Q !== null ? +FPS_Q : settings.fpsCap ? 30 : 0;
   if (cap > 0) {
     const iv = 1000 / cap;
     if (now + 4 < nextDraw) return; // 4ms 余量：屏幕刷新的时间点有抖动（60Hz 屏隔一帧画一帧，90 / 120Hz 也一样均匀）
@@ -997,7 +1054,7 @@ function updateLights(h) {
   sample(h, 1, sun.color);
   sun.intensity = Math.max(sample(h, 2) * (1 - m * 0.92), 0.5 * m);
   sample(h, 3, hemi.color); sample(h, 4, hemi.groundColor);
-  hemi.intensity = Math.max(sample(h, 5) * (1 - m * 0.7), 1.5 * m); // 矿洞里环境光不低于 1.5
+  hemi.intensity = Math.max(sample(h, 5) * (1 - m * 0.7), 0.85 * m); // 矿洞里环境光不低于 0.85
   if (m > 0) hemi.color.lerp(_ca.setHex(0x8a80d0), m * 0.7); hemi.groundColor.lerp(_ca.setHex(0x4a4670), m * 0.7);
   sample(h, 6, _fog).lerp(MINE_FOG, m);
   scene.fog.color.copy(_fog); scene.background.copy(_fog);
@@ -1037,11 +1094,11 @@ function updateLights(h) {
     l.position.set(c.e.x, c.e.y, c.e.z); l.color.copy(c.e.color);
     l.intensity = c.lv * 10;
   });
-  aura.position.set(P.pos.x, 2.2, P.pos.z);
+  aura.position.set(P.pos.x, 3.6, P.pos.z); // 抬高一点：光铺在地上，不在角色身上形成亮斑
   // 角色自带一点小光：白天很淡，夜里 / 矿洞里更明显（灯灭了也不会全黑）
-  aura.intensity = (1.5 + Math.max(g.nightK * 0.8, m) * 9) * (m > 0.5 && g.lampOn === false ? 0.6 : 1);
+  aura.intensity = (0.4 + Math.max(g.nightK * 0.5, m * 0.6) * 4) * (m > 0.5 && g.lampOn === false ? 0.6 : 1);
   mineFill.position.set(P.pos.x, 4.5, P.pos.z);
-  mineFill.intensity = m * 45;
+  mineFill.intensity = m * 18;
   aura.intensity = Math.max(g.nightK * 0.6, m) * 6 * (m > 0.5 && g.lampOn === false ? 0.25 : 1); // 矿洞里灯灭了只剩一点微光
 }
 
@@ -1188,5 +1245,5 @@ g.zoom = () => camZoomU; // 调试用
 window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
 g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) drawFrame(); };
-g.fogCull = fogCull; g.shCull = shCull;
+g.fogCull = fogCull; g.shCull = shCull; g.shBatch = shBatch; g.scene = scene; g.camera = camera;
 export { flat, glow, mesh };
