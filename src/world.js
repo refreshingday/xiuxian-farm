@@ -179,7 +179,24 @@ export function configureVillage(data) {
 
 // 返回基础色到 out，并给出路面程度 path(0..1)、地面类型 kind
 const GS = { path: 0, kind: 0, frost: 0 };
+const GEN_BUDGET = 4; // 远处区块每帧最多生成几毫秒
+// 只挑会碰到这一块地的路 / 铺地 / 村门 / 山 / 空地（余量都比它们能影响到的距离大）。生成区块时先圈出范围，
+// 范围里的采样点只看这几样，结果和全看一遍完全一样；范围外照旧全看。以前每个采样点都把全世界的空地算一遍。
+let GSL = null;
+function gsRegion(x0, z0, x1, z1) {
+  const hit = (a, b, c, d, m) => a - m < x1 && c + m > x0 && b - m < z1 && d + m > z0;
+  GSL = {
+    x0, z0, x1, z1,
+    paths: PATHS.filter(([ax, az, bx, bz]) => hit(Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz), 3)),
+    rects: PAVED_RECTS.filter(([a, b, c, d]) => hit(a, b, c, d, 1)),
+    discs: PAVED_DISCS.filter((D) => hit(D.x, D.z, D.x, D.z, D.r + 1)),
+    gates: GATES.filter((g) => hit(g.x, g.z, g.x, g.z, 6.5)),
+    peaks: PEAKS.filter(([px, pz, , pr]) => hit(px, pz, px, pz, pr + 2)),
+    clearings: CLEARINGS.filter((c) => hit(c.x, c.z, c.x, c.z, Math.max(c.r, (c.plaza || 0) + 1) + 1)),
+  };
+}
 function groundSample(x, z, out) {
+  const L = GSL !== null && x >= GSL.x0 && x <= GSL.x1 && z >= GSL.z0 && z <= GSL.z1 ? GSL : null;
   const dv = Math.hypot(x, z), dm = Math.hypot(x - MINE.x, z - MINE.y);
   const n = fbm(x * 0.08, z * 0.08, 3, 2);
   mix3(out, GP.grass, GP.grass2, smooth(0.42, 0.7, n));
@@ -191,19 +208,19 @@ function groundSample(x, z, out) {
   if (sec.tint && bk > 0) mix3(out, out, sec.tint, bk * (0.75 + n * 0.25));
   // 路：大路 + 各家门口通向广场的小路
   let rd = roadDist(x, z) - 0.5;
-  for (const [ax, az, bx, bz] of PATHS) rd = Math.min(rd, segDist(x, z, ax, az, bx, bz) + 0.25);
+  for (const [ax, az, bx, bz] of L ? L.paths : PATHS) rd = Math.min(rd, segDist(x, z, ax, az, bx, bz) + 0.25);
   GS.path = 1 - smooth(0.9, 1.6, rd + (n - 0.5) * 0.9);
   GS.kind = 0; GS.frost = 0;
   if (Math.hypot(x - PLAZA.x, z - PLAZA.z) < PLAZA.r + (n - 0.5) * 1.2) { GS.kind = 1; GS.path = 1; }
-  for (const [a, b, c, d] of PAVED_RECTS) if (x > a + (n - 0.5) * 0.5 && x < c - (n - 0.5) * 0.5 && z > b && z < d) { GS.kind = 1; GS.path = 1; }
-  for (const D of PAVED_DISCS) if (Math.hypot(x - D.x, z - D.z) < D.r + (n - 0.5) * 0.8) { GS.kind = 1; GS.path = 1; }
-  for (const g of GATES) if (Math.hypot(x - g.x, z - g.z) < 5 + (n - 0.5) * 1.2) { GS.kind = 1; GS.path = 1; } // 村门口铺石板
+  for (const [a, b, c, d] of L ? L.rects : PAVED_RECTS) if (x > a + (n - 0.5) * 0.5 && x < c - (n - 0.5) * 0.5 && z > b && z < d) { GS.kind = 1; GS.path = 1; }
+  for (const D of L ? L.discs : PAVED_DISCS) if (Math.hypot(x - D.x, z - D.z) < D.r + (n - 0.5) * 0.8) { GS.kind = 1; GS.path = 1; }
+  for (const g of L ? L.gates : GATES) if (Math.hypot(x - g.x, z - g.z) < 5 + (n - 0.5) * 1.2) { GS.kind = 1; GS.path = 1; } // 村门口铺石板
   const pd = pondDist(x, z);
   if (pd < 1.1 + (n - 0.5) * 0.6) { GS.kind = 2; GS.path = Math.max(GS.path, 1); }
   const bd = Math.min(Math.hypot(x - BASIN.x, z - BASIN.z) - BASIN.r, segDist(x, z, ...STREAM) - 0.55);
   if (bd < 0.8 + (n - 0.5) * 0.5) { GS.kind = 2; GS.path = 1; }
-  for (const [px, pz, , pr] of PEAKS) if (Math.hypot(x - px, z - pz) < pr + 0.9 + (n - 0.5) * 0.8) { GS.kind = 4; GS.path = 1; mix3(out, out, [96, 112, 84], 0.7); }
-  for (const c of CLEARINGS) {
+  for (const [px, pz, , pr] of L ? L.peaks : PEAKS) if (Math.hypot(x - px, z - pz) < pr + 0.9 + (n - 0.5) * 0.8) { GS.kind = 4; GS.path = 1; mix3(out, out, [96, 112, 84], 0.7); }
+  for (const c of L ? L.clearings : CLEARINGS) {
     if (c.tint) { const e = Math.max(Math.abs(x - c.x), Math.abs(z - c.z)); if (e < c.r) { const k = c.tintK * (1 - smooth(c.r - 14, c.r, e + (n - 0.5) * 6)); GS.frost = Math.max(GS.frost, k); mix3(out, out, c.tint, k); } } // 门派地貌色（寒溪宗覆霜：草叶 / 无贴图地面直接混色，有贴图时着色器按 frost 盖霜）
     if (c.ground) { if (Math.abs(x - c.x) < c.r && Math.abs(z - c.z) < c.r) { const k = c.ground(x - c.x, z - c.z, n - 0.5); if (k) { GS.kind = k; GS.path = 1; } } }
     else if (c.plaza && Math.abs(x - c.x) < c.plaza + (n - 0.5) && Math.abs(z - c.z) < c.plaza * 0.75 + (n - 0.5)) { GS.kind = 1; GS.path = 1; }
@@ -294,9 +311,10 @@ function paintGround(ox, oz) {
 
 // 有贴图时：每区块只做两张低分辨率数据图（底色 + 混合权重），细节由着色器从贴图采样
 const lin = (c) => new THREE.Vector3(...c.map((v) => (v / 255) ** 2.2));
-function groundMaps(ox, oz) {
+function* groundMaps(ox, oz) { // 生成器：每 8 行让一次（区块分几帧生成，见 World.update）
   const N = CHUNK * RES / 2, tint = new Uint8Array(N * N * 4), mask = new Uint8Array(N * N * 4);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    if (i === 0 && (j & 7) === 0 && j > 0) yield;
     const x = ox + (i + 0.5) * CHUNK / N, z = oz + (j + 0.5) * CHUNK / N;
     groundSample(x, z, _b);
     const o = (j * N + i) * 4, k = GS.kind;
@@ -829,7 +847,23 @@ export class World {
       if (!this.chunks.has(key(pcx + dx, pcz + dz))) need.push([pcx + dx, pcz + dz, dx * dx + dz * dz]);
     }
     need.sort((a, b) => a[2] - b[2]);
-    for (let i = 0; i < (forceAll ? need.length : Math.min(1, need.length)); i++) this.genChunk(need[i][0], need[i][1]);
+    // 脚下这块和周围一圈（≤ 64 米内）缺了就马上整块生成（传送后、飞得快时）；最外一圈（64–96 米，在雾里）
+    // 分几帧慢慢生成，每帧最多花 GEN_BUDGET 毫秒——以前一帧生成一整块（手机上一两百毫秒），跨区块边界时连卡好几帧
+    const sl = this.slice;
+    if (sl && (Math.abs(sl.cx - pcx) > R || Math.abs(sl.cz - pcz) > R)) this.slice = null; // 走远了，不要了
+    if (forceAll) { this.slice = null; for (const [cx, cz] of need) this.genChunk(cx, cz); }
+    else if (need.length) {
+      const [cx, cz, d2] = need[0];
+      if (d2 <= 2 || this.noSlice) {
+        if (this.slice && this.slice.cx === cx && this.slice.cz === cz) { GSL = this.slice.L; while (!this.slice.it.next().done); this.slice = null; }
+        else this.genChunk(cx, cz);
+      } else {
+        if (!this.slice) { const st = { cx, cz, L: null }; st.it = this.genChunkSteps(cx, cz, st); this.slice = st; }
+        const t0 = performance.now(), st = this.slice;
+        if (st.L) GSL = st.L; // 中间别的区块用过 GSL，换回自己的范围
+        while (performance.now() - t0 < GEN_BUDGET) if (st.it.next().done) { this.slice = null; break; }
+      }
+    }
     for (const [k, ch] of this.chunks) {
       if (Math.abs(ch.cx - pcx) > R + 1 || Math.abs(ch.cz - pcz) > R + 1) this.unloadChunk(k, ch);
     }
@@ -886,11 +920,14 @@ export class World {
     return 0.6 + 0.4 * Math.sin(this.time * 1.5 + e.seed); // crystal
   }
 
-  genChunk(cx, cz) {
+  genChunk(cx, cz) { const it = this.genChunkSteps(cx, cz, {}); while (!it.next().done); }
+  // 生成器：一块区块分几段做完，中间 yield 让出这一帧。做完之前什么都不放进场景，打断也不留东西
+  *genChunkSteps(cx, cz, st) {
     const k = key(cx, cz);
     const rng = mulberry32(hashInt(cx, cz, 99));
     const ox = cx * CHUNK, oz = cz * CHUNK;
     const group = new THREE.Group();
+    gsRegion(ox - 5, oz - 5, ox + CHUNK + 5, oz + CHUNK + 5); st.L = GSL; // 草、花会撒出区块边一点
 
     // 地面：一块平面 + 像素贴图；宗门台地所在的区块细分成 0.5 米网格，顶点抬到台地高度
     const terr = chunkHasTerrain(ox, oz), SEG = terr ? CHUNK / TG : 1;
@@ -911,9 +948,11 @@ export class World {
         if (Math.abs(H[a] - H[c]) < Math.abs(H[b] - H[d])) idx.push(a, b, c, a, c, d); else idx.push(a, b, d, b, c, d);
       }
       gg.setIndex(idx); gg.computeBoundingSphere(); gg.computeBoundingBox();
+      yield;
     }
     const usePNG = PNG.grass_ground && PNG.dirt_path && PNG.stone_plaza;
-    const gtex = usePNG ? groundMaps(ox, oz) : paintGround(ox, oz);
+    const gtex = usePNG ? yield* groundMaps(ox, oz) : paintGround(ox, oz);
+    yield;
     const gmat = usePNG ? groundMat(ox, oz, gtex, terr ? terrainRock(ox, oz) : null) : toon('#ffffff', { map: gtex, unique: true });
     const gm = mesh(gg, gmat, { cast: terr, recv: true }); gm.userData.ground = true; group.add(gm); // ground：水洼倒影不照地面自己（main.js mirrorPass）
 
@@ -922,6 +961,7 @@ export class World {
     const step = 2.6;
     let hi = 0;
     for (let gx = 0; gx < CHUNK; gx += step) for (let gz = 0; gz < CHUNK; gz += step) {
+      yield; // 每格让一次（一格约 30 次地面取样）
       const x = ox + gx + rng() * step, z = oz + gz + rng() * step;
       const dv = Math.hypot(x, z), dm = Math.hypot(x - MINE.x, z - MINE.y), rd = roadDist(x, z);
       const clear = dv < WALL_R + 4 || rd < 3 || dm < MINE_R + 7 || pondDist(x, z) < 2 || CLEARINGS.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
@@ -979,15 +1019,19 @@ export class World {
     if (terr) for (const L of [trees, blooms, pines, trunks, rocks, grass, flowers, bushes, tombs]) for (const o of L) o.y = groundY(o.x, o.z); // 台地上的草木跟着地面高度
     const ims = [];
     const add = (im) => { if (im) { group.add(im); ims.push(im); } };
+    yield;
     add(inst(this.G.trunk, this.M.trunk, trunks, true, this.M.line));
     for (const im of this.leafClump('crown', trees)) add(im);
     for (const im of this.leafClump('crown', blooms, this.M.blossom, this.M.leafyBloom)) add(im);
     add(inst(this.G.pine, this.M.pine, pines, true, this.M.leafLine));
+    yield;
     for (const im of this.leafClump('bush', bushes)) add(im);
     add(inst(this.G.rock, this.M.rock, rocks, true, this.M.line));
     add(inst(this.G.tomb, this.M.rock, tombs, true, this.M.line));
+    yield;
     add(inst(this.G.grass, this.M.grass, grass, false));
     add(inst(this.G.flower, this.M.plain, flowers, false));
+    yield;
 
     this.scene.add(group);
     const ch = { cx, cz, group, ground: gg, gtex, gmat, ims, cols, herbs };
