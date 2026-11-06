@@ -7,7 +7,7 @@ const when = (t) => (t ? new Date(t).toLocaleString('zh-CN', { month: 'numeric',
 // 冲突：这台设备和云端的存档都改过（或是两局不同的游戏），让玩家选一份。没选的那份会留备份。
 // 自己的弹层（比标题画面还高），标题画面和游戏里都能用。
 export function askConflict(cloud, onDone) {
-  const c = cloud.conflict; if (!c) return;
+  const c = cloud.conflict; if (!c || !cloud.canPull()) return;
   document.getElementById('cloudAsk')?.remove();
   const L = c.local.meta, C = c.doc, acct = cloud.user?.anon ? '云端' : `云端（${esc(cloud.user?.email || '你的账号')}）`;
   const back = el('div'); back.id = 'cloudAsk';
@@ -40,7 +40,9 @@ export function openCloudPanel(gui, cloud, g) {
   gui.panel('云存档', (body) => {
     const u = cloud.user;
     body.append(gui.row('☁', esc(cloud.statusText()), cloud.state === 'offline' && cloud.msg ? esc(cloud.msg) : '每次存档后自动上传（最多 20 秒一次）'));
-    if (cloud.state === 'conflict') body.append(gui.row('⚠', '这台设备和云端的存档不一样', '选一份接着玩，另一份会留备份', [btn('选择', () => askConflict(cloud, () => gui.refresh()))]));
+    if (cloud.state === 'conflict') body.append(cloud.canPull()
+      ? gui.row('⚠', '这台设备和云端的存档不一样', '选一份接着玩，另一份会留备份', [btn('选择', () => askConflict(cloud, () => gui.refresh()))])
+      : gui.row('⚠', '这台设备和云端的存档不一样', '联机在道友的世界里时不能换存档，回到自己的世界再选'));
     if (cloud.mode !== 'off') {
       if (!u || u.anon) body.append(gui.row('🔗', '用 Google 登录', '现在是游客：进度已经自动存到云端，但只认这台设备的这个浏览器。登录后换设备、清缓存都能接着玩，游客进度会直接接到账号上。', [btn('登录', login)]));
       else body.append(gui.row('👤', esc(u.email || u.name || '已登录'), '换设备时登录同一个账号就能接着玩', [btn('退出登录', async () => {

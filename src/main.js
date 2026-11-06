@@ -535,6 +535,7 @@ const landmarks = new Landmarks(g, g.mapData); g.landmarks = landmarks;
 // 坊市（hubs.js）：客栈、丹药阁、法器阁、拍卖行
 const hubs = new Hubs(g, landmarks); g.hubs = hubs;
 g.cloud = cloud;
+cloud.canPull = () => !g.coop?.visiting;   // 在道友的房间里不换存档（内存里的状态会对不上）
 g.cheat = new Cheat(g); // 作弊面板（` 键开关，可最小化）
 const coop = new Coop(g, scene); // 联机同游（coop.js / net.js，照《一箭双修》的 PeerJS 房间号）
 document.getElementById('mpBtn').addEventListener('click', () => coop.openPanel());

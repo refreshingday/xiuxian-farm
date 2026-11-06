@@ -29,6 +29,7 @@ export class CloudSync {
     this.msg = ''; this.lastSync = 0; this.lastPush = 0; this.timer = 0;
     this.conflict = null;        // { local, doc } 两边都改过、等玩家选
     this.subs = [];
+    this.canPull = () => true;   // 游戏设：现在能不能把本机存档换成云端的（联机在道友房间里时不能）
     onWrite(() => this.schedulePush());
     addEventListener('visibilitychange', () => { if (document.hidden && this.timer) this.pushNow(); });
     this.ready = this.start();
@@ -78,6 +79,7 @@ export class CloudSync {
         const act = decide(L, doc, this.base(), clearedSid());
         if (act === 'future') return this.set('future', `云端存档来自更新的游戏版本 ${doc.game}，请刷新页面`);
         if (act === 'ask') { this.conflict = { local: L, doc }; this.set('conflict'); this.emit('conflict'); return; }
+        if (act === 'pull' && !this.canPull()) return;   // 先不换，回到自己的世界后下次同步再说
         if (act === 'pull') this.pull(doc);
         else if (act === 'push') { try { await this.push(L, doc); } catch (e) { if (e.code === 'conflict') continue; throw e; } }
         else if (act === 'same') this.setBase(stamp(L));

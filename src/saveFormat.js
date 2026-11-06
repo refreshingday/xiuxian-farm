@@ -1,41 +1,43 @@
 // 存档格式与版本迁移（纯函数，不碰 DOM / localStorage，node 里也能跑：tests/save-compat.test.mjs）。
 //
-// 游戏会一直更新，所以旧存档要永远读得进来。规则：
+// 游戏会一直更新，所以旧存档要永远读得进来——上线前已经有玩家在玩，他们本机的存档一个都不能丢。规则：
 //   1. 任何模块的 save() 形状变了（改名、换结构、删字段），SAVE_V 加 1，并在 MIGRATIONS 里写
 //      「上一版 → 这一版」的迁移函数，把旧数据改成新形状。
 //   2. 迁移只能加、不能删、不能改已发布的旧迁移——老玩家可能从任何一个旧版本跳过来，
 //      v1 存档会依次经过 1→2→3→… 每一步。
-//   3. 只是新加字段：不用升版本，但 load() 要给缺的字段默认值（旧存档里没有）。
-//   4. 每升一次版本，在 tests/fixtures/ 存一份那个版本的真实存档（save-v<N>.json），永远不删；
-//      测试会把所有 fixture 迁到最新版并检查。
+//   3. 只是新加字段：不升版本（这样还开着旧页面的玩家也照样读得进新存档），在 fill() 或模块的 load() 里给默认值。
+//   4. tests/fixtures/ 存着每个版本的真实存档（save-v<N>*.json），永远不删；测试会把它们都读一遍。
 //   5. 存档比游戏新（玩家开着旧的缓存页面）时，不读也不覆盖，提示刷新。
 //
 // 存档外壳：{ v, meta: { text, at, sid, rev, game }, <模块名>: <模块数据>, ... }
 //   sid  这条存档线的随机 id（「新的开始」换新的）——云同步用它判断两份存档是不是同一局
 //   rev  这条线写了第几次，单调递增——云同步用它判断谁新
 //   game 写这份存档的游戏版本（src/version.js 的 VERSION），只用来显示和排查
+//   sid / rev / game 是 2026-11-06 加云存档时新加的：之前的存档没有，fill() 补上（版本号仍是 1）
 
-export const SAVE_V = 2;
+export const SAVE_V = 1;
 export const RESERVED = new Set(['v', 'meta']); // 外壳占用的键，模块不能用
 
 export const newSid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 
 // MIGRATIONS[n]：把 v=n 的存档改成 v=n+1。拿到的是深拷贝，可以直接改，返回改好的。
-export const MIGRATIONS = {
-  // v1（2026-10-30 起，只有 meta.text / meta.at）→ v2：加存档线 id、写入次数、游戏版本
-  1: (d) => {
-    d.meta = { ...(d.meta || {}) };
-    d.meta.sid ??= newSid();
-    d.meta.rev ??= 1;
-    d.meta.game ??= 'v1';
-    d.meta.at ??= 0;
-    d.meta.text ??= '旧存档';
-    return d;
-  },
-};
+// 现在还没有（v1 是第一版）。以后第一次改存档形状时写 MIGRATIONS[1]，SAVE_V 改成 2。
+export const MIGRATIONS = {};
 
-// 解析 + 迁移。返回 { status, data, from }：
-//   status 'ok'      data 已是最新版本（from = 原来的版本号，from < SAVE_V 表示迁移过）
+// 新加的字段补默认值（所有版本迁移完以后都会过一遍）。返回补了没有
+function fill(d) {
+  const m = d.meta = d.meta && typeof d.meta === 'object' ? d.meta : {};
+  let added = false;
+  if (typeof m.sid !== 'string' || !m.sid) { m.sid = newSid(); added = true; }   // 云存档上线前的存档
+  if (!Number.isInteger(m.rev) || m.rev < 1) { m.rev = 1; added = true; }
+  if (typeof m.game !== 'string') { m.game = '早期版本'; added = true; }
+  if (typeof m.at !== 'number') { m.at = 0; added = true; }
+  if (typeof m.text !== 'string') { m.text = '旧存档'; added = true; }
+  return added;
+}
+
+// 解析 + 迁移 + 补字段。返回 { status, data, from, changed }：
+//   status 'ok'      data 已是最新格式；changed = 和传进来的不一样（迁移过或补过字段，调用方应该写回去，sid 才固定）
 //          'future'  存档比这个游戏新，data 原样返回，不要读也不要覆盖
 //          'bad'     读不出来（不是 JSON、没有版本号、迁移报错）
 export function migrate(raw) {
@@ -52,7 +54,8 @@ export function migrate(raw) {
       d = step(d); d.v++;
     }
   } catch (e) { return { status: 'bad', data: null, from, error: e }; }
-  return { status: 'ok', data: d, from };
+  const added = fill(d);
+  return { status: 'ok', data: d, from, changed: from < SAVE_V || added };
 }
 
 // 只取比较用的信息（本机存档外壳或云端文档都行）

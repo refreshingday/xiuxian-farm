@@ -34,7 +34,8 @@ async function browser() {
 async function open(ctx, url) {
   const p = await ctx.newPage(), errors = [];
   p.on('pageerror', (e) => errors.push(e.message));
-  p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  // 网络层失败（沙盒连不上的 CDN，比如联机用的 PeerJS）不算游戏的错
+  p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource: net::/.test(m.text())) errors.push(m.text()); });
   p.errors = errors;
   await p.goto(url, { waitUntil: 'load' });
   return p;

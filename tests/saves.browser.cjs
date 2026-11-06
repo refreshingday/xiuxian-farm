@@ -1,6 +1,6 @@
 // 把 tests/fixtures/ 里每个版本的旧存档读进真的游戏：不报错、读档成功、再存一次是最新版本。
 //   node tests/saves.browser.cjs            检查
-//   node tests/saves.browser.cjs --capture  顺便把当前版本的存档存成 fixture（升 SAVE_V 后跑一次）
+//   node tests/saves.browser.cjs --capture  顺便把当前版本的存档存成 fixture（升 SAVE_V 后跑一次；已有的不覆盖）
 const fs = require('fs'), path = require('path');
 const { ROOT, serve, browser, open, inGame } = require('./browser-helpers.cjs');
 
@@ -9,7 +9,7 @@ const { ROOT, serve, browser, open, inGame } = require('./browser-helpers.cjs');
   const { b, newCtx } = await browser();
   const dir = path.join(ROOT, 'tests/fixtures');
   let bad = 0, cur = 0;
-  for (const f of fs.readdirSync(dir).filter((f) => /^save-v\d+\.json$/.test(f)).sort()) {
+  for (const f of fs.readdirSync(dir).filter((f) => /^save-v\d+(-[\w-]+)?\.json$/.test(f)).sort()) {
     const raw = fs.readFileSync(path.join(dir, f), 'utf8'), orig = JSON.parse(raw);
     const ctx = await newCtx();
     await ctx.addInitScript((s) => { if (!sessionStorage.seeded) { sessionStorage.seeded = 1; localStorage.setItem('lingtian-save-v1', s); } }, raw);

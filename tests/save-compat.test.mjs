@@ -1,12 +1,14 @@
 // 存档向后兼容测试：node --test tests/*.test.mjs
-// 规则见 src/saveFormat.js 开头。每升一次 SAVE_V 就从游戏里存一份 tests/fixtures/save-v<N>.json，永远不删。
+// 规则见 src/saveFormat.js 开头。tests/fixtures/save-v<N>[-说明].json 是各版本的真实存档，永远不删：
+//   save-v1-pre-cloud.json  云存档上线前（2026-11-06 之前）老玩家本机的存档，用改动前的代码玩出来的
+//   save-v1.json            现在的格式（带 sid / rev / game）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { SAVE_V, MIGRATIONS, migrate, decide } from '../src/saveFormat.js';
 
 const dir = new URL('./fixtures/', import.meta.url);
-const fixtures = readdirSync(dir).filter((f) => /^save-v\d+\.json$/.test(f)).map((f) => ({ f, raw: readFileSync(new URL(f, dir), 'utf8') }));
+const fixtures = readdirSync(dir).filter((f) => /^save-v\d+(-[\w-]+)?\.json$/.test(f)).map((f) => ({ f, raw: readFileSync(new URL(f, dir), 'utf8') }));
 
 test('每个存档版本都有 fixture，每一步都有迁移', () => {
   const have = new Set(fixtures.map(({ raw }) => JSON.parse(raw).v));
@@ -26,10 +28,22 @@ for (const { f, raw } of fixtures) {
     assert.equal(typeof meta.text, 'string'); assert.equal(typeof meta.at, 'number'); assert.equal(typeof meta.game, 'string');
     for (const k of Object.keys(orig)) if (k !== 'v' && k !== 'meta') assert.ok(k in m.data, `模块 ${k} 迁移后不见了`);
     assert.deepEqual(JSON.parse(raw), orig, '迁移不能改动传进来的原数据');
-    // 迁移过一次的再迁一次不变（sid 不能每次读都换）
-    assert.deepEqual(migrate(m.data).data, m.data);
+    // 升级过一次的再读一次不变（sid 不能每次读都换），而且不用再写回
+    const again = migrate(JSON.stringify(m.data));
+    assert.deepEqual(again.data, m.data); assert.equal(again.changed, false);
+    for (const k of ['text', 'at']) if (orig.meta?.[k] !== undefined) assert.equal(meta[k], orig.meta[k], `meta.${k} 不能被改`);
   });
 }
+
+test('云存档上线前的老存档：补上 sid / rev / game，版本号不变（旧页面也照样读得进）', () => {
+  const raw = readFileSync(new URL('save-v1-pre-cloud.json', dir), 'utf8'), orig = JSON.parse(raw);
+  assert.equal(orig.meta.sid, undefined, 'fixture 应该是没有 sid 的老存档');
+  const m = migrate(raw);
+  assert.equal(m.status, 'ok'); assert.equal(m.changed, true);
+  assert.equal(m.data.v, orig.v, '只加字段不升版本：还开着旧页面的玩家要能读');
+  assert.equal(m.data.meta.rev, 1);
+  for (const k of Object.keys(orig)) if (k !== 'meta') assert.deepEqual(m.data[k], orig[k], `模块 ${k} 的数据不能变`);
+});
 
 test('读不出来 / 比游戏新的存档', () => {
   assert.equal(migrate('{坏了').status, 'bad');

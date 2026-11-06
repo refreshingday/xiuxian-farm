@@ -5,6 +5,7 @@
 //   4 又换一台设备，先当游客玩了一局，再登录 → 冲突弹窗 → 选云端 → 读进游戏
 //   5 断网：本机照样存档，状态显示连不上
 //   6 本机存档比游戏新：不读、不被云端覆盖
+//   7 老玩家（云存档上线前就有本机存档）：存档原样备份、补上的 sid 固定、传上云端、接着玩进度一点不少
 const { serve, browser, open, inGame, tap } = require('./browser-helpers.cjs');
 const EMAIL = 'tester@example.com';
 let fails = 0;
@@ -14,7 +15,8 @@ const check = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} ${msg}`); if (!o
   const { server, url } = await serve();
   const { b, newCtx } = await browser();
   const ctx = await newCtx();   // 同一个 context = 同一个浏览器（模拟云端就存在这里的 localStorage）
-  const page = async (q = '') => { const p = await open(ctx, url + 'index.html' + q); p.on('dialog', (d) => d.accept(d.type() === 'prompt' ? EMAIL : undefined)); return p; };
+  const errsAll = [];
+  const page = async (q = '') => { const p = await open(ctx, url + 'index.html' + q); p.on('close', () => errsAll.push(...p.errors)); p.on('dialog', (d) => d.accept(d.type() === 'prompt' ? EMAIL : undefined)); return p; };
   const titleReady = (p) => p.waitForFunction(() => document.querySelector('#titleBtns button') && window.game?.cloud?.state !== 'connecting', null, { timeout: 120000 });
   const server_ = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('lingtian-mockcloud') || '{"docs":{},"accounts":{}}'));
   const local = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('lingtian-save-v1')));
@@ -97,8 +99,29 @@ const check = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} ${msg}`); if (!o
   check(st.t.includes('更新的版本') && st.s === 'future' && st.v === 99, `6 未来版本存档：不读不覆盖（${st.t.split('\n')[0]}）`);
   await p.close();
 
-  const errs = []; for (const pg of ctx.pages()) errs.push(...pg.errors);
+  // 7
+  const fs = require('fs'), path = require('path');
+  const legacy = fs.readFileSync(path.join(__dirname, 'fixtures/save-v1-pre-cloud.json'), 'utf8'), old = JSON.parse(legacy);
+  const ctx7 = await newCtx();
+  await ctx7.addInitScript((s) => { if (!sessionStorage.seeded) { sessionStorage.seeded = 1; localStorage.setItem('lingtian-save-v1', s); } }, legacy);
+  p = await open(ctx7, url + 'index.html');
+  await titleReady(p);
+  st = await p.evaluate(() => ({ t: document.getElementById('titleBtns').innerText, orig: localStorage.getItem('lingtian-save-v1.orig'), L: JSON.parse(localStorage.getItem('lingtian-save-v1')), S: JSON.parse(localStorage.getItem('lingtian-mockcloud')), uid: game.cloud.user.uid }));
+  check(st.t.includes('继续 · ' + old.meta.text), `7 老玩家：标题画面「继续 · ${old.meta.text}」`);
+  check(st.orig === legacy, '7 原来的存档一字不差备份在 lingtian-save-v1.orig');
+  check(st.L.v === old.v && !!st.L.meta.sid && st.S.docs[st.uid]?.sid === st.L.meta.sid, `7 补上 sid ${st.L.meta.sid}、版本号还是 v${st.L.v}、已传上云端`);
+  await tap(p, '#titleBtns button.wide'); await inGame(p);
+  const g7 = await p.evaluate(() => ({ layer: game.player.layer, money: game.inv.money, day: game.day }));
+  check(g7.layer === old.player.layer && g7.money === old.inv.money && g7.day === old.time.day, `7 进度一点不少：第 ${g7.day} 天 · 层 ${g7.layer} · 钱 ${g7.money}`);
+  await p.evaluate(async () => { game.addMoney(1); game.save(); await game.cloud.flush(); });
+  const L7 = await local(p), S7 = await p.evaluate(() => JSON.parse(localStorage.getItem('lingtian-mockcloud')));
+  check(L7.meta.sid === st.L.meta.sid && L7.meta.rev === 2 && S7.docs[st.uid].rev === 2, '7 再存档还是同一局（sid 没变，rev 1 → 2，云端跟上）');
+  errsAll.push(...p.errors);
+  await ctx7.close();
+
+  const errs = errsAll.slice(); for (const pg of ctx.pages()) errs.push(...pg.errors);
   await b.close(); server.close();
+  check(!errs.length, '没有页面报错' + (errs.length ? '：\n  ' + [...new Set(errs)].join('\n  ') : ''));
   console.log(fails ? `${fails} 项失败` : '全部通过');
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

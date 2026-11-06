@@ -7,8 +7,8 @@
 - Hosted page: https://refreshingday.github.io/xiuxian-farm/ — always include this link in replies to the user.
 
 ## 存档兼容（游戏会一直更新，旧存档永远要读得进来）
-- 改了任何模块 `save()` 的形状（改名 / 换结构 / 删字段）→ `src/saveFormat.js` 里 `SAVE_V` +1，加 `MIGRATIONS[旧版本]`；跑 `node tests/saves.browser.cjs --capture` 存新版本的 fixture。只是新加字段：不升版本，但 `load()` 给默认值。
-- 已发布的迁移和 `tests/fixtures/save-v*.json` 永远不删不改。改完存档相关的代码跑 `node --test tests/*.test.mjs` 和 `node tests/saves.browser.cjs`。
+- 改了任何模块 `save()` 的形状（改名 / 换结构 / 删字段）→ `src/saveFormat.js` 里 `SAVE_V` +1，加 `MIGRATIONS[旧版本]`；跑 `node tests/saves.browser.cjs --capture` 存新版本的 fixture。只是新加字段：不升版本（还开着旧页面的玩家要读得进），在 `fill()` 或 `load()` 给默认值。
+- 已发布的迁移和 `tests/fixtures/save-v*.json` 永远不删不改（`save-v1-pre-cloud.json` = 云存档上线前老玩家的存档，他们的进度绝对不能丢）。改完存档相关的代码跑 `node --test tests/*.test.mjs` 和 `node tests/saves.browser.cjs`。
 - 云存档（Firebase，现在是模拟云端）见 `docs/CLOUD_SAVE.md`；动了 `src/cloud/` 跑 `node tests/cloud.browser.cjs`。
 
 ## 音效禁令
