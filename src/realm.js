@@ -3,6 +3,7 @@
 // 小境界只要修为够就自动突破；大境界要在圆满后服破境丹、渡过天劫。
 // 灵根：每条只有品级（凡 20 / 良 45 / 上 80 / 极 150），修炼倍率 = 1 + 2 × (1 − e^(−S/300))，S = 已激活灵根值之和。
 // 异灵根（雷冰风暗）要先有两条前置五行灵根才激活。每种灵根带一个生活被动。
+import * as THREE from 'three';
 import { VILLAGE_R } from './world.js';
 import { ITEMS, itemName } from './items.js';
 import { near } from './life.js';
@@ -190,23 +191,23 @@ export class Realm {
     if (this.trib) return false;
     if (used && used !== need) { g.toast(`这是${itemName(used)}，你现在要的是${itemName(need)}`, 2.5); return false; }
     if (!I.top || P.xp < xpNeed(P.layer)) { g.toast(`修为还没圆满（${I.name}），破境丹现在吃了也是浪费`, 2.5); return false; }
-    if (this.cool > g.day) { g.toast(`上次渡劫失败，${this.cool - g.day + 1} 天内不能再渡`, 2.5); return false; }
+    if (this.cool > g.day) { g.toast(`上次渡劫失败，${this.cool - g.day} 天内不能再渡（睡一觉过一天）`, 2.5); return false; }
     const home = g.life.atHome || near(P, g.life.home.door, 10) !== false;
     if (!home && Math.hypot(P.pos.x, P.pos.z) < VILLAGE_R + 6) { g.toast('村子里禁止渡劫（自家洞府除外）', 2.5); return false; }
     if (g.hubs?.at(P.pos)) { g.toast('坊市里禁止渡劫', 2.5); return false; }
     const id = [need + '+2', need + '+1', need].find((k) => g.inv.count(k));
     if (!id) { g.toast(`需要${itemName(need)}`, 2); return false; }
-    g.inv.take(id);
-    this.startTrib(home, id.endsWith('+2') ? 0.7 : id.endsWith('+1') ? 0.85 : 1);
+    // 破境丹不在这里消耗：渡劫成功才扣（passTrib），失败了丹还在，睡两天就能再渡
+    this.startTrib(home, id.endsWith('+2') ? 0.7 : id.endsWith('+1') ? 0.85 : 1, id);
     return true;
   }
   takeAvert() {
     const g = this.g; g.inv.take(g.inv.count('pill_avert+2') ? 'pill_avert+2' : g.inv.count('pill_avert+1') ? 'pill_avert+1' : 'pill_avert');
     g.player.avert = true; g.toast('服下避劫丹：这次天劫伤害减半', 2); return true;
   }
-  startTrib(home, pillK) {
+  startTrib(home, pillK, pill = null) {
     const g = this.g, P = g.player, target = levelInfo(P.layer).realm + 1;
-    this.trib = { t: -4, stage: 0, home, target, mech: TRIB[target], k: pillK * (P.avert ? 0.5 : 1) * (home ? 0.75 : 1) * (1 - (P.mods?.tribRes || 0)) * (g.inv.count('zhen_jie') ? 0.75 : 1), next: 0, beastT: 6, fires: [], x: P.pos.x, z: P.pos.z };
+    this.trib = { pill, q: [], t: -4, stage: 0, home, target, mech: TRIB[target], k: pillK * (P.avert ? 0.5 : 1) * (home ? 0.75 : 1) * (1 - (P.mods?.tribRes || 0)) * (g.inv.count('zhen_jie') ? 0.75 : 1), next: 0, beastT: 6, fires: [], x: P.pos.x, z: P.pos.z };
     P.avert = false;
     g.toast(`劫云汇聚……\n${REALMS[target]}天劫将至${home ? '（洞府阵法护身）' : '（野外渡劫，会引来妖兽）'}`, 4);
     g.shake(0.6); this.sfx((s) => s.thunderCharge(1));
@@ -222,15 +223,19 @@ export class Realm {
     const stage = Math.min(2, Math.floor(T.t / 30));
     if (stage !== T.stage) { T.stage = stage; g.toast(['第一重', '第二重', '第三重'][stage] + '天劫', 1.6); }
     banner.textContent = `${REALMS[T.target]}天劫 · ${['第一重', '第二重', '第三重'][stage]}　${Math.ceil(90 - T.t)}`;
-    // 雷击：地面预警圈，追着人劈；越往后越密
+    // 雷击：地面预警圈，追着人劈。第一重 1 道、第二重 2 道、第三重 3 道，一道接一道（间隔 0.5 秒，不同时落）；
+    // 道数越多单道越轻：第一重最痛，第二重 88%，第三重 65%
     T.next -= dt;
     if (T.next <= 0) {
-      T.next = [1.6, 1.15, 0.85][stage];
-      const n = stage + 1;
-      for (let i = 0; i < n; i++) {
-        const lead = i === 0 ? 0.5 : 0, a = Math.random() * 6.28, r = i === 0 ? 0 : 2 + Math.random() * 4;
-        this.bolt(P.pos.x + P.vel.x * lead + Math.cos(a) * r, P.pos.z + P.vel.z * lead + Math.sin(a) * r, 2 + stage * 0.4, 0.22 * T.k);
-      }
+      T.next = [2.0, 2.4, 2.8][stage];
+      for (let i = 0; i <= stage; i++) T.q.push({ at: T.t + i * 0.5, i, stage });
+    }
+    for (let j = T.q.length - 1; j >= 0; j--) {
+      const s = T.q[j];
+      if (T.t < s.at) continue;
+      T.q.splice(j, 1);
+      const a = Math.random() * 6.28, r = s.i === 0 ? 0 : 1.5 + Math.random() * 2.5; // 落点现算：每一道都追着你当时的位置
+      this.bolt(P.pos.x + P.vel.x * 0.5 + Math.cos(a) * r, P.pos.z + P.vel.z * 0.5 + Math.sin(a) * r, 2 + s.stage * 0.4, 0.3 * [1, 0.88, 0.65][s.stage] * T.k);
     }
     // 劫兽 / 野外引来的妖兽
     if (T.mech.includes('beast') || !T.home) {
@@ -266,7 +271,13 @@ export class Realm {
     const g = this.g, P = g.player;
     g.fx.circle(x, z, r, 1.1, () => {
       if (!this.trib) return;
-      g.cfx?.bolt(x, z, '#d8c8ff', 18); g.cfx?.flash(x, z, '#c8b8ff', 45, 0.3, 3);
+      const c = g.cfx; // 粗电弧 + 白芯 + 光柱 + 闪光 + 焦痕
+      if (c) {
+        const top = new THREE.Vector3(x + (Math.random() - 0.5) * 3, 26, z + (Math.random() - 0.5) * 3), foot = new THREE.Vector3(x, 0, z);
+        c.zap(top, foot, '#b9a4ff', 1.1, 0.42); c.zap(top, foot, '#ffffff', 0.7, 0.16);
+        c.pillar(x, z, r * 0.5, 30, '#c8b8ff', 0.3); c.disc(x, z, r * 1.3, '#e8e0ff', 0.35, 0.6); c.scorch(x, z, r * 0.9, 3);
+        c.flash(x, z, '#c8b8ff', 90, 0.35, 3);
+      }
       g.fx.shockRing(x, z, r + 0.4, '#c8a8ff', 0.35); g.fx.burst({ x, z }, '#e8e0ff', 16, { speed: 6, up: 5, life: 0.4, y: 0.3 });
       g.shake(0.5); this.sfx((s) => s.thunderClap());
       if (Math.hypot(P.pos.x - x, P.pos.z - z) < r + P.r) P.hurt(P.maxHp * k, x, z, 6, true);
@@ -276,6 +287,7 @@ export class Realm {
   passTrib() {
     const g = this.g, P = g.player, T = this.trib;
     this.endTrib();
+    if (T.pill && g.inv.count(T.pill)) g.inv.take(T.pill); // 成功才耗丹
     const before = this.snap();
     P.layer++; P.xp = 0;
     this.recalc(true);
@@ -285,14 +297,13 @@ export class Realm {
     g.ui.dialog({ narrate: true, lines: ['雷云散去，天光倾泻而下。', `你突破到了「${levelInfo(P.layer).name}」！`], info: '解锁：' + UNLOCK[T.target], hint: T.home ? '' : '野外渡劫，额外得到灵石和妖丹。', onClose: () => this.ui.celebrate(before, { major: true, fx: false }) });
     g.save?.();
   }
-  // GDD：失败时修为退回圆满前一点，3 天内不能再渡，破境丹作废
+  // 失败：修为退回圆满前一点，睡两天（2 天内不能再渡）；破境丹不会消失，成功才耗
   failTrib() {
     const g = this.g, P = g.player;
     this.endTrib();
     P.hp = Math.round(P.maxHp * 0.3); P.iframe = 2;
-    P.xp = Math.floor(xpNeed(P.layer) * 0.9);
-    this.cool = g.day + 3;
-    g.ui.dialog({ narrate: true, lines: ['一道天雷劈下，你眼前一黑……', '醒来时劫云已散，经脉里的灵力乱成一团。'], info: '渡劫失败：修为退回圆满之前，3 天内不能再渡，破境丹作废。', hint: '下次试试：服避劫丹、在自家洞府渡劫、用闪避躲开雷击预警圈。' });
+    this.cool = g.day + 2; // 修为不扣：圆满还是圆满，睡两天就能再渡
+    g.ui.dialog({ narrate: true, lines: ['一道天雷劈下，你眼前一黑……', '醒来时劫云已散，经脉里的灵力乱成一团。'], info: '渡劫失败：睡两天就能再渡；修为和破境丹都还在。', hint: '下次试试：服避劫丹、在自家洞府渡劫、用闪避躲开雷击预警圈。' });
   }
   endTrib() {
     for (const e of [...this.g.enemies.list]) if (e.trib) this.g.enemies.remove(e);
