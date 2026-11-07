@@ -5,6 +5,7 @@
 import { item, itemName, CROPS } from './items.js';
 import { TYPES } from './enemies.js';
 import { near } from './life.js';
+import { xpScale } from './realm.js';
 import { btn, el } from './ui.js';
 import { screenOf } from './hpbar.js';
 
@@ -105,7 +106,7 @@ export class Quests {
     for (const go of d.goals) if (go.type === 'have') g.inv.take(go.item, go.n);
     this.active.splice(this.active.indexOf(q), 1);
     if (q.from !== 'board') this.done.add(d.id);
-    this.give(d.reward);
+    this.give(q.from === 'story' || d.reward?.xp ? d.reward : { ...d.reward, xp: Math.round(10 * xpScale(g.player.layer)) }); // 完成委托额外一点修为
     g.audio?.cue('quest');
     const next = d.next && this.defs[d.next];
     if (next) this.accept(next.id, 'story');
