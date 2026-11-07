@@ -7,7 +7,7 @@ import {
 import { sectorAt, biomeK, dangerFor, ringAt, RINGS } from './worldmap.js';
 import { buildWall } from './wall.js';
 import { polyDist } from './terrace.js';
-import { makeLabWater, makeLabFall } from './water.js';
+import { makeLabWater, makeLabFall, waterFxU } from './water.js';
 import { getRefAsset } from './lab/ref/index.js';
 import { FACE, rotXZ, TAU, PLAZA, BOARD, PAVED_RECTS, PAVED_DISCS, LANES, DECOR, COTTAGES, BLOCKS, GINKGO, doorOf } from './townplan.js';
 export { BOARD };
@@ -807,6 +807,7 @@ export class World {
     }
     for (const w of this.windowMats) w.color.copy(w.userData.day).lerp(w.userData.base, nightK);
     for (const wm of [this.water, this.wellWater]) if (wm) { wm.uniforms.uTime.value = this.time; wm.uniforms.uLight.value = 1 - nightK * 0.72; }
+    this.pondLamps?.forEach(([lx, lz], i) => waterFxU.lamp.value[i].set(lx + 0.4, lz, nightK * (0.9 + 0.1 * Math.sin(this.time * 3 + i * 2))));
     if (this.fall) { this.fall.uniforms.uTime.value = this.time; this.fall.uniforms.uLight.value = 1 - nightK * 0.72; }
     if (this.wheel && !this.iced) this.wheel.rotation.z -= dt * 0.9; // 冬天水冻住，水车也停了
     this.updateSky(dt, p, nightK);
@@ -1287,6 +1288,9 @@ export class World {
 
   buildPond() {
     const P = POND;
+    // 夜灯：池塘边三盏暖色灯笼（灯光 + 水面光晕 / 碎光）
+    this.pondLamps = [[-12.2, -17.2], [-9.2, -13.6], [-1.9, -15.4]];
+    for (const [lx, lz] of this.pondLamps) this.lanternPost(lx, lz);
     const g = this.waterGeo(P.x, P.z, pondR);
     // 水面：lab 里 Claude 版的水面着色器。池塘 + 小潭 + 溪流共用一张深度图（越往里越深；溪流里带流向）
     const Bz = BASIN, [sx0, sz0, sx1, sz1] = STREAM, sl = Math.hypot(sx1 - sx0, sz1 - sz0);

@@ -108,15 +108,15 @@ for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xffaa66, 0, 13, 1.
 const aura = new THREE.PointLight(0x9fdcff, 0, 9, 1.4); scene.add(aura);
 
 const KEYS = [ // 时, 日光色, 日光强度, 天空色, 地面色, 环境强度, 雾色
-  [0, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
-  [4.5, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
+  [0, 0x8aa2ff, 0.55, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
+  [4.5, 0x8aa2ff, 0.55, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
   [6, 0xffb27a, 1.6, 0xb0b8d8, 0x7a7448, 0.85, 0xd8c8b8],
   [8, 0xffe0b0, 2.5, 0xd0e4ff, 0x9a8a50, 1.05, 0xd8e8d0],
   [12, 0xfff0d8, 2.8, 0xd8ecff, 0x9a8a50, 1.1, 0xdcecd8],
   [16.5, 0xffd49a, 2.5, 0xd0e0f8, 0x9a8a50, 1.0, 0xe4e0c8],
   [18.5, 0xff7a4a, 1.1, 0x8a6a8a, 0x4a3a3a, 0.6, 0xd08a6a],
-  [20, 0x7f98ff, 0.4, 0x2a3058, 0x1a1a24, 0.45, 0x1a1e38],
-  [24, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
+  [20, 0x8aa2ff, 0.6, 0x2a3058, 0x1a1a24, 0.45, 0x1a1e38],
+  [24, 0x8aa2ff, 0.55, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
 ];
 const _ca = new THREE.Color(), _cb = new THREE.Color(), MINE_FOG = new THREE.Color(0x07060c);
 function sample(h, idx, out) {
@@ -880,6 +880,11 @@ function updatePlayer(dt) {
 function ambience(dt) {
   if (g.nightK > 0.5 && world.mineFactor < 0.5 && Math.random() < dt * 8) {
     fx.mote(P.pos.x + (Math.random() - 0.5) * 30, 0.5 + Math.random() * 1.5, P.pos.z + (Math.random() - 0.5) * 24, '#d8ff7a', { life: 3, size: 0.5, vy: 0.15, vx: (Math.random() - 0.5) * 0.6, vz: (Math.random() - 0.5) * 0.6 });
+  }
+  // 池塘上空的萤火虫：夜里离池塘 30 米内，贴着水面和岸边慢慢飘、一闪一闪
+  if (g.nightK > 0.4 && world.mineFactor < 0.5 && Math.hypot(P.pos.x - POND.x, P.pos.z - POND.z) < 30 && Math.random() < dt * 10) {
+    const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * (POND.r + 4);
+    fx.mote(POND.x + Math.cos(a) * r, 0.3 + Math.random() * 1.6, POND.z + Math.sin(a) * r, '#e4ff8a', { life: 4 + Math.random() * 2, size: 0.55, vy: 0.08, vx: (Math.random() - 0.5) * 0.4, vz: (Math.random() - 0.5) * 0.4, bright: 1 });
   }
   if (world.mineFactor > 0.5 && Math.random() < dt * 14) {
     fx.mote(P.pos.x + (Math.random() - 0.5) * 30, 3 + Math.random() * 2, P.pos.z + (Math.random() - 0.5) * 24, '#b8a8ff', { life: 4, size: 0.35, vy: -0.4, bright: 0.8 });
