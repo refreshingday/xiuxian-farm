@@ -104,7 +104,7 @@ export class GameAudio {
     if (!this.ready) return;
     const t = this.c.currentTime;
     this.fxBus.gain.setTargetAtTime(this.vol.fx, t, 0.05); this.voiceBus.gain.setTargetAtTime(this.vol.voice, t, 0.05);
-    this.ambBus.gain.setTargetAtTime(this.vol.amb, t, 0.05); this.musicBus.gain.setTargetAtTime(this.vol.music * 0.96, t, 0.1);
+    this.ambBus.gain.setTargetAtTime(this.vol.amb, t, 0.05); this.musicBus.gain.setTargetAtTime(this.musicOff ? 0 : this.vol.music * 0.96, t, 0.1);
   }
   get ok() { return this.ready && this.sfx.ok; }
 
@@ -404,7 +404,10 @@ export class GameAudio {
     if (s.fight) this.fightT = 4; else this.fightT -= dt; // 脱战 4 秒后才收
     if (s.boss) mood = 'boss'; else if (this.fightT > 0) mood = 'fight';
     this.setMood(mood);
-    this.music(dt);
+    // 标题画面、开着菜单 / 面板、联机时不放背景音乐（环境声、脚步照常）
+    const off = !!(s.title || s.menu || s.coop);
+    if (off !== this.musicOff) { this.musicOff = off; this.musicBus.gain.setTargetAtTime(off ? 0 : this.vol.music * 0.96, t, 0.35); }
+    if (off) this.nextT = 0; else this.music(dt);
     // ---- 持续环境声 ----
     const L = this.L, set = (o, v, tc = 0.6) => o.g.gain.setTargetAtTime(v, t, tc);
     const outside = !s.inside && !s.mine, B = s.biome > 0.5 ? s.sector : '';

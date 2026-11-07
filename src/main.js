@@ -960,6 +960,7 @@ function soundTick(dt) {
   const town = Math.hypot(x, z) < VILLAGE_R + 2 || !!g.hubs?.at?.(P.pos, 40) || !!g.sects?.at?.(P.pos, 26);
   audio.update(dt, {
     x, z, speed: sp > 20 ? 0 : sp, run: clamp((sp - 3) / 4, 0, 1), surf: SND.surf, fly: realm.fly, swim: SW.on, wade: realm.fly ? 0 : world.waterDepth(x, z),
+    menu: !!gui.panelOpen && !['声音', '设置'].includes(gui.panelOpen.title), // 调音量的面板里照常放，好听得出大小 coop: !!g.coop?.net?.role,
     dead: P.dead, title: g.title, paused: g.paused || gui.blocking, inside, mine, sector: s.sector, biome: s.biome, village: town,
     night: g.nightK > 0.5, hours: g.hours % 24, season: dateOf(g.day).season, winter: !!L.ice, rain: weather.rain, snow: weatherU.snow.value,
     waterNear: SND.water.near, waterfallNear: SND.water.fall, fight, boss, npcs: SND.npcs,
