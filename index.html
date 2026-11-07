@@ -139,7 +139,12 @@
   .dmore { position: absolute; right: 16px; bottom: 8px; color: #ffe7a8; animation: dmore 1s ease-in-out infinite alternate; }
   @keyframes dmore { to { transform: translateY(3px); opacity: .5; } }
   body.talking #skills, body.talking #hotbar, body.talking #hotName, body.talking #prompt { visibility: hidden; }
-  #help { position: fixed; left: 16px; bottom: 16px; font-size: 12px; line-height: 1.75; width: 230px; }
+  /* 操作说明默认收起；展开时放在左下作弊面板（left 8, ≤170 宽）右边，不叠在一起 */
+  #help { position: fixed; left: 190px; bottom: 16px; font-size: 12px; line-height: 1.75; width: 230px; }
+  #helpBtn { position: fixed; left: 8px; bottom: 12px; z-index: 60; padding: 3px 8px; font: 12px sans-serif; color: #fff; background: rgba(20,20,30,.82); border: 1px solid #8a7a4a; border-radius: 6px; cursor: pointer; }
+  #helpBtn kbd { font-size: 10px; padding: 0 3px; }
+  #helpBtn.on { background: #3a3020; }
+  body.talking #helpBtn, body.mobile #helpBtn { display: none; }
   #help b { color: #ffe7a8; }
   #comboName { position: fixed; left: 50%; bottom: 190px; transform: translateX(-50%); font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; color: #ffe7a8; text-shadow: 0 2px 6px rgba(0,0,0,.8); pointer-events: none; white-space: nowrap; }
   #comboName small { font-size: 14px; letter-spacing: 1px; opacity: .8; margin-left: 8px; }
@@ -266,7 +271,8 @@
   <div class="slot hidden" id="skFly"><kbd>G</kbd><span>御剑</span></div>
 </div>
 
-<div id="help" class="panel">
+<button id="helpBtn" title="操作说明（H）">❓ 说明 <kbd>H</kbd></button>
+<div id="help" class="panel hidden">
   <b>WASD</b> 移动　<b>鼠标</b> 瞄准（出招自动吸附）<br>
   <b>左键</b> 连招（松开出招）<br>
   　快点 / 慢点 走不同分支，每种武器 6 套<br>
