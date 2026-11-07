@@ -18,6 +18,7 @@ export class UI {
   constructor() {
     this.dialogOpen = false; this.panelOpen = null; this.d = null; this.page = 0;
     $('dialog').addEventListener('pointerdown', (e) => { if (!e.target.closest('button')) this.advance(); });
+    addEventListener('resize', () => this.dialogOpen && this.fitPortrait());
     $('pclose').addEventListener('click', () => this.closePanel());
     $('panelBack').addEventListener('pointerdown', (e) => { if (e.target.id === 'panelBack') this.closePanel(); });
   }
@@ -47,6 +48,12 @@ export class UI {
     box.querySelector('.dmore').hidden = last;
     if (d.name && !d.narrate && !d.silent) snd('talk', d.name, t); else snd('page');
     box.classList.remove('hidden');
+    this.fitPortrait();
+  }
+  // 手机竖屏：立绘的脚踩在名牌下面那行（身份 + 好感心）的底边上，行数变了也跟着走（CSS 用 --subB）
+  fitPortrait() {
+    const box = $('dialog'), sub = box.querySelector('.dsub');
+    box.style.setProperty('--subB', `${sub.offsetTop + sub.offsetHeight}px`);
   }
   portraitFor(d) {
     if (d.portrait === false || d.narrate || !d.name) return null;
