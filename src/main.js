@@ -1089,9 +1089,10 @@ function updatePlayer(dt) {
       for (let i = 0; i < 8 && rm > 0.12; i++) { const a = i * 0.785, ca = Math.cos(a), sa = Math.sin(a); for (let r = 0.12; r < rm; r += 0.08) if (puddleAt(f.x + ca * r, f.z + sa * r, weather.wet) < 0.3) { rm = r; break; } }
       const fy = (P.gy || 0) + 0.02, k = Math.min(1, pk) * (0.6 + 0.4 * moveK);
       // 只溅几滴很低的小水珠（不高过脚踝），水圈淡、虚、不是一道硬线
-      waterFx.splash(f.x, fy, f.z, 2 + Math.round(k * 2), 0.55 + k * 0.25, 0.25, 0.016 + k * 0.004, _puddleD.set(Math.sin(P.yaw), 0, Math.cos(P.yaw)), true);
-      waterFx.ring(f.x, fy, f.z, Math.min(0.06, rm * 0.4), rm * 0.92, 0.8, 0.45, Math.random() * 6.28, 1, 1);
-      waterSound('puddle', 0.35 + k * 0.35);
+      waterFx.splash(f.x, fy, f.z, 4 + Math.round(k * 3), 0.8 + k * 0.4, 0.4, 0.02 + k * 0.006, _puddleD.set(Math.sin(P.yaw), 0, Math.cos(P.yaw)), true);
+      waterFx.ring(f.x, fy, f.z, Math.min(0.06, rm * 0.4), rm * 0.92, 0.85, 0.8, Math.random() * 6.28, 1, 1);
+      waterFx.ring(f.x, fy, f.z, 0.03, rm * 0.55, 0.6, 0.6, Math.random() * 6.28, 1, 1); // 里面再一小圈，更显眼
+      waterSound('puddle', 0.75 + k * 0.25);
     }
   }
   SW.stepSg = sg;

@@ -414,8 +414,8 @@ export class GameAudio {
     const windK = s.title ? 0.4 : (s.fly ? 1 : 0.35) + (B === 'snow' ? 0.5 : B === 'desert' ? 0.45 : B === 'battle' ? 0.35 : 0) + s.snow * 0.2;
     const gust = 0.6 + 0.4 * Math.sin(t * 0.23) * Math.sin(t * 0.61 + 1);
     set(L.wind, outside ? 0.05 * windK * gust : 0.008); L.wind.f.frequency.setTargetAtTime(250 + 500 * gust * windK + (s.fly ? 600 : 0), t, 0.5);
-    set(L.rain, outside ? 0.11 * s.rain * (1 - s.snow * 0.85) : 0.02 * s.rain);
-    set(L.roof, (s.inside ? 0.12 : 0.03) * s.rain * (1 - s.snow)); L.roof.f.frequency.setTargetAtTime(s.inside ? 700 : 1500, t, 0.3);
+    set(L.rain, outside ? 0.065 * s.rain * (1 - s.snow * 0.85) : 0.014 * s.rain); // 雨声压低一些（用户：雨太吵）
+    set(L.roof, (s.inside ? 0.08 : 0.018) * s.rain * (1 - s.snow)); L.roof.f.frequency.setTargetAtTime(s.inside ? 700 : 1500, t, 0.3);
     const wn = s.mine ? 0 : s.waterNear, wf = s.mine ? 0 : s.waterfallNear;
     set(L.water, 0.07 * wn * (s.winter ? 0.25 : 1), 0.3); L.water.f.frequency.setValueAtTime(700 + R() * 1300, t); // 每帧乱跳的截止 = 潺潺
     set(L.fall, 0.1 * wf * (s.winter ? 0.15 : 1), 0.3);
