@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { Site } from './sectsites.js';
 import { hall, tower, pagoda, paifang, banner, plaque, scroll, lion, roof, M, TX, shade } from './sectkit.js';
-import { woodpile, tableSet, crystalCluster, bridge, herbBed, rng32 } from './sectprops.js';
+import { woodpile, tableSet, crystalCluster, bridge, herbBed, rng32, cylUVs } from './sectprops.js';
 import { glow, mesh, at, canvasTex, toon } from './util.js';
 import { DECOR, FACE, rotXZ, PAGODA, PAIFANG, GINKGO, TAU } from './townplan.js';
 
@@ -87,8 +87,11 @@ export class Town {
     for (const s of [-1, 1]) { const l = lion(s, '#b8b2a6'); S.put(l, F.x + s * 5.6, F.z + 0.9, 0); S.circ(F.x + s * 5.6, F.z + 0.9, 0.7); }
     // 古银杏：一圈石凳 + 系红布条的护栏
     const G = new THREE.Group(), st = M('#a8a29a', { tx: TX.stone });
-    G.add(mesh(new THREE.CylinderGeometry(1.9, 2.0, 0.45, 24, 1, true).translate(0, 0.22, 0), st));
-    G.add(mesh(new THREE.TorusGeometry(1.95, 0.16, 6, 28).rotateX(Math.PI / 2).translate(0, 0.46, 0), M('#bcb6ac', { tx: TX.stone })));
+    // UV 按真实尺寸铺：默认 u 绕一整圈只贴一张图，石纹会被拉长（周长 ≈12m）
+    G.add(mesh(cylUVs(new THREE.CylinderGeometry(1.9, 2.0, 0.45, 24, 1, true), 1.95, 0.45).translate(0, 0.22, 0), st));
+    const rimG = new THREE.TorusGeometry(1.95, 0.16, 6, 28), rimUV = rimG.attributes.uv;
+    for (let i = 0; i < rimUV.count; i++) rimUV.setXY(i, rimUV.getX(i) * TAU * 1.95 * 0.45, rimUV.getY(i) * TAU * 0.16 * 0.45);
+    G.add(mesh(rimG.rotateX(Math.PI / 2).translate(0, 0.46, 0), M('#bcb6ac', { tx: TX.stone })));
     for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; G.add(at(mesh(new THREE.BoxGeometry(0.05, 0.5, 0.12), M('#c8242a')), Math.cos(a) * 1.97, 0.3, Math.sin(a) * 1.97)); }
     S.put(G, GINKGO.x, GINKGO.z); S.circ(GINKGO.x, GINKGO.z, 2.0);
     // 路标：广场西南角，四块木牌指向四个方向（认路靠图形和地标，不靠长篇文字）
