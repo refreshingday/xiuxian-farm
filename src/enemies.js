@@ -215,7 +215,8 @@ export class Enemies {
     this.lairs = [{ type: 'boss', x: ARENA.x, z: ARENA.y, deadDay: -99 }];
   }
 
-  spawn(type, x, z, lvl = 0) {
+  // pow：算气血 / 伤害用的等级（可以带小数，野外按那一点的危险度）；lvl 是整数等级，修为、掉落、显示用它
+  spawn(type, x, z, lvl = 0, pow = lvl) {
     const T = TYPES[type];
     // 村墙以内不刷妖兽：教学野猪、事件、委托这些脚本刷的怪，改到最近的村门外面，再让它们穿墙冲向目标
     let passWall = false;
@@ -226,7 +227,7 @@ export class Enemies {
     const { root, parts, mats } = build(T);
     const g = this.game, night = g.nightK > NIGHT && !T.boss, blood = night && g.bloodMoon;
     // 气血 / 伤害跟玩家同一条成长曲线（stats.js）：同级妖兽永远和刚到这一层的玩家差不多难打
-    const k = (night ? 1.3 : 1) * (blood ? 1.5 : 1), hpMul = foeHpMul(lvl) * k, dmgMul = foeDmgMul(lvl);
+    const k = (night ? 1.3 : 1) * (blood ? 1.5 : 1), hpMul = foeHpMul(pow) * k, dmgMul = foeDmgMul(pow);
     const e = {
       type, T, root, parts, mats, pos: root.position, r: T.r * (T.boss ? 1 : 1), hp: T.hp * hpMul, maxHp: T.hp * hpMul,
       dmg: T.dmg * dmgMul * k, npcK: (1 + lvl * 0.2) / dmgMul, lvl, night, blood, speed: T.speed, yaw: Math.random() * 6.28, kx: 0, kz: 0,

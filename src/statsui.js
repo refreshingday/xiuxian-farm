@@ -128,7 +128,7 @@ export class StatsUI {
         fb('⚖ 剩下的四项平均', () => this.set(evenSpread(P.alloc, P.layer)), left > 0),
         fb('↺ 全部收回', () => this.set(emptyAlloc()), spentPts(P.alloc) > 0));
       root.append(foot);
-      root.insertAdjacentHTML('beforeend', `<div class="st-note">每升一个小境界 +40 点（四项各固定 3，自由 28），突破大境界 +108 点（各固定 9，自由 72）。力量、体质、精神每点 ×1.027 乘法叠加：四项平均分配，每个小境界就强约 31%、大境界强一倍多，主修的那项更多；敏捷、灵力越加越少。单项最多占总点数 35%。随时可以收回重新分配。<br>其他加成：兵器 +${pct(P.atkBonus || 0)}（炼器、剑阶、剑冢）· 功法减伤 ${pct(Math.min(0.7, M.dmgTaken || 0))} · 功法暴击 +${pct(M.crit || 0)}</div>`);
+      root.insertAdjacentHTML('beforeend', `<div class="st-note">每升一个小境界 +40 点（四项各固定 3，自由 28），突破大境界 +108 点（各固定 9，自由 72）。力量、体质、精神：境界越高越强——四项平均分配时每个小境界强约 31%、大境界强一倍多；某项占总点数的比例越高那项越强（占到上限 35% 约 ×1.5），新点没分配比例就会被稀释。敏捷、灵力越加越少。随时可以收回重新分配。<br>其他加成：兵器 +${pct(P.atkBonus || 0)}（炼器、剑阶、剑冢）· 功法减伤 ${pct(Math.min(0.7, M.dmgTaken || 0))} · 功法暴击 +${pct(M.crit || 0)}</div>`);
       body.append(root);
     });
   }

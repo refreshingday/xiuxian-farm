@@ -58,11 +58,16 @@ export function evenSpread(a, L) {
 }
 
 const soft = (n, s) => 1 - Math.exp(-n / s);
+// 力量 / 体质 / 精神 = 境界曲线 × (这项占总点数的比例 ÷ 25%)^SHAPE：
+//   境界决定大头（每层 +31%、大境界一倍多），加点决定偏向——占 35%（上限）约 ×1.5，只有固定点（7.5%）约 ×0.24。
+//   以前是每点直接乘法叠加，偏科到后期会差几十倍（筑基主修力量就是平均的 3 倍多，妖兽一两下就死），所以改成看比例。
+export const SHAPE = 1.2;
+const shareMul = (L, n) => { const T = totalPts(L); return T ? (n / T / SHARE) ** SHAPE : 1; };
 // 第 L 层、这样分配时的全部数值
 export function derive(L, a) {
-  const au = autoPts(L), n = (k) => au + (a?.[k] || 0), fa = soft(n('agi'), AGI_S), fs = soft(n('spi'), SPI_S);
+  const au = autoPts(L), n = (k) => au + (a?.[k] || 0), fa = soft(n('agi'), AGI_S), fs = soft(n('spi'), SPI_S), C = curve(L);
   return {
-    str: PT_K ** n('str'), con: PT_K ** n('con'), spi: PT_K ** n('spi'),
+    str: C * shareMul(L, n('str')), con: C * shareMul(L, n('con')), spi: C * shareMul(L, n('spi')),
     speed: AGI_MAX.speed * fa, dash: AGI_MAX.dash * soft(n('agi'), DASH_S), crit: AGI_MAX.crit * fa, // dash：闪避冷却少掉的比例，2.5 秒最多减到 0.5 秒
     qi: SPI_QI_MAX * fs, regen: SPI_REGEN_MAX * fs,
   };
@@ -78,7 +83,10 @@ export function curve(L) {
 // 妖兽等级 → 对应的玩家层数（realm.foeLevel 的反函数）：炼气 (L−1)×0.5，筑基起 4.3 + (L−10)×1.45
 export const layerForFoe = (lvl) => (lvl <= 4 ? 1 + lvl / 0.5 : lvl <= 4.3 ? 9 + (lvl - 4) / 0.3 : 10 + (lvl - 4.3) / 1.45);
 // 妖兽气血按同级玩家的攻击倍率涨；伤害按 气血 × 防御 涨（体质两样一起涨，伤害要涨平方才守住同样的威胁）
-export const foeHpMul = (lvl) => curve(layerForFoe(Math.max(0, lvl)));
+// 出了炼气圈（等级 3.5 → 4.3 之间渐变），妖兽比刚到这一层的玩家再强一层（+31%）——筑基后不能一两下就砍死
+export const FOE_AHEAD = 1;
+export const foeLayer = (lvl) => layerForFoe(Math.max(0, lvl)) + FOE_AHEAD * Math.min(1, Math.max(0, (lvl - 3.5) / 0.8));
+export const foeHpMul = (lvl) => curve(foeLayer(lvl));
 export const foeDmgMul = (lvl) => foeHpMul(lvl) ** 2;
 
 // 大数字：1.2万 / 3.4亿

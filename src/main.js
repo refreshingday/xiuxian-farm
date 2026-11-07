@@ -254,6 +254,7 @@ function die() {
 const realm = new Realm(g); g.realm = realm;
 g.addXP = (n, p, quiet) => realm.addXP(n, p, quiet);
 // 御剑：脚下一把发光的飞剑
+const FLY_SPEED = 21, FLY_LOW = 1.1, FLY_HIGH = 9; // 御剑：筑基 21（原来 15，快 40%）；金丹起飞到 9 米高
 const flySword = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 1.6), glow('#9ef0ff', 2.2));
 flySword.position.y = -0.05; flySword.visible = false; P.c.root.add(flySword);
 g.addItem = (id, n, p) => { inv.add(id, n); audio.cue('pickup'); if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} ${itemName(id)}`, 'item'); };
@@ -278,7 +279,7 @@ world.onSpawn = (cx, cz, rng) => {
   for (let i = 0; i < n; i++) {
     const x = x0 + 4 + rng() * 24, z = z0 + 4 + rng() * 24;
     if (!okSpawn(x, z) || Math.hypot(x - P.pos.x, z - P.pos.z) < 16) continue;
-    enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z))).amb = true; // amb：普通野怪，联机时可以交给更近的道友
+    enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)), dangerAt(x, z)).amb = true; // amb：普通野怪，联机时可以交给更近的道友
   }
 };
 let spawnT = 4, golemT = 0;
@@ -290,7 +291,7 @@ function ambientSpawns(dt) {
     if (near < 11 + g.nightK * 7 && !P.dead) {
       const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * Math.min(camZoom, 1.6);
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
-      if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z))).amb = true;
+      if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)), dangerAt(x, z)).amb = true;
     }
   }
   const dm = Math.hypot(P.pos.x - MINE.x, P.pos.z - MINE.y);
@@ -1003,8 +1004,13 @@ function updatePlayer(dt) {
   if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
   // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里；御剑飞行时走得快、悬在半空
   const wd0 = realm.fly ? 0 : world.waterDepth(P.pos.x, P.pos.z), wadeK = SW.on ? 0.62 : lerp(1, WADE_SLOW, clamp(wd0 / SWIM_IN, 0, 1));
-  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0) + (P.st?.speed || 0)) * (P.slowT > 0 ? 0.55 : 1) * wadeK * (g.cheatOn.fast ? 2 : 1));
-  if (realm.fly) { st.y = 1.1 + Math.sin(g.time * 3) * 0.08; P.vy = 0; st.ghost = true; }
+  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? FLY_SPEED * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0) + (P.st?.speed || 0)) * (P.slowT > 0 ? 0.55 : 1) * wadeK * (g.cheatOn.fast ? 2 : 1));
+  // 御剑：筑基起贴地低飞；金丹起升到高空，越过房子、树、山崖（不撞东西）。收剑时从空中落回地面
+  const flyT = realm.fly ? (levelInfo(P.layer).realm >= 2 ? FLY_HIGH : FLY_LOW) : 0;
+  P.flyH = lerp(P.flyH || 0, flyT, 1 - Math.exp(-(flyT > (P.flyH || 0) ? 2.2 : 3.5) * dt));
+  if (realm.fly) { st.y = P.flyH + Math.sin(g.time * 3) * 0.08; P.vy = 0; st.ghost = true; }
+  else if (P.flyH > st.y + 0.05) { st.y = P.flyH; P.vy = 0; } else P.flyH = 0;
+  const overAll = P.flyH > 3; // 飞得够高：房子、树、石头都从脚下过去
   flySword.visible = realm.fly;
   let vx = st.vx, vz = st.vz;
   if (P.dashT > 0) {
@@ -1020,7 +1026,7 @@ function updatePlayer(dt) {
     if (stepOK(ox, oz, P.pos.x, oz)) P.pos.z = oz; else if (stepOK(ox, oz, ox, P.pos.z)) P.pos.x = ox; else { P.pos.x = ox; P.pos.z = oz; }
   }
   const kd = Math.exp(-10 * dt); P.kx *= kd; P.kz *= kd;
-  world.resolve(P.pos, P.r);
+  if (!overAll) world.resolve(P.pos, P.r);
   if (!st.ghost && P.dashT <= 0) for (const e of enemies.list) {
     if (Math.abs(e.pos.y - st.y) > 1) continue;
     const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, rr = P.r + e.r, d2 = dx * dx + dz * dz;
@@ -1079,9 +1085,9 @@ function updateCamera(dt) {
   camYawT = clamp(camYawT, -0.8, 0.8);
   camYaw = lerp(camYaw, camYawT, 1 - Math.exp(-8 * dt));
   focus.lerp(P.pos, 1 - Math.exp(-8 * dt));
-  camGY = lerp(camGY, P.gy || 0, 1 - Math.exp(-6 * dt)); // 台地：镜头跟着地面高度升降
+  camGY = lerp(camGY, (P.gy || 0) + Math.max(0, (P.flyH || 0) - FLY_LOW) * 0.85, 1 - Math.exp(-6 * dt)); // 台地：镜头跟着地面高度升降；高空御剑跟着抬
   // 手机屏幕小，镜头拉远 1.4 倍看得更远
-  camZoom = lerp(camZoom, (touch.on ? 1.4 : 1) * camZoomU, 1 - Math.exp(-6 * dt));
+  camZoom = lerp(camZoom, (touch.on ? 1.4 : 1) * camZoomU * (1 + Math.max(0, (P.flyH || 0) - FLY_LOW) / (FLY_HIGH - FLY_LOW) * 0.35), 1 - Math.exp(-6 * dt)); // 高空御剑拉远一点，看得更广
   const farK = 140 * Math.max(1, camZoom); if (Math.abs(camera.far - farK) > 1) { camera.far = farK; camera.updateProjectionMatrix(); }
   const dist = 21 * camZoom, pitch = 0.9;
   camera.position.set(focus.x + Math.sin(camYaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist + camGY, focus.z + Math.cos(camYaw) * Math.cos(pitch) * dist);

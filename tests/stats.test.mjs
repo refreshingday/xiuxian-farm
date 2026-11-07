@@ -23,6 +23,13 @@ test('四项平均：小境界 +31%，大境界一倍多', () => {
   for (const L of [5, 13, 26]) { const a = evenSpread(emptyAlloc(), L); assert.ok(Math.abs(derive(L, a).str / curve(L) - 1) < 0.03, `L${L}`); }
 });
 
+test('偏科有好处但不失控：占到上限约 ×1.5，只有固定点明显变弱', () => {
+  for (const L of [5, 10, 18, 26]) {
+    const top = derive(L, { str: capPts(L) }).str / curve(L), none = derive(L, {}).str / curve(L);
+    assert.ok(top > 1.4 && top < 1.6, `L${L} 主修 ×${top}`); assert.ok(none < 0.35, `L${L} 不加 ×${none}`);
+  }
+});
+
 test('敏捷、灵力越加越少，有上限', () => {
   const a = derive(26, { agi: capPts(26), spi: capPts(26) });
   assert.ok(a.speed <= 0.4 && a.crit <= 0.2 && a.qi <= 1 && a.regen <= 1);
@@ -53,8 +60,9 @@ test('按现在的比例分配剩下的点', () => {
   assert.equal(spentPts(b), freePts(9)); assert.ok(Math.abs(b.str / b.con - 2) < 0.1 && Math.max(b.con, b.agi, b.spi) - Math.min(b.con, b.agi, b.spi) <= 1, JSON.stringify(b));
 });
 
-test('同级妖兽：气血跟着平均分配的倍率涨', () => {
-  for (const L of [1, 5, 10, 17, 22, 26]) assert.ok(Math.abs(foeHpMul(foeLevel(L)) / curve(L) - 1) < 1e-9, `L${L}`);
+test('同级妖兽：炼气圈跟平均分配的玩家一样，出了炼气圈再强一层', () => {
+  for (const L of [1, 5, 7]) assert.ok(Math.abs(foeHpMul(foeLevel(L)) / curve(L) - 1) < 1e-9, `L${L}`);
+  for (const L of [10, 17, 22, 26]) assert.ok(Math.abs(foeHpMul(foeLevel(L)) / curve(L + 1) - 1) < 1e-9, `L${L}`);
   assert.ok(Math.abs(layerForFoe(foeLevel(13)) - 13) < 1e-9);
   assert.equal(foeHpMul(0), 1);
 });

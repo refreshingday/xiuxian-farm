@@ -20,7 +20,7 @@ export const ROOT_NEED = { 冰: ['金', '水'], 风: ['水', '木'], 雷: ['木'
 export const ROOT_LIFE = { 金: '采矿产量更多', 木: '作物长得更快', 水: '浇水范围更大', 火: '炼丹火候更宽', 土: '灵草少耗灵气', 雷: '雨天修炼加速', 冰: '作物不怕冬天', 风: '移动更快', 暗: '夜里看得更清' };
 // 突破到这个大境界时天劫新增的机制（GDD 表）
 const TRIB = { 1: ['bolt'], 2: ['bolt', 'beast'], 3: ['bolt', 'beast', 'mirror'], 4: ['bolt', 'beast', 'mirror', 'fire'], 5: ['bolt', 'beast', 'mirror', 'fire'] };
-const UNLOCK = { 1: '御剑飞行（G）· 可以拜入大宗、结道侣', 2: '二阶炼丹、法宝制作', 3: '分身技能、天外陨铁矿', 4: '可以登天劫峰', 5: '最终天劫已过 —— 问道长生' };
+const UNLOCK = { 1: '御剑飞行（G）· 可以拜入大宗、结道侣', 2: '二阶炼丹、法宝制作 · 御剑升空（飞越房屋、树木、山崖）', 3: '分身技能、天外陨铁矿', 4: '可以登天劫峰', 5: '最终天劫已过 —— 问道长生' };
 
 export function levelInfo(L) {
   if (L <= 9) return { realm: 0, stage: L, name: `炼气${NUM[L - 1]}层`, top: L === 9 };
@@ -315,7 +315,7 @@ export class Realm {
     const g = this.g, P = g.player;
     if (levelInfo(P.layer).realm < 1) { g.toast('筑基之后才能御剑飞行', 1.5); return; }
     this.fly = !this.fly && P.qi > 10;
-    g.toast(this.fly ? '御剑飞行' : '落地', 1);
+    g.toast(this.fly ? (levelInfo(P.layer).realm >= 2 ? '御剑升空' : '御剑飞行') : '落地', 1);
     this.sfx((s) => s.leap(0.2));
   }
 
