@@ -188,6 +188,29 @@ function groundSample(x, z, out) {
   return out;
 }
 
+// 雨后水洼：和地面着色器里 gPud 同一套算法（pHash / pNoise 用 float32 模拟），返回 0..1
+const f32 = Math.fround, fr = (v) => f32(v - Math.floor(v));
+function pHash(x, y) {
+  let a = fr(f32(x * 0.1031)), b = fr(f32(y * 0.1031)), c = a;
+  const d = f32(f32(a * f32(b + 33.33)) + f32(b * f32(c + 33.33)) + f32(c * f32(a + 33.33)));
+  a = f32(a + d); b = f32(b + d); c = f32(c + d);
+  return fr(f32(f32(a + b) * c));
+}
+function pNoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+  const a = pHash(ix, iy), b = pHash(ix + 1, iy), c = pHash(ix, iy + 1), d = pHash(ix + 1, iy + 1);
+  return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+}
+export function puddleAt(x, z, wet) {
+  if (wet < 0.05) return 0;
+  const n = pNoise(x * 0.32, z * 0.32) * 0.65 + pNoise(x * 0.95 + 7.3, z * 0.95 + 7.3) * 0.35, th = 0.86 - 0.15 * wet;
+  const p = smooth(th, th + 0.035, n); if (p <= 0) return 0;
+  groundSample(x, z, _b);
+  const k = GS.kind, hard = k === 1 || k === 4 ? 0.8 : k === 0 || k === 2 || k === 3 ? smooth(0.4, 0.6, GS.path + 0.12) : 0; // 0.12 ≈ 草贴图亮度带来的偏移
+  return p * hard;
+}
+
 // 一个区块 → 一张像素地面贴图（每单位 8 像素）
 const RES = 8;
 const _b = [0, 0, 0], _d = [0, 0, 0];
@@ -276,7 +299,8 @@ const GROUND_FRAG = `
     // 雨后：整体变暗；土路 / 石板的低洼处积水，越湿水洼越大
     float hard = max(wd, ws);
     float n = gNoise(wp * 0.32) * 0.65 + gNoise(wp * 0.95 + 7.3) * 0.35, th = 0.86 - 0.15 * uWet;
-    gPud = smoothstep(th, th + 0.035, n) * max(wd, ws * 0.8) * step(0.05, uWet);
+    float pn = pNoise(wp * 0.32) * 0.65 + pNoise(wp * 0.95 + 7.3) * 0.35; // 水洼用不带 sin 的哈希，CPU 端 puddleAt() 能算出同样的位置（踩水花）
+    gPud = smoothstep(th, th + 0.035, pn) * max(wd, ws * 0.8) * step(0.05, uWet);
     c *= mix(1.0, mix(0.84, 0.62, hard), uWet);
     c *= 1.0 - gPud * 0.5;
     gWetS = uWet * (0.3 + 0.7 * hard);
@@ -344,6 +368,11 @@ const GROUND_WET = `
   }`;
 const GROUND_NOISE = `
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float pHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+float pNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(pHash(i), pHash(i + vec2(1.0, 0.0)), f.x), mix(pHash(i + vec2(0.0, 1.0)), pHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
 float gNoise(vec2 p) {
   vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x), mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);

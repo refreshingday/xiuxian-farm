@@ -141,11 +141,11 @@ function ac() {
 // 浏览器要求用户先操作过才能出声
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { const a = ac(); if (a && a.state === 'suspended') a.resume(); }, { passive: true });
 
-/** kind: 'step' 涉水脚步 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
+/** kind: 'step' 涉水脚步 | 'puddle' 踩雨后水洼 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
 export function waterSound(kind, vol = 1) {
   const a = AC; if (!a || a.state !== 'running') return;
   // 全部用低通噪声（Q 很低，不共振）——不用正弦音高、不用高频，免得听起来像敲金属
-  const P = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], enter: [0.38, 900, 260, 0.4], plunge: [0.7, 800, 200, 0.55], exit: [0.3, 750, 300, 0.28], land: [0.2, 260, 90, 0.7] }[kind];
+  const P = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], enter: [0.38, 900, 260, 0.4], plunge: [0.7, 800, 200, 0.55], exit: [0.3, 750, 300, 0.28], land: [0.2, 260, 90, 0.7], puddle: [0.12, 1000, 360, 0.24] }[kind];
   const [len, f0, f1, g] = P, t = a.currentTime, r = 0.88 + Math.random() * 0.24;
   const layer = (len2, fa, fb, gain, attack = 0.02, off = 0) => {
     const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = r;
@@ -156,6 +156,7 @@ export function waterSound(kind, vol = 1) {
     src.start(t + off, Math.random() * 0.5, len2 + 0.05);
   };
   layer(len, f0, f1, g);
+  if (kind === 'puddle') layer(0.09, 520, 220, g * 0.45, 0.008, 0.05 + Math.random() * 0.03); // 踩水洼：啪嗒——第二下更低更轻的"嗒"（水落回地面）
   if (kind === 'enter' || kind === 'plunge') { // 水花入水：再叠一层更低更慢的"噗"，和几声小气泡（也是低通噪声）
     layer(len * 1.3, 320, 110, g * 0.9, 0.05);
     const n = kind === 'plunge' ? 4 : 2;

@@ -8,7 +8,7 @@ import { loadTextures, weatherU, outlineK, CHUNK, occ, clamp, lerp, smooth, angD
 import { createChibi, animChibi } from './chibi.js';
 import { Weather } from './weather.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
-import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist } from './world.js';
+import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist, puddleAt } from './world.js';
 import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
 import { sectorAt, biomeK, polar } from './worldmap.js';
@@ -169,6 +169,7 @@ g.player = P;
 const waterFx = createWaterFx(scene);
 const SW = { on: false, k: 0, ph: 0, prev: 0, ringT: 0 };
 const WATER_Y = 0.03; g.swim = SW;
+const _puddleV = new THREE.Vector3(), _puddleD = new THREE.Vector3();
 
 const xpNeed = () => realmXP(P.layer);
 g.xpNeed = xpNeed;
@@ -794,6 +795,19 @@ function updatePlayer(dt) {
     SW.ringT -= dt;
     if (SW.ringT < 0) { SW.ringT = SW.on ? (moveK > 0.3 ? 0.5 : 0.8) : moveK > 0.3 ? 0.4 : 1.1; const r0 = SW.on ? 0.35 : 0.22 + clamp(wd, 0, 0.6) * 0.25; waterFx.ring(P.pos.x, WATER_Y, P.pos.z, r0, r0 + (SW.on ? 1.3 : 1.0), SW.on ? 1.3 : 1.2, SW.on ? 0.65 : 0.55); }
   }
+  // 雨后踩水洼：落脚那一下溅几滴水、起一个小圈，配"啪嗒"水声（水洼位置和地面着色器同一套算法）
+  const sg = Math.sign(Math.sin(P.c.phase));
+  if (wd <= 0.03 && st.y < 0.05 && moveK > 0.3 && sg !== SW.stepSg && SW.stepSg) {
+    const leg = P.c.legs[sg > 0 ? 0 : 1], f = leg.localToWorld(_puddleV.set(0, -0.48, 0.06));
+    const pk = puddleAt(f.x, f.z, weather.wet);
+    if (pk > 0.35) {
+      const fy = (P.gy || 0) + 0.02, k = Math.min(1, pk) * (0.6 + 0.4 * moveK);
+      waterFx.splash(f.x, fy, f.z, 5 + Math.round(k * 5), 1.4 + k * 1.0, 0.6, 0.032 + k * 0.01, _puddleD.set(Math.sin(P.yaw), 0, Math.cos(P.yaw)));
+      waterFx.ring(f.x, fy, f.z, 0.08, 0.6 + k * 0.3, 0.75, 0.9);
+      waterSound('puddle', 0.35 + k * 0.35);
+    }
+  }
+  SW.stepSg = sg;
   SW.prev = wd;
   SW.sunk = st.y < 0.3 ? SW.k * (0.5 + Math.sin(g.time * 2.2) * 0.03) + clamp(wd / SWIM_IN, 0, 1) * 0.1 * (1 - SW.k) : 0;
   P.pos.y -= SW.sunk;
