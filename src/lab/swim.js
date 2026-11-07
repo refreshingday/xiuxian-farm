@@ -141,7 +141,7 @@ function ac() {
 // 浏览器要求用户先操作过才能出声
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { const a = ac(); if (a && a.state === 'suspended') a.resume(); }, { passive: true });
 
-/** kind: 'step' 涉水脚步 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
+/** kind: 'step' 涉水脚步 | 'puddle' 踩雨后水洼 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
 export function waterSound(kind, vol = 1) {
   const a = AC; if (!a || a.state !== 'running') return;
   waterVoice(a, master, noiseBuf, kind, vol, a.currentTime);
@@ -181,8 +181,9 @@ export function waterVoice(a, out, nb, kind, vol, t) {
     layer(0.5, 1100, 500, 0.1, 0.1, 0.1, 0.45, 0.5);
     drips(6, 0.3, 0.9, 0.05);
   } else {
-    const [len, f0, f1, gn] = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], land: [0.2, 260, 90, 0.7] }[kind];
+    const [len, f0, f1, gn] = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], land: [0.2, 260, 90, 0.7], puddle: [0.12, 1000, 360, 0.24] }[kind];
     layer(len, f0, f1, gn, 0.02);
+    if (kind === 'puddle') layer(0.09, 520, 220, gn * 0.45, 0.008, 0.05 + R() * 0.03); // 踩雨后水洼：啪嗒——第二下更低更轻的"嗒"（水落回地面）
   }
 }
 
