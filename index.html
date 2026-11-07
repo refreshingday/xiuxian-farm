@@ -13,6 +13,8 @@
   .hidden { display: none !important; }
   /* 血条（hpbar.js，与试炼场同款） */
   #hpLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .warn { position: absolute; left: 0; top: 0; font-size: 22px; line-height: 1; color: #ff4d4d; text-shadow: 0 0 4px #000, 0 0 8px #f00; animation: warnp .8s ease-in-out infinite alternate; pointer-events: none; }
+  @keyframes warnp { from { opacity: .55 } to { opacity: 1 } }
   .hb { position: absolute; left: 0; top: 0; width: 66px; transform-origin: 50% 100%; will-change: transform, opacity; pointer-events: none; }
   .hb-frame { position: relative; height: 8px; background: rgba(8, 12, 14, .78); border: 1px solid rgba(255, 231, 168, .6); border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.7); overflow: hidden; }
   .hb-trail, .hb-fill, .hb-flash { position: absolute; inset: 0; transform-origin: 0 50%; }
@@ -141,16 +143,54 @@
   #sk0 { width: 96px; } #skWeap span { font-family: "STKaiti", "KaiTi", serif; font-size: 16px; color: #ffe7a8; }
   kbd { font-family: inherit; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 0 5px; }
   #prompt { position: fixed; left: 50%; bottom: 152px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 6px 14px; border-radius: 16px; font-size: 14px; }
-  #dialog { position: fixed; z-index: 15; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(680px, 92vw); background: rgba(24, 20, 16, 0.86); border: 1px solid rgba(255, 220, 160, .3); border-radius: 12px; padding: 14px 18px; }
-  .dname { font-family: "STKaiti", "KaiTi", serif; font-size: 22px; color: #ffe7a8; letter-spacing: 2px; }
-  .dsub { font-size: 12px; opacity: .7; margin: 2px 0 8px; }
-  .dline { font-size: 16px; line-height: 1.6; }
-  .dinfo { font-size: 13px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.2); color: #bfe6ff; }
+  /* 对话框：左边立绘（站出框外），右边名牌 + 台词；旁白模式没有立绘、居中。手机竖屏 / 横屏另见下面的 @media */
+  #dialog { --pw: 200px; --ph: 290px; position: fixed; z-index: 15; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(780px, 94vw); min-height: 132px;
+    background: linear-gradient(180deg, rgba(30, 26, 22, .93), rgba(16, 14, 12, .95)); border: 1px solid rgba(232, 196, 120, .55); border-radius: 10px;
+    box-shadow: inset 0 0 0 3px rgba(0,0,0,.35), inset 0 0 0 4px rgba(232,196,120,.22), 0 10px 30px rgba(0,0,0,.45); padding: 22px 26px 16px; }
+  #dialog::before, #dialog::after { content: ''; position: absolute; width: 14px; height: 14px; border: 2px solid rgba(232,196,120,.75); pointer-events: none; }
+  #dialog::before { right: 7px; top: 7px; border-left: 0; border-bottom: 0; }
+  #dialog::after { left: 7px; bottom: 7px; border-right: 0; border-top: 0; }
+  #dialog.hasPortrait { padding-left: calc(var(--pw) + 14px); }
+  .dportrait { display: none; position: absolute; left: 4px; bottom: 0; width: var(--pw); height: var(--ph); object-fit: contain; object-position: 50% 100%; pointer-events: none; z-index: -1;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,.55)); -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 8px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 8px), transparent); }
+  #dialog.hasPortrait .dportrait { display: block; }
+  .dportrait.in { animation: dpin .28s ease-out; }
+  @keyframes dpin { from { transform: translateY(14px); opacity: 0; } }
+  .dplate { position: absolute; top: 0; transform: translateY(-58%); padding: 4px 18px 5px; background: linear-gradient(180deg, #7a2a22, #4e1814); border: 1px solid rgba(255, 214, 140, .7); border-radius: 4px;
+    box-shadow: 0 3px 8px rgba(0,0,0,.5), inset 0 0 0 2px rgba(0,0,0,.2); }
+  .dplate:has(.dname:empty) { display: none; }
+  .dname { font-family: "STKaiti", "KaiTi", serif; font-size: 21px; color: #ffe7a8; letter-spacing: 3px; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+  .dsub { font-size: 12px; color: rgba(244, 239, 226, .62); margin: 4px 0 8px; }
+  .dsub:empty { margin: 0; }
+  .dline { font-size: 17px; line-height: 1.7; color: #f6f0e0; }
+  #dialog.narrate .dline { font-family: "STKaiti", "KaiTi", serif; font-size: 18px; text-align: center; color: #efe6cf; padding: 4px 12px; }
+  .dinfo { font-size: 13px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(232,196,120,.3); color: #bfe6ff; }
   .dhint { font-size: 12px; margin-top: 4px; color: #ffcf9a; }
   .dinfo:empty, .dhint:empty { display: none; }
   .dchoices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .dchoices button { font-size: 15px !important; padding: 7px 16px !important; }
-  .dmore { position: absolute; right: 16px; bottom: 8px; color: #ffe7a8; animation: dmore 1s ease-in-out infinite alternate; }
+  .dchoices:empty { display: none; }
+  #dialog .dchoices button { font-size: 15px; padding: 7px 16px; background: rgba(232,196,120,.08); border-color: rgba(232,196,120,.5); }
+  #dialog .dchoices button:hover { background: rgba(232,196,120,.26); }
+  #dialog .dchoices button.off { opacity: .5; }
+  .dmore { position: absolute; right: 18px; bottom: 8px; color: #ffe7a8; animation: dmore 1s ease-in-out infinite alternate; }
+  /* 窄屏（手机竖屏）：立绘站在框的左上方（不占文字宽度），名牌挪到立绘右边；选项两列铺满方便手指点 */
+  @media (max-width: 600px) {
+    #dialog { --pw: 118px; --ph: 172px; width: calc(100vw - 16px); padding: 22px 14px 14px; min-height: 110px; }
+    #dialog.hasPortrait { padding-left: 14px; padding-top: 26px; }
+    #dialog.hasPortrait .dportrait { bottom: calc(100% - var(--subB, 54px)); left: 2px; }
+    #dialog.hasPortrait .dplate { left: calc(var(--pw) + 2px); }
+    #dialog.hasPortrait .dsub { margin: 2px 0 8px calc(var(--pw) + 4px); min-height: 18px; }
+    .dname { font-size: 18px; letter-spacing: 2px; } .dplate { padding: 3px 12px 4px; }
+    .dline { font-size: 15px; line-height: 1.6; }
+    #dialog .dchoices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    #dialog .dchoices button { font-size: 14px; padding: 10px 8px; }
+  }
+  /* 矮屏（手机横屏）：框放矮，立绘不能挡住上半屏 */
+  @media (max-height: 500px) {
+    #dialog { --pw: 120px; --ph: 172px; width: min(720px, calc(100vw - 24px)); padding-top: 18px; padding-bottom: 10px; min-height: 100px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+    .dline { font-size: 15px; line-height: 1.55; }
+    .dchoices { margin-top: 8px; } #dialog .dchoices button { padding: 8px 12px; }
+  }
   @keyframes dmore { to { transform: translateY(3px); opacity: .5; } }
   body.talking #skills, body.talking #hotbar, body.talking #hotName, body.talking #prompt { visibility: hidden; }
   /* 操作说明默认收起；展开时放在左下作弊面板（left 8, ≤170 宽）右边，不叠在一起 */
@@ -219,7 +259,6 @@
   body.mobile #prompt { bottom: 24px; padding: 10px 18px; font-size: 15px; z-index: 4; touch-action: none; }
   body.mobile #prompt::before { content: '👆 '; }
   body.mobile #comboName { bottom: 76px; font-size: 22px; }
-  body.mobile #dialog { bottom: 16px; }
   @media (max-height: 500px) {
     body.mobile #menuBtns { top: calc(54px + env(safe-area-inset-top)); left: 50%; right: auto; transform: translateX(-50%); }
     body.mobile #skills { width: 290px; height: 230px; }
@@ -284,9 +323,13 @@
 
 <div id="prompt" class="hidden"></div>
 <div id="dialog" class="hidden">
-  <div class="dname"></div><div class="dsub"></div>
-  <div class="dline"></div><div class="dinfo"></div><div class="dhint"></div>
-  <div class="dchoices"></div><div class="dmore">▼</div>
+  <img class="dportrait" alt="" draggable="false">
+  <div class="dbody">
+    <div class="dplate"><span class="dname"></span></div><div class="dsub"></div>
+    <div class="dline"></div><div class="dinfo"></div><div class="dhint"></div>
+    <div class="dchoices"></div>
+  </div>
+  <div class="dmore">▼</div>
 </div>
 <div id="panelBack" class="hidden"><div id="panel"><div id="phead"><span id="ptitle"></span><button id="pclose">✕</button></div><div id="pbody"></div></div></div>
 

@@ -7,7 +7,7 @@ import { createChibi, animChibi } from './chibi.js';
 import { glow, mesh, lerpAngle } from './util.js';
 import { RINGS, dangerFor, sectorAt } from './worldmap.js';
 import { SECTOR_MOBS, TYPES } from './enemies.js';
-import { MINE, regionName } from './world.js';
+import { MINE, regionName, VILLAGE_R } from './world.js';
 import { levelInfo } from './realm.js';
 import { foeHpMul, foeDmgMul } from './stats.js';
 import { near } from './life.js';
@@ -68,9 +68,19 @@ export class Jobs {
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2, d = rnd(lo, hi), x = Math.sin(a) * d, z = -Math.cos(a) * d;
       if (Math.hypot(x - MINE.x, z - MINE.y) < 45 || g.landmarks?.list.some((L) => Math.hypot(L.x - x, L.z - z) < 45)) continue;
+      if (!this.openGround(x, z)) continue;
       return { x, z };
     }
     return null;
+  }
+  // 委托地点周围 30 米不能有村镇 / 坊市 / 宗门（围墙会把刷出来的妖兽挡在里面，也进不去）
+  openGround(x, z, R = 30) {
+    const g = this.g;
+    if (Math.hypot(x, z) < VILLAGE_R + R + 12) return false;
+    for (const h of g.hubs?.list || []) if (Math.hypot(h.x - x, h.z - z) < 26 + R + 12) return false;
+    for (const s of g.sects?.list || []) if (Math.hypot(s.x - x, s.z - z) < (s.r || 40) + R + 12) return false;
+    for (const L of g.landmarks?.list || []) if ((L.kind === 'hub' || L.kind === 'sect') && Math.hypot(L.x - x, L.z - z) < 26 + R + 20) return false;
+    return true;
   }
   gen(kind, who) {
     const g = this.g, ring = this.realm(), poster = who.name, aff = [];
@@ -171,7 +181,23 @@ export class Jobs {
       m.add(mesh(new THREE.IcosahedronGeometry(0.6, 1).translate(0, 0.7, 0), glow(col, 3), { cast: false }));
       R.objs.push(this.add(m, J.x, J.z)); R.beam = m;
     }
+    if (J.kind === 'guard') this.camp(R);
     if (J.aff.includes('ally')) this.allyUp(R);
+  }
+  // 守护地点布景：帐篷 / 篝火 / 石头 / 木箱，加一个站在旁边的 NPC，到了才不会光秃秃的
+  camp(R) {
+    const J = R.J, grp = new THREE.Group();
+    const tentCol = J.name === '猎户的陷阱营地' ? '#7a5a3a' : J.name === '山神小庙' ? '#a85a4a' : '#c9b88a';
+    const lam = (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(2, 2.2, 4).rotateY(Math.PI / 4).translate(0, 1.1, 0), lam(tentCol)); tent.castShadow = true;
+    tent.position.set(-3, 0, -2); grp.add(tent);
+    const fire = mesh(new THREE.ConeGeometry(0.28, 0.6, 6).translate(0, 0.3, 0), glow('#ffb347', 2.6), { cast: false }); fire.position.set(2, 0, 1); grp.add(fire);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22), lam('#8a8a82')); st.position.set(2 + Math.cos(a) * 0.55, 0.12, 1 + Math.sin(a) * 0.55); grp.add(st); }
+    for (let i = 0; i < 3; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.5), lam('#9a7a4a')); b.position.set(-1 + i * 0.8, 0.25, 2.6); b.castShadow = true; grp.add(b); }
+    R.objs.push(this.add(grp, J.x, J.z + 3));
+    const w = WHO[Math.floor(Math.random() * WHO.length)];
+    const c = createChibi({ skin: '#eac3a0', hair: w.age === 'elder' ? '#e8e8ec' : '#3a2a24', hairStyle: 1, robe: w.robe, robe2: shade(w.robe, 0.65), belt: shade(w.robe, 0.4), age: w.age });
+    R.objs.push(this.add(c.root, J.x + 3.4, J.z + 3.2)); c.root.rotation.y = -2.2; R.keeper = c;
   }
   update(dt) {
     const Q = this.g.quests;
@@ -193,7 +219,8 @@ export class Jobs {
   alive(R) { return R.mobs.filter((e) => e.alive); }
   // 委托刷出来的妖兽：词缀在这里生效
   mob(R, type, x, z, lvl, o = {}) {
-    const J = R.J, e = this.g.enemies.spawn(type, x, z, Math.max(0, lvl));
+    const J = R.J, pp = { x, z }; this.g.world.resolve(pp, 1.2);
+    const e = this.g.enemies.spawn(type, pp.x, pp.z, Math.max(0, lvl));
     if (J.aff.includes('blood') && !e.blood) { e.hp = e.maxHp *= 1.5; e.dmg *= 1.5; e.blood = true; }
     if (J.aff.includes('storm') && e.elem === '火') e.hp = e.maxHp *= 0.75; // 雷雨浇火
     e.state = o.idle ? 'idle' : 'chase'; e.jobR = R;
@@ -262,6 +289,7 @@ export class Jobs {
   guard(R, dt, P) {
     const g = this.g, J = R.J, N = R.node, d = Math.hypot(P.pos.x - J.x, P.pos.z - J.z);
     N.m.rotation.y += dt;
+    if (R.keeper) animChibi(R.keeper, dt, { move: 0, attack: -1, cast: 0, talk: false });
     if (R.stage === 'go') { if (d < 14) { R.stage = 'fight'; R.engaged = true; R.wave = 0; R.next = 1.5; g.toast(`守住${J.name}！一共三波`, 2.2); } return; }
     if (d > 35) { if ((R.away = (R.away || 0) + dt) > 8) return this.fail(R, `你离开太久，${J.name}被妖兽毁了`); } else R.away = 0;
     let hurt = 0;

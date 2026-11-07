@@ -37,6 +37,10 @@ export class Life {
   tick(dt, fast) {
     const g = this.g, dh = dt / SEC_PER_HOUR * (fast ? 40 : 1);
     g.hours += dh;
+    if (g.hours >= DAY_END - 1 && g.hours < DAY_END && this.warnedDay !== g.day) { // 睡觉前一小时提醒
+      this.warnedDay = g.day;
+      g.toast(this.atHome ? '快到子时了，该睡觉了（还有一小时）' : '快到子时了，一小时后会累倒——赶紧回家或找个安全的地方歇息', 4);
+    }
     if (g.hours >= DAY_END && !this.ending) this.passOut();
     return dh;
   }
