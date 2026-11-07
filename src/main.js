@@ -378,6 +378,7 @@ touch.bind(document.getElementById('skWeap'), tap(cycleWeapon));
 document.getElementById('hotbar').addEventListener('pointerdown', (e) => { const s = e.target.closest('.hs'); if (!s) return; e.stopPropagation(); sfx.unlock(); hotKey(+s.dataset.i); });
 document.getElementById('bagBtn').addEventListener('click', () => openBag());
 document.getElementById('menuBtn').addEventListener('click', () => openMenu());
+document.getElementById('soundBtn').addEventListener('click', () => { if (!g.title) openSound(); });
 const statBtn = document.getElementById('statBtn');
 statBtn.addEventListener('click', () => { if (!gui.blocking && !g.title) realm.openStats(); });
 document.getElementById('questBtn').addEventListener('click', () => quests.openLog());
@@ -606,6 +607,7 @@ function openMenu() {
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast(saveLocked() ? '试炼模式：不存档，真存档没动' : '已存档'); }, 'wide'));
     body.append(btn('☁ 云存档 · ' + (cloud.state === 'ok' ? (cloud.user?.anon ? '游客' : '已登录') : cloud.state === 'conflict' ? '要选存档' : cloud.state === 'off' ? '关' : '未连上'), () => openCloudPanel(gui, cloud, g), 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
+    body.append(btn('🔊 声音', () => { gui.closePanel(); openSound(); }, 'wide'));
     body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
     body.append(btn('❓ 操作说明', () => { gui.closePanel(); setHelp(true); }, 'wide'));
     body.append(btn('🔄 重新开始', () => { if (confirm('放弃当前进度，从头开始？')) { clearSave(); location.reload(); } }, 'wide'));
@@ -616,14 +618,20 @@ const settings = { music: 0.6, amb: 0.8, voice: 0.8, vol: 0.7, shake: true, rhyt
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
 const applySettings = () => { sfx.setVolume(settings.vol); audio.setVolumes({ music: settings.music, amb: settings.amb, voice: settings.voice }); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; setOutline(settings.outline); world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
+// 音量滑条：总音量 / 背景音乐 / 环境声 / 说话声（声音面板和设置里共用）
+function volumeRows(body) {
+  for (const [k, icon, name] of [['vol', '🔊', '总音量'], ['music', '🎵', '背景音乐'], ['amb', '🌿', '环境声'], ['voice', '💬', '说话声']]) {
+    const row = el('div', 'prow'), pct = el('span', '', Math.round(settings[k] * 100) + '%');
+    pct.style.cssText = 'min-width:3.2em;text-align:right;';
+    const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings[k]; r.style.flex = '1';
+    r.addEventListener('input', () => { settings[k] = +r.value; pct.textContent = Math.round(settings[k] * 100) + '%'; applySettings(); });
+    row.append(el('span', 'pic', icon), el('div', 'ptxt', `<b>${name}</b>`), r, pct); body.append(row);
+  }
+}
+function openSound() { gui.panel('声音', (body) => volumeRows(body)); }
 function openSettings() {
   gui.panel('设置', (body) => {
-    for (const [k, icon, name] of [['vol', '🔊', '总音量'], ['music', '🎵', '音乐'], ['amb', '🌿', '环境声'], ['voice', '💬', '说话声']]) {
-      const row = el('div', 'prow');
-      const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings[k]; r.style.flex = '1';
-      r.addEventListener('input', () => { settings[k] = +r.value; applySettings(); });
-      row.append(el('span', 'pic', icon), el('div', 'ptxt', `<b>${name}</b>`), r); body.append(row);
-    }
+    volumeRows(body);
     for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）'], ['fpsCap', '锁 30 帧', '帧率固定在 30，不忽高忽低（默认关 = 不限帧率）']]) {
       body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : k === 'fpsCap' ? '🎞' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
     }
