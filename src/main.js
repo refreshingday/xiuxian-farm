@@ -152,6 +152,7 @@ const g = {
 const fx = new FX(scene, camera); g.fx = fx;
 const cfxRoot = new THREE.Group(); scene.add(cfxRoot); // 招式特效挂在这里：台地上整体抬到玩家脚下的地面高度
 const cfx = new ComboFX(cfxRoot, fx, { soft: true });
+g.cfx = cfx; // 天劫落雷、突破光柱这些模块外的特效也用它
 const sfx = new SFX(); g.sfx = sfx;
 await loadItems();
 await loadTextures({
@@ -199,9 +200,9 @@ const xpNeed = () => realmXP(P.layer);
 g.xpNeed = xpNeed;
 g.xpScale = () => xpScale(P.layer);
 g.killXpK = (lvl) => killXpK(P.layer, lvl);
-g.atkMul = () => atkMul();
-// 招式伤害按炼气一层设计，随境界和攻击点放大（stats.js：小境界约 +31%，大境界一倍多）；兵器淬火另算
-const atkMul = () => 1.25 * (P.atkK || 1) * (1 + P.atkBonus);
+g.atkMul = (spell) => atkMul(spell);
+// 招式伤害按炼气一层设计，随属性点放大（stats.js）：力量管拳和剑 / 符的普通连招，精神管剑 / 符的收招和技能；兵器淬火另算
+const atkMul = (spell) => 1.25 * ((spell ? P.spiK : P.atkK) || 1) * (1 + P.atkBonus);
 
 // raw：按最大气血百分比算的伤害（天劫、陨铁坠落），不吃防御倍率，否则高境界就不疼了
 P.hurt = (dmg, fx0, fz0, knock = 6, raw = false) => {
@@ -442,9 +443,10 @@ g.tryClash = (e) => {
 function hitEnemy(e, dmg, fromX, fromZ, knock, color, h) {
   if (!e.alive) return;
   if (h?.melee && enemies.clashable(e) && Math.hypot(e.pos.x - P.pos.x, e.pos.z - P.pos.z) < e.r + P.r + 2.4 && clash(e) !== 'win') return;
-  const M = P.mods, crit = Math.random() < 0.12 + (M.crit || 0), mul = elemMul(e);
+  const M = P.mods, crit = Math.random() < 0.12 + (M.crit || 0) + (P.st?.crit || 0), mul = elemMul(e);
+  const spell = combat.kit.id !== 'fist' && !!(h?.spi || h?.skill); // 拳全靠力量；剑 / 符的收招（h.spi）和技能靠精神
   const k = 1 + (M.dmg_all || 0) + (M['dmg_' + combat.kit.id] || 0) + ((e.T.look === 'ghost' || e.T.look === 'zombie') ? M.vsUndead || 0 : 0);
-  const amt = dmg * atkMul() * mul * k * (crit ? 1.8 : 1);
+  const amt = dmg * atkMul(spell) * mul * k * (crit ? 1.8 : 1);
   if (M.slow) e.slowT = 2;
   if (M.lifesteal) P.hp = Math.min(P.maxHp, P.hp + amt * M.lifesteal);
   enemies.damage(e, amt, fromX, fromZ, knock * 1.4, crit, h, '');
@@ -497,7 +499,7 @@ function hotKey(i) {
   const id = inv.hot[i], it = id && item(id);
   if (it && (it.heal || it.qiHeal || it.xp || it.use) && !gui.blocking) life.use(id);
 }
-const dashCd = () => Math.max(0.6, DASH_CD + (P.mods.dashCd || 0));
+const dashCd = () => Math.max(0.6, DASH_CD * (1 - (P.st?.dash || 0)) + (P.mods.dashCd || 0)); // 敏捷缩短闪避冷却
 function dash() {
   if (P.dashCd > 0 || P.dead || g.paused || gui.blocking) return;
   const mv = moveInput();
@@ -960,7 +962,7 @@ function updatePlayer(dt) {
   if (P.work > 0) { P.work += dt / 0.4; if (P.work >= 1) P.work = 0; }
   // 招式自带的位移 / 跳跃 / 突刺判定在 combat.step 里；御剑飞行时走得快、悬在半空
   const wd0 = realm.fly ? 0 : world.waterDepth(P.pos.x, P.pos.z), wadeK = SW.on ? 0.62 : lerp(1, WADE_SLOW, clamp(wd0 / SWIM_IN, 0, 1));
-  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0)) * (P.slowT > 0 ? 0.55 : 1) * wadeK * (g.cheatOn.fast ? 2 : 1));
+  const st = combat.step(dt, P.dead || P.work > 0 ? NOMOVE : mv, realm.fly ? 15 * (1 + (P.mods.flySpeed || 0)) : 6 * (1 + realm.passive('风') * 0.5 + (P.mods.moveSpeed || 0) + (P.st?.speed || 0)) * (P.slowT > 0 ? 0.55 : 1) * wadeK * (g.cheatOn.fast ? 2 : 1));
   if (realm.fly) { st.y = 1.1 + Math.sin(g.time * 3) * 0.08; P.vy = 0; st.ghost = true; }
   flySword.visible = realm.fly;
   let vx = st.vx, vz = st.vz;
