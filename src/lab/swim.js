@@ -24,7 +24,7 @@ const ringFS = `uniform float uT, uOp, uSeed, uSoft; uniform vec3 uCol; varying 
     d *= 1.0 + uSoft * (0.07 * sin(ang * 3.0 + uSeed) + 0.04 * sin(ang * 5.0 - uSeed * 1.3));
     // 软边：高斯式的剖面（中间最实、两边慢慢淡出去），不是一条硬边的线；圈越扩越细
     float w = mix(0.17, 0.06, uT) * (1.0 + uSoft * 1.4), c = 1.0 - w * 1.7, e = (d - c) / (w * 0.8);
-    float a = exp(-e * e * (1.6 - uSoft * 0.8)) * (1.0 - smoothstep(0.9, 1.0, d)) * (1.0 - uSoft * 0.55);
+    float a = exp(-e * e * (1.6 - uSoft * 0.8)) * (1.0 - smoothstep(0.9, 1.0, d)) * (1.0 - uSoft * 0.25);
     // 沿圆周固定的断口花纹：越到后面断得越多
     float n = 0.5 + 0.25 * sin(ang * 5.0 + uSeed) + 0.25 * sin(ang * 3.0 - uSeed * 1.7);
     a *= smoothstep(uT * 1.05 - 0.32, uT * 1.05 + 0.1, n); // 断口也是慢慢淡掉的，不是一刀切
@@ -63,7 +63,7 @@ export function createWaterFx(parent) {
   const drops = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), dropMat, DROPS);
   drops.frustumCulled = false; drops.renderOrder = 3; group.add(drops);
   // 半透明的水珠（踩水洼用）：同一个池子，soft 的画在这一层
-  const softMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.4, depthWrite: false });
+  const softMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthWrite: false });
   const dropsSoft = new THREE.InstancedMesh(drops.geometry, softMat, DROPS);
   dropsSoft.frustumCulled = false; dropsSoft.renderOrder = 4; group.add(dropsSoft);
   const D = Array.from({ length: DROPS }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), t: 0, life: 0, s: 0, floor: 0, ripple: false, soft: false }));
@@ -186,9 +186,9 @@ export function waterVoice(a, out, nb, kind, vol, t) {
     layer(0.5, 1100, 500, 0.1, 0.1, 0.1, 0.45, 0.5);
     drips(6, 0.3, 0.9, 0.05);
   } else {
-    const [len, f0, f1, gn] = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], land: [0.2, 260, 90, 0.7], puddle: [0.12, 1000, 360, 0.24] }[kind];
+    const [len, f0, f1, gn] = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], land: [0.2, 260, 90, 0.7], puddle: [0.15, 1200, 400, 0.55] }[kind];
     layer(len, f0, f1, gn, 0.02);
-    if (kind === 'puddle') layer(0.09, 520, 220, gn * 0.45, 0.008, 0.05 + R() * 0.03); // 踩雨后水洼：啪嗒——第二下更低更轻的"嗒"（水落回地面）
+    if (kind === 'puddle') layer(0.11, 600, 240, gn * 0.6, 0.008, 0.05 + R() * 0.03); // 踩雨后水洼：啪嗒——第二下更低更轻的"嗒"（水落回地面）
   }
 }
 
