@@ -630,7 +630,7 @@ function volumeRows(body) {
     row.append(el('span', 'pic', icon), el('div', 'ptxt', `<b>${name}</b>`), r, pct); body.append(row);
   }
 }
-function openSound() { gui.panel('声音', (body) => volumeRows(body)); }
+function openSound() { gui.panel('声音', (body) => { volumeRows(body); const cr = audio.credits?.() || []; if (cr.length) body.append(el('div', 'pempty', '音乐：' + cr.join('；'))); }); }
 function openSettings() {
   gui.panel('设置', (body) => {
     volumeRows(body);
