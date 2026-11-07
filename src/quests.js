@@ -106,7 +106,7 @@ export class Quests {
     this.active.splice(this.active.indexOf(q), 1);
     if (q.from !== 'board') this.done.add(d.id);
     this.give(d.reward);
-    g.sfx?.respawn?.();
+    g.audio?.cue('quest');
     const next = d.next && this.defs[d.next];
     if (next) this.accept(next.id, 'story');
     const v = g.village.byId[d.giver], far = q.from === 'story' && v && v.pos.distanceTo(g.player.pos) > 6;

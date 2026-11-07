@@ -4,6 +4,9 @@ import { item, CAT_NAME } from './items.js';
 
 const $ = (id) => document.getElementById(id);
 export const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+// 界面声音（main.js 接到 sound.js）：('talk', 名字, 台词) / ('page') / ('open') / ('close')
+export const uiSound = { fn: null };
+const snd = (...a) => uiSound.fn?.(...a);
 export function btn(label, fn, cls = '') {
   const b = el('button', cls, label);
   b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
@@ -37,6 +40,7 @@ export class UI {
     const ch = box.querySelector('.dchoices'); ch.innerHTML = '';
     if (last && d.choices?.length) for (const c of d.choices) ch.append(btn(c.label, () => { if (!c.keep) this.closeDialog(true); c.fn?.(); }, c.off ? 'off' : ''));
     box.querySelector('.dmore').hidden = last;
+    if (d.name && !d.narrate && !d.silent) snd('talk', d.name, t); else snd('page');
     box.classList.remove('hidden');
   }
   advance() {
@@ -47,13 +51,14 @@ export class UI {
   // chosen = 点了选项（不触发 onClose）
   closeDialog(chosen = false) {
     if (!this.dialogOpen) return;
-    this.dialogOpen = false; $('dialog').classList.add('hidden'); document.body.classList.remove('talking');
+    this.dialogOpen = false; $('dialog').classList.add('hidden'); document.body.classList.remove('talking'); snd('hush');
     const f = this.d.onClose; this.d = null;
     if (!chosen) f?.();
   }
 
   // ---------- 面板 ----------
   panel(title, render, onClose) {
+    if (!this.panelOpen) snd('open');
     this.panelOpen = { title, render, onClose };
     $('panelBack').classList.remove('hidden');
     this.refresh();
@@ -65,7 +70,7 @@ export class UI {
   }
   closePanel() {
     const p = this.panelOpen; if (!p) return;
-    this.panelOpen = null; $('panelBack').classList.add('hidden'); p.onClose?.();
+    this.panelOpen = null; $('panelBack').classList.add('hidden'); snd('close'); p.onClose?.();
   }
   // 一行：图标、名字、说明、右侧按钮
   row(icon, name, sub, buttons = [], cls = '') {

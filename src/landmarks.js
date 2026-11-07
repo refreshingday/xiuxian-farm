@@ -70,7 +70,7 @@ export class Landmarks {
   update(dt) {
     const g = this.g, P = g.player;
     for (const L of this.list) if (!L.found && Math.hypot(L.x - P.pos.x, L.z - P.pos.z) < FOUND_R) {
-      L.found = true; g.toast(`发现：${L.name}（${KIND[L.kind].name}）`, 2.5); g.emit?.('discover', L);
+      L.found = true; g.toast(`发现：${L.name}（${KIND[L.kind].name}）`, 2.5); g.emit?.('discover', L); g.audio?.cue('discover');
     }
     // 光柱远看清楚、走近了变淡，别挡视线
     for (const b of this.beacons) { const d = Math.hypot(b.L.x - P.pos.x, b.L.z - P.pos.z); b.m.material.opacity = Math.min(0.22, Math.max(0.03, (d - 15) / 120)); }

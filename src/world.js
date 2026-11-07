@@ -237,6 +237,22 @@ function groundSample(x, z, out) {
   return out;
 }
 
+// 脚下是什么地面（sound.js 选脚步声用）：kind / path / frost 同 groundSample，外加扇区和扇区程度
+const _sf = [0, 0, 0], SURF = { kind: 0, path: 0, frost: 0, sector: '', biome: 0 };
+export function surfaceAt(x, z) {
+  groundSample(x, z, _sf);
+  SURF.kind = GS.kind; SURF.path = GS.path; SURF.frost = GS.frost; SURF.sector = sectorAt(x, z).id; SURF.biome = biomeK(x, z);
+  return SURF;
+}
+// 附近的水声：池塘 / 溪 / 门派水（0..1，越近越大）和瀑布潭
+export function waterNoise(world, x, z) {
+  let near = 0;
+  for (let r = 1.5; r <= 12; r *= 2) for (let i = 0; i < 8; i++) { const a = i * 0.785 + r; if (world.waterDepth(x + Math.cos(a) * r, z + Math.sin(a) * r) > 0.01) { near = Math.max(near, 1 - r / 16); break; } }
+  const sd = segDist(x, z, ...STREAM), fd = Math.hypot(x - BASIN.x, z - BASIN.z);
+  near = Math.max(near, 1 - smooth(1, 14, sd) * 1);
+  return { near: clamp(near, 0, 1), fall: 1 - smooth(2, 26, fd) };
+}
+
 // ---------- 地图取样（小地图 / 舆图的实时地形，src/maptiles.js 用） ----------
 // 粗采样：地面底色 + 路面程度 / 地面类型 + 这一格的树 / 石概率和树冠色。逐像素的细节（树冠点、房子、水）在 maptiles 里补。
 const CANOPY = { broad: [58, 128, 56], maple: [198, 92, 42], pine: [36, 92, 68], dark: [40, 96, 58], snow: [196, 218, 222] };
