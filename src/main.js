@@ -359,6 +359,8 @@ touch.bind(document.getElementById('skWeap'), tap(cycleWeapon));
 document.getElementById('hotbar').addEventListener('pointerdown', (e) => { const s = e.target.closest('.hs'); if (!s) return; e.stopPropagation(); sfx.unlock(); hotKey(+s.dataset.i); });
 document.getElementById('bagBtn').addEventListener('click', () => openBag());
 document.getElementById('menuBtn').addEventListener('click', () => openMenu());
+const statBtn = document.getElementById('statBtn');
+statBtn.addEventListener('click', () => { if (!gui.blocking && !g.title) realm.openStats(); });
 document.getElementById('questBtn').addEventListener('click', () => quests.openLog());
 document.getElementById('mapBtn').addEventListener('click', () => landmarks.open());
 touch.bind(document.getElementById('prompt'), tap(interact));
@@ -499,7 +501,7 @@ function hotKey(i) {
   const id = inv.hot[i], it = id && item(id);
   if (it && (it.heal || it.qiHeal || it.xp || it.use) && !gui.blocking) life.use(id);
 }
-const dashCd = () => Math.max(0.6, DASH_CD * (1 - (P.st?.dash || 0)) + (P.mods.dashCd || 0)); // 敏捷缩短闪避冷却
+const dashCd = () => Math.max(0.5, DASH_CD * (1 - (P.st?.dash || 0)) + (P.mods.dashCd || 0)); // 敏捷大幅缩短闪避冷却，最低 0.5 秒
 function dash() {
   if (P.dashCd > 0 || P.dead || g.paused || gui.blocking) return;
   const mv = moveInput();
@@ -580,7 +582,6 @@ function openMenu() {
     body.append(btn('🎒 背包', () => { gui.closePanel(); openBag(); }, 'wide'));
     body.append(btn('📜 任务', () => { gui.closePanel(); quests.openLog(); }, 'wide'));
     body.append(btn('🗺 地图', () => { gui.closePanel(); landmarks.open(); }, 'wide'));
-    body.append(btn('📊 属性' + (realm.ptsLeft() > 0 ? `（${realm.ptsLeft()} 点未分配）` : ''), () => { gui.closePanel(); realm.openStats(); }, 'wide'));
     body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
     body.append(btn('👥 联机同游', () => coop.openPanel(), 'wide'));
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
@@ -1130,7 +1131,9 @@ function updateUI() {
   ui.qiText.textContent = `${Math.floor(P.qi)} / ${P.maxQi}`;
   const L = levelInfo(P.layer), full = L.top && P.xp >= xpNeed();
   ui.xpFill.style.width = Math.min(100, P.xp / xpNeed() * 100) + '%';
-  ui.realm.textContent = L.name + (full ? '（圆满 · 待渡劫）' : `　修为 ${Math.floor(P.xp)}/${xpNeed()}`) + (realm.ptsLeft() > 0 ? `　📊 ${realm.ptsLeft()} 点未分配（I）` : '');
+  ui.realm.textContent = L.name + (full ? '（圆满 · 待渡劫）' : `　修为 ${Math.floor(P.xp)}/${xpNeed()}`);
+  const ptsLeft = realm.ptsLeft(); // 右上角「属性」按钮：还有点没加就挂红色感叹号
+  statBtn.classList.toggle('pts', ptsLeft > 0); statBtn.title = ptsLeft > 0 ? `还有 ${ptsLeft} 点属性点没分配（I）` : '属性（I）';
   ui.rootTag.textContent = P.roots.map((r) => r.e).join('') + '灵根 · ' + ['凡品', '良品', '上品', '极品'][P.roots[0].grade];
   ui.skFly.classList.toggle('hidden', L.realm < 1); ui.skFly.classList.toggle('on', realm.fly);
   const d = dateOf(g.day);

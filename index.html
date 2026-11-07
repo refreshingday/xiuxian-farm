@@ -49,6 +49,13 @@
   #money { position: fixed; right: 16px; top: 92px; font-size: 14px; padding: 6px 12px; }
   #menuBtns { position: fixed; right: 16px; top: 132px; display: flex; gap: 6px; }
   #menuBtns button { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  /* 属性按钮：还有属性点没加时，右上角红色感叹号 + 金色呼吸光 */
+  #menuBtns #statBtn { position: relative; }
+  #statBtn .ptsDot { display: none; position: absolute; top: -8px; right: -7px; min-width: 18px; height: 18px; border-radius: 9px; background: #e8402a; color: #fff; font: bold 13px/18px sans-serif; font-style: normal; text-align: center; box-shadow: 0 0 0 2px #2a1408, 0 0 10px rgba(255,80,40,.8); animation: ptsBounce 1.2s ease-in-out infinite; pointer-events: none; }
+  #statBtn.pts { border-color: #ffd36a; color: #ffe7a8; animation: ptsGlow 1.6s ease-in-out infinite; }
+  #statBtn.pts .ptsDot { display: block; }
+  @keyframes ptsGlow { 50% { box-shadow: 0 0 14px rgba(255,200,90,.8), inset 0 0 8px rgba(255,200,90,.35); } }
+  @keyframes ptsBounce { 50% { transform: translateY(-3px) scale(1.12); } }
   /* 快捷栏（1–8），战斗时淡出 */
   #hotbar { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); display: flex; gap: 4px; transition: opacity .3s; }
   #hotbar.fight .hs:not(.heal) { opacity: .25; pointer-events: none; }
@@ -254,7 +261,7 @@
 
 <div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
 <div id="money" class="panel"></div>
-<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="mpBtn">👥<span> 联机</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
+<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="statBtn">📊<span> 属性</span><i class="ptsDot">!</i></button><button id="mpBtn">👥<span> 联机</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
 <div id="qtrack" hidden></div><div id="markLayer"></div>
 <div id="miniWrap"><canvas id="mini"></canvas><div id="miniB"><button id="miniC" title="回到自己" hidden>◎</button><button id="miniIn" title="放大（滚轮）">＋</button><button id="miniOut" title="缩小（滚轮）">－</button></div></div>
 <div id="qptr" hidden><i>➤</i><b></b></div>

@@ -89,11 +89,11 @@ export class StatsUI {
   // 每项属性在面板上的效果行：[名字, 现在的值, 加 n 点后的值（同一种写法）]
   lines(k, D, P, M) {
     const atk = 1.25 * (1 + (P.atkBonus || 0)), hp = (v) => fmtNum(Math.round((100 + (P.hpBonus || 0) + (M.hp || 0)) * v * (1 + (M.hpPct || 0))));
-    const qiBase = P.maxQi / (1 + (P.st?.qi || 0));
+    const qiBase = P.maxQi / (1 + (P.st?.qi || 0)), cd = (d) => Math.max(0.5, DASH_CD * (1 - d.dash) + (M.dashCd || 0)); // 和 main.js dashCd 一样
     switch (k) {
       case 'str': return [['招式伤害', (d) => fmtMul(atk * d.str), (d) => d.str]];
       case 'con': return [['气血上限', (d) => hp(d.con), (d) => d.con], ['受到伤害', (d) => '÷' + fmtMul(d.con).slice(1), (d) => d.con]];
-      case 'agi': return [['移动速度', (d) => '+' + pct(d.speed), (d) => 1 + d.speed], ['闪避冷却', (d) => '−' + (DASH_CD * d.dash).toFixed(2) + '秒', (d) => 1 + d.dash], ['暴击率', (d) => pct(0.12 + (M.crit || 0) + d.crit), (d) => 0.12 + (M.crit || 0) + d.crit]];
+      case 'agi': return [['移动速度', (d) => '+' + pct(d.speed), (d) => 1 + d.speed], ['闪避冷却', (d) => cd(d).toFixed(2) + '秒', (d) => 1 / cd(d), (d, n) => (cd(d) - cd(n) >= 0.005 ? `−${(cd(d) - cd(n)).toFixed(2)}秒` : '')], ['暴击率', (d) => pct(0.12 + (M.crit || 0) + d.crit), (d) => 0.12 + (M.crit || 0) + d.crit]];
       case 'spi': return [['技能 / 收招伤害', (d) => fmtMul(atk * d.spi), (d) => d.spi], ['灵力上限', (d) => fmtNum(Math.round(qiBase * (1 + d.qi))), (d) => 1 + d.qi], ['回灵速度', (d) => '+' + pct(d.regen), (d) => 1 + d.regen]];
     }
     return [];
@@ -115,7 +115,7 @@ export class StatsUI {
         card.innerHTML = `<div class="st-top"><span class="st-ic">${S.icon}</span><span class="st-nm">${S.name}</span>
           <span class="st-pts"><b>${au + a}</b> 点<small>（固定 ${au} + 自由 ${a}）</small></span></div>
           <div class="st-desc">${S.desc}</div><div class="st-bar"><i style="width:${Math.min(100, a / Math.max(1, cap) * 100)}%"></i></div>
-          <div class="st-fx">${this.lines(k, D, P, M).map(([n, f, v]) => `<span>${n}</span><span>${f(D)}${nx && upPct(v(D), v(nx)) ? `<em>+${step}点 ${upPct(v(D), v(nx))}</em>` : ''}</span>`).join('')}</div>`;
+          <div class="st-fx">${this.lines(k, D, P, M).map(([n, f, v, dl]) => { const up = nx ? (dl ? dl(D, nx) : upPct(v(D), v(nx))) : ''; return `<span>${n}</span><span>${f(D)}${up ? `<em>+${step}点 ${up}</em>` : ''}</span>`; }).join('')}</div>`;
         const bs = document.createElement('div'); bs.className = 'st-btns';
         const mk = (label, n, cls) => { const b = document.createElement('button'); b.textContent = label; b.className = cls; b.onclick = (e) => { e.stopPropagation(); this.add(k, n); }; return b; };
         bs.append(mk('−7', -7, a > 0 ? '' : 'off'), mk('−1', -1, a > 0 ? '' : 'off'), mk('+1', 1, left > 0 && a < cap ? 'plus' : 'plus off'), mk('+7', 7, left > 0 && a < cap ? 'plus' : 'plus off'), mk('全部', 1e9, left > 0 && a < cap ? 'plus' : 'plus off'));

@@ -15,8 +15,8 @@ export const SMALL = 40, BIG = 108, SMALL_AUTO = 3, BIG_AUTO = 9; // AUTO：每�
 export const SHARE = 0.25; // 成长曲线按「四项平均分配」校准：谁都至少每层 +31%
 export const PT_K = 1.31 ** (1 / (SMALL * SHARE)); // 一点 ×1.027
 export const CAP = 0.35; // 单项（固定 + 自由）最多占总点数的 35%
-export const AGI_S = 80, SPI_S = 120; // 敏捷 / 灵力的「越加越少」速度
-export const AGI_MAX = { speed: 0.4, dash: 0.4, crit: 0.2 }, SPI_QI_MAX = 1, SPI_REGEN_MAX = 1;
+export const AGI_S = 80, DASH_S = 40, SPI_S = 120; // 敏捷 / 闪避 / 灵力的「越加越少」速度（闪避收得快：筑基左右就接近 0.5 秒一次）
+export const AGI_MAX = { speed: 0.4, dash: 0.8, crit: 0.2 }, SPI_QI_MAX = 1, SPI_REGEN_MAX = 1;
 export const MAX_L = 26;
 export const isMajor = (L) => L >= 10 && (L - 10) % 4 === 0; // 筑基 / 金丹 / 元婴 / 化神初期、渡劫
 
@@ -63,7 +63,7 @@ export function derive(L, a) {
   const au = autoPts(L), n = (k) => au + (a?.[k] || 0), fa = soft(n('agi'), AGI_S), fs = soft(n('spi'), SPI_S);
   return {
     str: PT_K ** n('str'), con: PT_K ** n('con'), spi: PT_K ** n('spi'),
-    speed: AGI_MAX.speed * fa, dash: AGI_MAX.dash * fa, crit: AGI_MAX.crit * fa,
+    speed: AGI_MAX.speed * fa, dash: AGI_MAX.dash * soft(n('agi'), DASH_S), crit: AGI_MAX.crit * fa, // dash：闪避冷却少掉的比例，2.5 秒最多减到 0.5 秒
     qi: SPI_QI_MAX * fs, regen: SPI_REGEN_MAX * fs,
   };
 }
