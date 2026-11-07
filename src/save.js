@@ -54,7 +54,13 @@ export function saveInfo() {
   return s.status === 'ok' ? s.data.meta : null;
 }
 
+// 试炼模式（作弊面板）：上锁后任何路径都写不进存档，真存档原样保留
+let locked = false;
+export function lockSave() { locked = true; }
+export function saveLocked() { return locked; }
+
 export function writeSave(meta) {
+  if (locked) return false;
   const prev = localEnvelope();
   if (!prev && localSave()?.status === 'future') return false;   // 本机存档比游戏新：不覆盖
   if (!cur.sid) cur = prev ? { sid: prev.meta.sid, rev: prev.meta.rev } : { sid: newSid(), rev: 0 };

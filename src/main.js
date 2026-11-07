@@ -50,7 +50,7 @@ import { Cheat, startWithQuest } from './cheat.js';
 import { Coop } from './coop.js';
 import { siteOf } from './sectsites.js';
 import { Life, near } from './life.js';
-import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
+import { register, hasSave, saveInfo, writeSave, readSave, clearSave, lockSave, saveLocked } from './save.js';
 import { CloudSync } from './cloud/sync.js';
 import { openCloudPanel, askConflict, titleCloudLine } from './cloud/ui.js';
 
@@ -591,7 +591,7 @@ function openMenu() {
     body.append(btn('📊 属性' + (realm.ptsLeft() > 0 ? `（${realm.ptsLeft()} 点未分配）` : ''), () => { gui.closePanel(); realm.openStats(); }, 'wide'));
     body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
     body.append(btn('👥 联机同游', () => coop.openPanel(), 'wide'));
-    body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
+    body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast(saveLocked() ? '试炼模式：不存档，真存档没动' : '已存档'); }, 'wide'));
     body.append(btn('☁ 云存档 · ' + (cloud.state === 'ok' ? (cloud.user?.anon ? '游客' : '已登录') : cloud.state === 'conflict' ? '要选存档' : cloud.state === 'off' ? '关' : '未连上'), () => openCloudPanel(gui, cloud, g), 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
@@ -1274,6 +1274,7 @@ function startPlay() {
       if (info) box.append(btn(`继续 · ${info.text}`, () => { if (readSave()) startPlay(); else g.toast('存档读不出来'); }, 'wide'));
       box.append(btn(info ? '新的开始（覆盖存档）' : '开始问道', () => { if (info) clearSave(); newGame(); startPlay(); }, 'wide'));
     }
+    box.append(btn('⚡ 渡劫试炼（不存档，不动现有存档）', () => { lockSave(); newGame(); startPlay(); g.toast('试炼模式：全程不存档。用左下「🛠 作弊」选天劫', 4); }, 'wide'));
     box.append(titleCloudLine(cloud, g, build));
   };
   box.append(el('div', '', '☁ 正在连接云存档…'));
@@ -1287,13 +1288,14 @@ function startPlay() {
   cloud.whenReady(4000).then(() => {
     build();
     if (cloud.state === 'conflict') askConflict(cloud, build);   // 启动时就冲突了（那时还没订阅）
-    if (new URLSearchParams(location.search).has('skipTitle')) { if (saveInfo() && !saveInfo().future) readSave(); else newGame(); startPlay(); }
+    if (new URLSearchParams(location.search).has('trial')) { lockSave(); newGame(); startPlay(); }
+    else if (new URLSearchParams(location.search).has('skipTitle')) { if (saveInfo() && !saveInfo().future) readSave(); else newGame(); startPlay(); }
   });
 }
 requestAnimationFrame(frame);
 // 调试入口
 g.zoom = () => camZoomU; // 调试用
-window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
+window.game = g; g.cfx = cfx; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
 g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) drawFrame(); };
 g.fogCull = fogCull; g.shCull = shCull; g.shBatch = shBatch; g.scene = scene; g.camera = camera;
