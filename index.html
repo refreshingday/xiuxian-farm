@@ -152,7 +152,7 @@
   #dialog::after { left: 7px; bottom: 7px; border-right: 0; border-top: 0; }
   #dialog.hasPortrait { padding-left: calc(var(--pw) + 14px); }
   .dportrait { display: none; position: absolute; left: 4px; bottom: 0; width: var(--pw); height: var(--ph); object-fit: contain; object-position: 50% 100%; pointer-events: none; z-index: -1;
-    filter: drop-shadow(0 4px 10px rgba(0,0,0,.55)); -webkit-mask-image: linear-gradient(180deg, #000 88%, transparent); mask-image: linear-gradient(180deg, #000 88%, transparent); }
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,.55)); -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 8px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 8px), transparent); }
   #dialog.hasPortrait .dportrait { display: block; }
   .dportrait.in { animation: dpin .28s ease-out; }
   @keyframes dpin { from { transform: translateY(14px); opacity: 0; } }
@@ -177,9 +177,9 @@
   @media (max-width: 600px) {
     #dialog { --pw: 118px; --ph: 172px; width: calc(100vw - 16px); padding: 22px 14px 14px; min-height: 110px; }
     #dialog.hasPortrait { padding-left: 14px; padding-top: 26px; }
-    #dialog.hasPortrait .dportrait { bottom: calc(100% - 40px); left: 2px; -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent 96%); mask-image: linear-gradient(180deg, #000 70%, transparent 96%); }
+    #dialog.hasPortrait .dportrait { bottom: calc(100% - 54px); left: 2px; }
     #dialog.hasPortrait .dplate { left: calc(var(--pw) + 2px); }
-    #dialog.hasPortrait .dsub { margin-left: calc(var(--pw) - 10px); }
+    #dialog.hasPortrait .dsub { margin: 2px 0 8px calc(var(--pw) - 10px); min-height: 18px; }
     .dname { font-size: 18px; letter-spacing: 2px; } .dplate { padding: 3px 12px 4px; }
     .dline { font-size: 15px; line-height: 1.6; }
     #dialog .dchoices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
