@@ -1006,7 +1006,7 @@ function startPlay() {
 }
 requestAnimationFrame(frame);
 // 调试入口
-window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
+window.game = g; g.cfx = cfx; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
 g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) composer.render(); };
 export { flat, glow, mesh };
