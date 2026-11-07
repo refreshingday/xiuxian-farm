@@ -46,11 +46,11 @@ export class Quests {
   // ---------- 进度 ----------
   cur(q, i) {
     const go = q.def.goals[i], g = this.g;
-    if (go.type === 'have') return Math.min(go.n, g.inv.count(go.item));
-    if (go.type === 'layer') return Math.min(go.n, g.player.layer);
-    return Math.min(go.n, q.prog[i] || 0);
+    if (go.type === 'have') return Math.min(go.n ?? 1, g.inv.count(go.item));
+    if (go.type === 'layer') return Math.min(go.n ?? 1, g.player.layer);
+    return Math.min(go.n ?? 1, q.prog[i] || 0);
   }
-  complete(q) { return q.def.goals.every((go, i) => this.cur(q, i) >= go.n); }
+  complete(q) { return q.def.goals.every((go, i) => this.cur(q, i) >= (go.n ?? 1)); }
   goalText(go) {
     if (go.text) return go.text;
     return {
@@ -187,7 +187,7 @@ export class Quests {
       }
     });
   }
-  count(q, i) { const go = q.def.goals[i]; return go.type === 'job' ? '' : ` ${this.cur(q, i)}/${go.n}`; }
+  count(q, i) { const go = q.def.goals[i]; return go.type === 'job' || go.type === 'reach' || go.n == null ? '' : ` ${this.cur(q, i)}/${go.n ?? 1}`; }
   progText(q) { return q.def.goals.map((go, i) => this.goalText(go) + this.count(q, i)).join('，'); }
   openLog() {
     const g = this.g;
@@ -229,7 +229,7 @@ export class Quests {
         continue;
       }
       q.def.goals.forEach((go, i) => {
-        if (this.cur(q, i) >= go.n) return;
+        if (this.cur(q, i) >= (go.n ?? 1)) return;
         let p = go.x != null ? go : null;
         if (!p && go.type === 'talk') { const v = g.village.byId[go.who]; if (v && !v.away) p = v.pos; }
         if (!p && go.type === 'kill') p = g.enemies.lairs.find((l) => l.type === go.target);
