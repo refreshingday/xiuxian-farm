@@ -217,6 +217,7 @@ P.hurt = (dmg, fx0, fz0, knock = 6, raw = false) => {
   if (P.iframe > 0 || P.dead || g.cheatOn?.god) return false;
   const M = P.mods;
   dmg = Math.round(dmg / (raw ? 1 : P.defK || 1) * Math.max(0.3, 1 - (M.dmgTaken || 0) - (g.nightK > 0.5 ? M.nightDef || 0 : 0)));
+  P.lastHit = { dmg, hp: Math.ceil(P.hp), maxHp: Math.round(P.maxHp), src: P.dotSrc || hitSource(fx0, fz0) }; // 死亡画面用
   P.hp -= dmg; P.iframe = 0.6; P.c.flash = 0.12;
   const dx = P.pos.x - fx0, dz = P.pos.z - fz0, d = Math.hypot(dx, dz) || 1;
   P.kx += dx / d * knock; P.kz += dz / d * knock;
@@ -233,21 +234,31 @@ P.hurt = (dmg, fx0, fz0, knock = 6, raw = false) => {
 P.dot = (dmg) => {
   if (P.dead || P.dashT > 0) return;
   dmg = Math.max(1, Math.round(dmg / (P.defK || 1) * Math.max(0.3, 1 - (P.mods.dmgTaken || 0))));
-  if (P.hp <= dmg) { P.iframe = 0; P.hurt(dmg, P.pos.x, P.pos.z, 0, true); return; }
+  if (P.hp <= dmg) { P.iframe = 0; P.dotSrc = '毒雾 / 灼地'; P.hurt(dmg, P.pos.x, P.pos.z, 0, true); P.dotSrc = null; return; }
   P.hp -= dmg; P.c.flash = 0.08; fx.num(P.pos, '-' + fmtNum(dmg), 'hurt');
 };
+// 谁打的：伤害源头附近最近的活妖兽（弹丸打中时源头是弹丸，退一步找 30 米内离你最近的）
+function hitSource(x, z) {
+  let best = null, bd = 4;
+  for (const e of enemies.list) { if (e.alive === false) continue; const d = Math.hypot(e.pos.x - x, e.pos.z - z); if (d < bd) { bd = d; best = e; } }
+  if (!best) { bd = 30; for (const e of enemies.list) { if (e.alive === false) continue; const d = e.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = e; } } }
+  return best ? (best.T?.name || '妖兽') + (best.lvl ? ` Lv${best.lvl}` : '') : '不明之物';
+}
 function die() {
   P.dead = true; P.hp = 0;
   P.lastDeath = { x: P.pos.x, z: P.pos.z }; // 作弊面板「回到上次死亡点」用
   combat.cancel();
   const lost = life.deathDrop();
-  document.getElementById('dead').classList.remove('hidden');
+  life.markGrave(P.pos.x, P.pos.z); // 小地图 / 舆图标红 ✕，屏幕边缘红箭头
+  const H = P.lastHit, dEl = document.getElementById('dead');
+  dEl.innerHTML = '<div>重伤昏迷……</div>' + (H ? `<div class="why">最后一击：<b>${H.src}</b> 造成 <b class="d">${fmtNum(H.dmg)}</b> 点伤害<br>受击时你还剩 <b>${fmtNum(H.hp)}</b> / ${fmtNum(H.maxHp)} 血</div>` : '');
+  dEl.classList.remove('hidden');
   fx.burst(P.pos, '#ffffff', 30, { speed: 5, up: 4 });
   P.c.root.visible = false;
-  g.after(2.8, () => {
+  g.after(3.6, () => {
     P.dead = false; P.hp = P.maxHp; P.qi = P.maxQi; P.pos.set(life.bed.x + 1.3, 0, life.bed.z + 0.6); P.c.root.visible = true; P.iframe = 2;
     document.getElementById('dead').classList.add('hidden');
-    g.toast('你在家中醒来，伤势已愈' + (lost ? '\n' + lost : ''), 4);
+    g.toast('你在家中醒来，伤势已愈' + (H ? `\n被 ${H.src} 一击 ${fmtNum(H.dmg)} 点（当时剩 ${fmtNum(H.hp)} 血）` : '') + '\n殒身之处已在地图上标出' + (lost ? '\n' + lost : ''), 5);
   });
 }
 // 境界、灵根、天劫、御剑（realm.js）
