@@ -451,7 +451,7 @@ export class GameAudio {
     // 这种情况有音乐文件就放文件（交叉淡入淡出），没有就放合成古筝
     const want = off ? null : this.pickTrack(mood);
     if (want !== (this.cur?.T || null)) this.playTrack(want);
-    if (off || this.cur) this.nextT = 0; else this.music(dt);
+    this.nextT = 0; // 只放音乐文件，不再用合成古筝（用户要求）
     // ---- 持续环境声 ----
     const L = this.L, set = (o, v, tc = 0.6) => o.g.gain.setTargetAtTime(v, t, tc);
     const outside = !s.inside && !s.mine, B = s.biome > 0.5 ? s.sector : '';
