@@ -330,7 +330,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyI') realm.openStats();
   if (e.code === 'KeyG') realm.toggleFly();
   if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
-  if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
+  if (e.code === 'KeyH') setHelp(document.getElementById('help').classList.contains('hidden'));
   const si = SKILL_KEYS.indexOf(e.code);
   if (si >= 0) useSkill(si);
   if (e.code === 'KeyX') cycleWeapon();
@@ -596,7 +596,7 @@ function openMenu() {
     body.append(btn('☁ 云存档 · ' + (cloud.state === 'ok' ? (cloud.user?.anon ? '游客' : '已登录') : cloud.state === 'conflict' ? '要选存档' : cloud.state === 'off' ? '关' : '未连上'), () => openCloudPanel(gui, cloud, g), 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
-    body.append(btn('❓ 操作说明', () => { gui.closePanel(); document.getElementById('help').classList.remove('hidden'); }, 'wide'));
+    body.append(btn('❓ 操作说明', () => { gui.closePanel(); setHelp(true); }, 'wide'));
     body.append(btn('🔄 重新开始', () => { if (confirm('放弃当前进度，从头开始？')) { clearSave(); location.reload(); } }, 'wide'));
   });
 }
@@ -1203,8 +1203,14 @@ function updateKitUI() {
 }
 combat.onKit = updateKitUI;
 updateKitUI();
-// 窗口矮时操作说明默认收起（H 打开）
-if (innerHeight < 720) document.getElementById('help').classList.add('hidden');
+// 操作说明默认收起：左下「❓ 说明」按钮或 H 键开关，记住上次状态
+function setHelp(o) {
+  document.getElementById('help').classList.toggle('hidden', !o);
+  document.getElementById('helpBtn').classList.toggle('on', o);
+  try { localStorage.setItem('helpOpen', o ? '1' : '0'); } catch (e) {}
+}
+document.getElementById('helpBtn').addEventListener('click', (e) => { e.currentTarget.blur(); setHelp(document.getElementById('help').classList.contains('hidden')); });
+{ let o = false; try { o = localStorage.getItem('helpOpen') === '1'; } catch (e) {} setHelp(o); }
 
 // ---------- 季节画面（GDD 美术：春夏秋冬配色明显不同；秋叶、雪地、结冰水面）----------
 // 叶子、草地变色；春天飘花瓣，秋天飘落叶、地上铺落叶；冬天积雪、下雪、池塘和瀑布结冰
