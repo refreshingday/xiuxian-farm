@@ -1084,9 +1084,13 @@ function updatePlayer(dt) {
     const leg = P.c.legs[sg > 0 ? 0 : 1], f = leg.localToWorld(_puddleV.set(0, -0.48, 0.06));
     const pk = puddleAt(f.x, f.z, weather.wet);
     if (pk > 0.35) {
+      // 水圈不能超出水洼：往 8 个方向探，到水洼边为止
+      let rm = 0.6;
+      for (let i = 0; i < 8 && rm > 0.12; i++) { const a = i * 0.785, ca = Math.cos(a), sa = Math.sin(a); for (let r = 0.12; r < rm; r += 0.08) if (puddleAt(f.x + ca * r, f.z + sa * r, weather.wet) < 0.3) { rm = r; break; } }
       const fy = (P.gy || 0) + 0.02, k = Math.min(1, pk) * (0.6 + 0.4 * moveK);
-      waterFx.splash(f.x, fy, f.z, 5 + Math.round(k * 5), 1.4 + k * 1.0, 0.6, 0.032 + k * 0.01, _puddleD.set(Math.sin(P.yaw), 0, Math.cos(P.yaw)));
-      waterFx.ring(f.x, fy, f.z, 0.08, 0.6 + k * 0.3, 0.75, 0.9);
+      // 只溅几滴很低的小水珠（不高过脚踝），水圈淡、虚、不是一道硬线
+      waterFx.splash(f.x, fy, f.z, 2 + Math.round(k * 2), 0.55 + k * 0.25, 0.25, 0.016 + k * 0.004, _puddleD.set(Math.sin(P.yaw), 0, Math.cos(P.yaw)), true);
+      waterFx.ring(f.x, fy, f.z, Math.min(0.06, rm * 0.4), rm * 0.92, 0.8, 0.45, Math.random() * 6.28, 1, 1);
       waterSound('puddle', 0.35 + k * 0.35);
     }
   }
