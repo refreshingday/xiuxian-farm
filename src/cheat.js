@@ -7,6 +7,8 @@ import { polar } from './worldmap.js';
 import { ITEMS, CROPS } from './items.js';
 import { TYPES } from './enemies.js';
 import { CloudSync } from './cloud/sync.js';
+import { lockSave } from './save.js';
+import { VILLAGE_R } from './world.js';
 
 export function startWithQuest() { try { return localStorage.getItem('startQuest') === '1'; } catch (e) { return false; } }
 
@@ -105,6 +107,24 @@ export class Cheat {
       g.toast(`${n} 种物品各 +5`, 2);
     });
     pair('✨ 升一层', () => this.levelUp(), '⚡ 破大境界', () => this.breakRealm());
+
+    // ---- 渡劫试炼：点哪道劫就直接设成「该劫之前的圆满」并开劫；一点就给存档上锁（真存档不会被改）----
+    head('渡劫试炼（点了就不存档）');
+    const trialOpt = { home: false, avert: false };
+    check('在洞府渡', false, (v) => { trialOpt.home = v; });
+    check('服避劫丹', false, (v) => { trialOpt.avert = v; });
+    const trial = (target) => {
+      const P0 = P(), R = g.realm;
+      if (R.trib) { g.toast('正在渡劫', 1.5); return; }
+      lockSave(); g.save = () => false;
+      P0.layer = 9 + (target - 1) * 4; // 筑基劫=炼气九层，之后每档 +4 层（13 / 17 / 21 / 25）
+      P0.xp = g.xpNeed(P0.layer); R.cool = 0; R.recalc(true);
+      P0.hp = P0.maxHp; P0.qi = P0.maxQi;
+      if (trialOpt.home) { const d = g.life.home.door; this.tp(d.x, d.z + 3); } else this.tp(0, VILLAGE_R + 25);
+      P0.avert = trialOpt.avert;
+      R.startTrib(trialOpt.home, 1);
+    };
+    ['筑基劫（炼气→筑基）', '金丹劫', '元婴劫', '化神劫', '最终渡劫'].forEach((n, i) => add(`⚡ ${n}`, () => trial(i + 1)));
 
     // ---- 时间 / 天气 / 灵田 ----
     head('时间 / 天气 / 灵田');

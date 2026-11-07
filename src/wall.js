@@ -43,6 +43,26 @@ export function buildWall(world, R, gates, towers) {
   }
   for (const im of [inst(base, stoneM, segs), inst(body, plasterM, segs), inst(cap, tileM, segs), inst(post, woodM, posts)]) { addOutline(im, line); scene.add(im); }
 
+  // ---- 补墙：门墩外沿到最近一段整墙之间会留一道缝（墙段 4 米一截，跳过得太多），碰撞却是连着的——每个门两侧各补一截定长墙 ----
+  const pierOut = GATE_HALF + PIER_W - 0.3;   // 插进门墩一点，不留缝
+  const kept = segs.map(([, , r]) => -r);
+  for (const g of gates) for (const s of [-1, 1]) {
+    let edge = Infinity;                      // 这一侧最近整墙段的内沿（沿墙弧长）
+    for (const a of kept) {
+      let d = (a - g.a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU;
+      if (Math.sign(d) === s) edge = Math.min(edge, R * Math.abs(d) - L / 2);
+    }
+    const len = edge + 0.1 - pierOut;
+    if (!(len > 0.05) || !isFinite(len)) continue;
+    const a = g.a + s * (pierOut + len / 2) / R, F = new THREE.Group();
+    F.position.set(Math.sin(a) * R, 0, -Math.cos(a) * R); F.rotation.y = -a;
+    F.add(mesh(boxUV(new THREE.BoxGeometry(len + 0.25, 0.6, 1.0), len, 0.6, 1.0, 1.4).translate(0, 0.3, 0), stoneM, { recv: true }));
+    F.add(mesh(new THREE.BoxGeometry(len + 0.15, H - 0.6, 0.66).translate(0, 0.6 + (H - 0.6) / 2, 0), plasterM, { recv: true }));
+    const fs = (k) => boxUV(new THREE.BoxGeometry(len + 0.5, 0.1, 0.85), len + 0.5, 0.1, 0.85, 0.8).rotateX(k * 0.55).translate(0, H + 0.14, -k * 0.36);
+    F.add(mesh(mergeGeometries([fs(1), fs(-1), boxUV(new THREE.BoxGeometry(len + 0.5, 0.1, 0.16), len + 0.5, 0.1, 0.16, 0.8).translate(0, H + 0.29, 0)]), tileM, { recv: true }));
+    addOutline(F, line); scene.add(F);
+  }
+
   // ---- 碰撞：沿墙一圈小圆，门洞留空（tide 的妖兽可以穿过去，见 world.resolve） ----
   const n = Math.round(TAU * R / 1.5);
   for (let k = 0; k < n; k++) {

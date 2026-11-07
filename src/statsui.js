@@ -176,6 +176,7 @@ export class StatsUI {
   celebrate(before, o = {}) {
     const major = !!o.major;
     if (o.fx !== false) this.burstFx(major);
+    this.g.audio?.cue('levelup');
     let el = document.getElementById('bkBanner');
     if (!el) { el = document.createElement('div'); el.id = 'bkBanner'; document.body.append(el); }
     this.bk = { before, major, el };

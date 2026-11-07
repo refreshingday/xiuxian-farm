@@ -87,6 +87,7 @@ export const SECTOR_MOBS = {
   volcano: ['firecrow', 'flamebeast', 'flamebeast'], desert: ['scorpion', 'scorpion', 'puppet'], battle: ['zombie', 'ghost', 'ghost'],
 };
 const GRAV = 26;
+const HURT_T = 0.4, STUN_MAX = 1.6, ARMOR_T = 1.4; // 受击硬直秒数 / 连续被压多久后霸体 / 霸体持续
 const NIGHT = 0.5; // nightK 超过这个算夜晚：敌人属性 +30%，掉落 +50%（GDD 第 3 节）；血月再 +50% / 掉落翻倍
 
 // ---------- 模型：几种骨架 × 配色 ----------
@@ -233,6 +234,7 @@ export class Enemies {
       tx: x, tz: z, walk: Math.random() * 6, touchCd: 0, alive: true, phase: 1, queue: [], hitOnce: false, chargeDir: 0,
       elem: T.elem, boss: !!T.boss, kind: T.kind, vy: 0, airSpin: 0, airRot: 0, spiked: false, rootT: 0, stuck: [],
       gen: 0, hop: 0, hasteT: 0, open: 0, tick: null, passWall,
+      flinch: 0, flinchDir: 0, stunAcc: 0, armorT: 0, // 受击：后仰动画 / 连续被压的秒数 / 霸体剩余
     };
     root.position.set(x, 0, z);
     // 外面再包一层：逻辑里 pos.y 是离地高度，外层按台地高度整体抬起（平地上就是 0）
@@ -288,6 +290,9 @@ export class Enemies {
     if (e.pos.y > 0) fx.nums.at(-1).p.y += e.pos.y;
     fx.burst(e.pos, crit ? '#ffe28a' : '#ffffff', crit ? 12 : 6, { speed: 5, up: 2, life: 0.3, y: 1 });
     this.game.sfx?.impact({ crit, heavy: Math.min(1, Math.max(0, (knock - 4) / 10)) });
+    // 受击动作：朝打来的方向后仰一下（妖王也有，但不硬直）
+    e.flinch = 1; e.flinchDir = Math.atan2(fromX - e.pos.x, fromZ - e.pos.z);
+    this.hitStun(e);
     if (!e.boss && e.state === 'idle') e.state = 'chase';
     if (e.hp <= 0) this.kill(e);
   }
@@ -303,6 +308,17 @@ export class Enemies {
     e.hitOnce = true; e.dashing = false; e.gen++; e.parts.body.rotation.z = 0;
     if (e.boss) { e.tick = null; e.hop = 0; this.openUp(e, sec); return; }
     e.state = 'recover'; e.st = sec; e.cd = Math.max(e.cd, sec + 0.8);
+  }
+  // 受击硬直：普通妖兽挨打后短时间不能出手；被连续压制超过 STUN_MAX 秒就进入霸体，硬着头皮还手
+  // 正在出招（前摇 / 冲锋）不打断——打断前摇还是技能的活（GDD 第 4 节）；联机镜像的妖兽状态归主人算
+  hitStun(e) {
+    if (e.boss || e.fake || e.mirror || e.armorT > 0) return;
+    if (e.state === 'windup' || e.state === 'charge') return;
+    e.state = 'hurt'; e.st = Math.max(e.st, HURT_T);
+    if (e.stunAcc >= STUN_MAX) { // 压太久了：霸体，马上出手
+      e.state = 'chase'; e.st = 0; e.cd = 0; e.stunAcc = 0; e.armorT = ARMOR_T;
+      this.game.fx.num(e.pos, '霸体', 'crit');
+    }
   }
   // 分身被打中：散成一团狐火
   poof(e) { this.game.fx.burst(e.pos, '#ff6aff', 30, { speed: 5, up: 3, y: 1.5 }); this.game.sfx?.impact({}); this.remove(e); }
@@ -426,10 +442,11 @@ export class Enemies {
       const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, dist = Math.hypot(dx, dz);
       const toP = Math.atan2(dx, dz);
       let mx = 0, mz = 0, spd = 0, face = null;
-      e.st -= dt; e.cd -= dt; e.touchCd -= dt; e.rootT -= dt; e.slowT = (e.slowT || 0) - dt; e.hasteT -= dt;
+      e.st -= dt; e.cd -= dt; e.touchCd -= dt; e.rootT -= dt; e.slowT = (e.slowT || 0) - dt; e.hasteT -= dt; e.armorT -= dt;
       if (e.fake && (e.life -= dt) <= 0) { this.poof(e); continue; }
       // 浮空受重力；浮空或被定身（缚符）时不能行动，前摇 / 冲锋被打断
       const air = e.pos.y > 0.02 || e.vy > 0;
+      if (e.state === 'hurt' && !air) e.stunAcc += dt; else e.stunAcc = Math.max(0, e.stunAcc - dt * 0.8);
       if (air) { e.vy -= GRAV * dt; e.pos.y += e.vy * dt; e.airRot += e.airSpin * dt; if (e.pos.y <= 0) this.land(e); }
       else e.airRot *= Math.exp(-10 * dt);
       if (e.rootT > 0) e.kx = e.kz = 0;
@@ -489,9 +506,11 @@ export class Enemies {
           if (e.st <= 0) { e.state = 'recover'; e.st = 0.8; e.cd = 2.6; }
         } else if (e.state === 'recover') {
           if (e.st <= 0) e.state = 'chase';
+        } else if (e.state === 'hurt') { // 受击硬直：不走不出手，面朝打它的方向
+          face = e.flinchDir;
+          if (e.st <= 0) { e.state = 'chase'; e.cd = Math.max(e.cd, 0.25); }
         }
-        // 普通接触伤害
-        if (e.state !== 'charge' && dist < e.r + P.r && e.touchCd <= 0 && e.kind === 'charger') { P.hurt(e.dmg * 0.5, e.pos.x, e.pos.z); e.touchCd = 1; }
+        // 不再有碰撞伤害：只有真的出招（扑 / 砸 / 冲 / 射）打中才扣血
         // 妖虫夜袭：往灵田爬，碰到庄稼就啃（GDD 第 6 节）
         if (e.raid && e.state !== 'charge') { const t = e.raid; if (dist > 7) { const wx = t.x - e.pos.x, wz = t.z - e.pos.z, wd = Math.hypot(wx, wz) || 1; mx = wx / wd; mz = wz / wd; spd = e.speed; face = null; } }
       }
@@ -551,7 +570,14 @@ export class Enemies {
       for (const a of pt.arms) a.rotation.x += (up - a.rotation.x) * Math.min(1, dt * 12);
     }
     pt.body.position.y = (pt.float || pt.wings.length ? Math.sin(g.time * 3 + e.walk) * 0.15 : Math.abs(sw) * 0.06) + (e.state === 'windup' && e.kind === 'charger' ? -0.1 : 0) + e.hop;
-    if (!e.boss) pt.body.rotation.x = e.airRot;
+    // 受击后仰：先猛地往后一仰再弹回来（flinch 1→0），身子顺带压扁一下
+    e.flinch = Math.max(0, (e.flinch || 0) - dt * 4.5);
+    const fk = e.flinch > 0 ? Math.sin(e.flinch * Math.PI) * (e.flinch > 0.5 ? 1 : 0.6) : 0, rel = (e.flinchDir || 0) - e.yaw;
+    const back = -fk * (e.boss ? 0.18 : 0.45) * Math.cos(rel), side = fk * (e.boss ? 0.12 : 0.3) * Math.sin(rel);
+    if (!pt.body.userData.s0) pt.body.userData.s0 = pt.body.scale.clone();
+    const s0 = pt.body.userData.s0, sq = fk * (e.boss ? 0.06 : 0.14);
+    pt.body.scale.set(s0.x * (1 + sq), s0.y * (1 - sq), s0.z * (1 + sq));
+    if (!e.boss) { pt.body.rotation.x = e.airRot + back; if (!(e.state === 'windup' && e.kind === 'charger')) pt.body.rotation.z = side; }
     else { // 破绽：往前耷拉着喘气；倒地：侧躺
       const k = Math.min(1, dt * 8);
       pt.body.rotation.x += ((e.state === 'open' ? 0.3 : 0) - pt.body.rotation.x) * k;
@@ -616,7 +642,6 @@ export class Enemies {
         const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z;
         const keep = e.kind === 'shooter' ? 8 : 3;
         if (dist > keep) { mv.mx = dx / dist; mv.mz = dz / dist; mv.spd = e.speed * (p2 ? 1.3 : 1) * (e.hasteT > 0 ? 1.5 : 1); }
-        if (dist < e.r + P.r + 0.3 && e.touchCd <= 0) { P.hurt(e.dmg * 0.6, e.pos.x, e.pos.z, 9); e.touchCd = 1; }
         if (e.st <= 0 && !P.dead) {
           // 一轮里每招出一次；狂暴后自己的招出两遍，再叫一次帮手
           if (!e.queue.length) e.queue = shuffle(p2 ? [...e.T.attacks, ...e.T.sig, ...e.T.sig, 'summon'] : [...e.T.attacks, ...e.T.sig]);

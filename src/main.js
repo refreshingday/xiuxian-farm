@@ -12,7 +12,7 @@ import { createMirror } from './lab/mirror.js';
 import { batchShadows, showBatches } from './shadowbatch.js';
 import { waterFxU } from './water.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
-import { World, configureVillage, configureClearings, groundY, stepOK, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist, POND } from './world.js';
+import { World, configureVillage, configureClearings, groundY, stepOK, surfaceAt, waterNoise, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist, POND } from './world.js';
 import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
 import { sectorAt, biomeK, polar } from './worldmap.js';
@@ -44,12 +44,13 @@ import { HealthBar, screenOf } from './hpbar.js';
 import { TouchControls } from './touch.js';
 import { DAY_START, dateOf, clockText, rollWeather } from './calendar.js';
 import { loadItems, Inventory, item, itemName } from './items.js';
-import { UI, btn, el } from './ui.js';
+import { UI, btn, el, uiSound } from './ui.js';
+import { GameAudio, surfaceName } from './sound.js';
 import { Cheat, startWithQuest } from './cheat.js';
 import { Coop } from './coop.js';
 import { siteOf } from './sectsites.js';
 import { Life, near } from './life.js';
-import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
+import { register, hasSave, saveInfo, writeSave, readSave, clearSave, lockSave, saveLocked } from './save.js';
 import { CloudSync } from './cloud/sync.js';
 import { openCloudPanel, askConflict, titleCloudLine } from './cloud/ui.js';
 
@@ -120,15 +121,15 @@ const aura = new THREE.PointLight(0x9fdcff, 0, 12, 1.2); scene.add(aura);
 const mineFill = new THREE.PointLight(0xc8baff, 0, 40, 1.0); scene.add(mineFill); // 矿洞基础补光：跟着玩家走，洞里不会黑到看不见
 
 const KEYS = [ // 时, 日光色, 日光强度, 天空色, 地面色, 环境强度, 雾色
-  [0, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
-  [4.5, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
+  [0, 0x8aa2ff, 0.55, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
+  [4.5, 0x8aa2ff, 0.55, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
   [6, 0xffb27a, 1.6, 0xb0b8d8, 0x7a7448, 0.85, 0xd8c8b8],
   [8, 0xffe0b0, 2.5, 0xd0e4ff, 0x9a8a50, 1.05, 0xd8e8d0],
   [12, 0xfff0d8, 2.8, 0xd8ecff, 0x9a8a50, 1.1, 0xdcecd8],
   [16.5, 0xffd49a, 2.5, 0xd0e0f8, 0x9a8a50, 1.0, 0xe4e0c8],
   [18.5, 0xff7a4a, 1.1, 0x8a6a8a, 0x4a3a3a, 0.6, 0xd08a6a],
-  [20, 0x7f98ff, 0.4, 0x2a3058, 0x1a1a24, 0.45, 0x1a1e38],
-  [24, 0x7f98ff, 0.35, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
+  [20, 0x8aa2ff, 0.6, 0x2a3058, 0x1a1a24, 0.45, 0x1a1e38],
+  [24, 0x8aa2ff, 0.55, 0x1c2648, 0x141a24, 0.45, 0x0d1224],
 ];
 const _ca = new THREE.Color(), _cb = new THREE.Color(), MINE_FOG = new THREE.Color(0x0f0c1a);
 function sample(h, idx, out) {
@@ -147,13 +148,20 @@ const g = {
   shakeV: 0, shake(v) { if (!this.noShake) this.shakeV = Math.max(this.shakeV, v); },
   // 事件：kill / harvest / plant / water / soilQi / craft / talk …（任务进度等靠它推进）
   handlers: {}, on(t, f) { (this.handlers[t] ??= []).push(f); }, emit(t, ...a) { for (const f of this.handlers[t] || []) f(...a); },
-  toast(msg, sec = 2.2) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), sec * 1000); },
+  toast(msg, sec = 2.2) { g.audio?.cue('toast'); const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), sec * 1000); },
 };
 const fx = new FX(scene, camera); g.fx = fx;
 const cfxRoot = new THREE.Group(); scene.add(cfxRoot); // 招式特效挂在这里：台地上整体抬到玩家脚下的地面高度
 const cfx = new ComboFX(cfxRoot, fx, { soft: true });
 g.cfx = cfx; // 天劫落雷、突破光柱这些模块外的特效也用它
 const sfx = new SFX(); g.sfx = sfx;
+// 战斗以外的声音（脚步 / 环境 / 说话 / 界面 / 背景音乐，sound.js）：和战斗音效共用一个 AudioContext
+const audio = new GameAudio(sfx); g.audio = audio;
+{ const u = sfx.unlock.bind(sfx); sfx.unlock = () => { u(); audio.init(); }; }
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => sfx.unlock(), { capture: true, passive: true });
+// 所有按钮（面板、对话选项、标题画面、HUD）点下去都有一声；灰掉的按钮是闷的"不行"
+addEventListener('click', (e) => { const b = e.target.closest?.('button, .hs, .tab'); if (b) audio.cue(b.classList.contains('off') || b.disabled ? 'deny' : 'click'); }, true);
+uiSound.fn = (k, name, line) => { if (k === 'talk') { audio.hush(); audio.talk(name, line); } else if (k === 'hush') audio.hush(); else audio.cue(k); };
 await loadItems();
 await loadTextures({
   grass_ground: { normal: 2 }, dirt_path: { normal: 2.5 }, stone_plaza: {},
@@ -214,7 +222,7 @@ P.hurt = (dmg, fx0, fz0, knock = 6, raw = false) => {
   P.kx += dx / d * knock; P.kz += dz / d * knock;
   fx.num(P.pos, '-' + fmtNum(dmg), 'hurt');
   fx.burst(P.pos, '#ff6a5a', 8, { speed: 4, life: 0.3 });
-  sfx.impact({ heavy: 0.6 });
+  sfx.impact({ heavy: 0.6 }); audio.cue('hurt');
   g.shake(0.35);
   const h = document.getElementById('hurt'); h.classList.remove('on'); void h.offsetWidth; h.classList.add('on');
   if (P.hp <= 0 && social.duel) P.hp = 1; // 节日比武点到为止
@@ -248,9 +256,9 @@ g.addXP = (n, p, quiet) => realm.addXP(n, p, quiet);
 // 御剑：脚下一把发光的飞剑
 const flySword = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 1.6), glow('#9ef0ff', 2.2));
 flySword.position.y = -0.05; flySword.visible = false; P.c.root.add(flySword);
-g.addItem = (id, n, p) => { inv.add(id, n); if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} ${itemName(id)}`, 'item'); };
-g.addStones = (n, p) => { inv.stones += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 灵石`, 'item'); };
-g.addMoney = (n, p) => { inv.money += n; if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 文`, 'item'); };
+g.addItem = (id, n, p) => { inv.add(id, n); audio.cue('pickup'); if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} ${itemName(id)}`, 'item'); };
+g.addStones = (n, p) => { inv.stones += n; audio.cue('pickup'); if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 灵石`, 'item'); };
+g.addMoney = (n, p) => { inv.money += n; audio.cue('money'); if (p) fx.num({ x: p.x - 0.6, z: p.z }, `+${n} 文`, 'item'); };
 
 // ---------- 村民 ----------
 
@@ -584,7 +592,7 @@ function openMenu() {
     body.append(btn('🗺 地图', () => { gui.closePanel(); landmarks.open(); }, 'wide'));
     body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
     body.append(btn('👥 联机同游', () => coop.openPanel(), 'wide'));
-    body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
+    body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast(saveLocked() ? '试炼模式：不存档，真存档没动' : '已存档'); }, 'wide'));
     body.append(btn('☁ 云存档 · ' + (cloud.state === 'ok' ? (cloud.user?.anon ? '游客' : '已登录') : cloud.state === 'conflict' ? '要选存档' : cloud.state === 'off' ? '关' : '未连上'), () => openCloudPanel(gui, cloud, g), 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
@@ -593,16 +601,18 @@ function openMenu() {
   });
 }
 // 设置（存在本机）：音量、震屏、连招节奏提示（GDD 第 12 节：F/S 提示可以在设置里开关）
-const settings = { vol: 0.7, shake: true, rhythm: false, outline: false, fpsCap: false };
+const settings = { music: 0.6, amb: 0.8, voice: 0.8, vol: 0.7, shake: true, rhythm: false, outline: false, fpsCap: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
-const applySettings = () => { sfx.setVolume(settings.vol); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; setOutline(settings.outline); world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
+const applySettings = () => { sfx.setVolume(settings.vol); audio.setVolumes({ music: settings.music, amb: settings.amb, voice: settings.voice }); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; setOutline(settings.outline); world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
 function openSettings() {
   gui.panel('设置', (body) => {
-    const row = el('div', 'prow');
-    const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings.vol; r.style.flex = '1';
-    r.addEventListener('input', () => { settings.vol = +r.value; applySettings(); });
-    row.append(el('span', 'pic', '🔊'), el('div', 'ptxt', '<b>音量</b>'), r); body.append(row);
+    for (const [k, icon, name] of [['vol', '🔊', '总音量'], ['music', '🎵', '音乐'], ['amb', '🌿', '环境声'], ['voice', '💬', '说话声']]) {
+      const row = el('div', 'prow');
+      const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings[k]; r.style.flex = '1';
+      r.addEventListener('input', () => { settings[k] = +r.value; applySettings(); });
+      row.append(el('span', 'pic', icon), el('div', 'ptxt', `<b>${name}</b>`), r); body.append(row);
+    }
     for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）'], ['fpsCap', '锁 30 帧', '帧率固定在 30，不忽高忽低（默认关 = 不限帧率）']]) {
       body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : k === 'fpsCap' ? '🎞' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
     }
@@ -794,7 +804,7 @@ function fogCullBegin() {
 function fogCullEnd() { for (const o of fogCull.hidden) { o.visible = true; o.matrixWorldAutoUpdate = true; } }
 let mirrorScan = 0;
 function mirrorPass() {
-  const ok = !g.title && !P.dead && P.c.root.visible;
+  const ok = !g.title && !P.dead;
   const near = ok && weatherU.ice.value < 0.5 && Math.hypot(P.pos.x - POND.x, P.pos.z - POND.z) < POND.r + 12;
   // 不在池塘边、地上有积水（雨后）：镜面放在脚下地面高度，照地上的水洼（同高的水洼才有人影，见 world.js GROUND_WET）
   // 水洼不再跟池塘二选一（以前离池塘 16 米内水洼倒影会突然没了）：同一面镜子，池塘边镜面在水面高度 0.03，地面水洼按和镜面的高差决定能不能用（world.js uPudY）
@@ -902,8 +912,38 @@ function frame(now) {
   }
   fpsTick((now - last) / 1000);
   padTick();
-  tick(Math.min(0.05, (now - last) / 1000)); last = now;
+  const dt0 = Math.min(0.05, (now - last) / 1000);
+  tick(dt0); last = now;
+  soundTick(dt0);
   drawFrame();
+}
+// 声音：脚下的地面、附近的水、在哪个地方、打没打架 → sound.js（暂停时音乐和环境声照常，只是不走路）
+const SND = { t: 0, surf: 'grass', water: { near: 0, fall: 0 }, npcs: [] };
+let sndPrev = null;
+function soundTick(dt) {
+  if (!audio.ok) return;
+  const x = P.pos.x, z = P.pos.z;
+  const sp = sndPrev ? Math.hypot(x - sndPrev.x, z - sndPrev.z) / Math.max(dt, 1e-3) : 0;
+  sndPrev = { x, z };
+  const L = SEASON_LOOK[dateOf(g.day).season], mine = world.mineFactor > 0.5, inside = world.insideHouse(x, z);
+  SND.t -= dt;
+  if (SND.t < 0) { // 地面和水声 0.2 秒查一次就够
+    SND.t = 0.2;
+    SND.s = { ...surfaceAt(x, z) };
+    SND.surf = surfaceName(SND.s, { inside, mine, snow: weatherU.snow.value, wet: weather.wet, autumn: L.litter || 0 });
+    SND.water = waterNoise(world, x, z);
+    SND.npcs = village.list.map((v) => ({ name: v.name, d: v.pos.distanceTo(P.pos) })).filter((v) => v.d < 10);
+  }
+  const s = SND.s || { sector: '', biome: 0 };
+  const fight = !g.title && enemies.list.some((e) => e.state !== 'idle' && e.pos.distanceTo(P.pos) < 14);
+  const boss = !g.title && !!enemies.boss && enemies.boss.pos.distanceTo(P.pos) < 30;
+  const town = Math.hypot(x, z) < VILLAGE_R + 2 || !!g.hubs?.at?.(P.pos, 40) || !!g.sects?.at?.(P.pos, 26);
+  audio.update(dt, {
+    x, z, speed: sp > 20 ? 0 : sp, run: clamp((sp - 3) / 4, 0, 1), surf: SND.surf, fly: realm.fly, swim: SW.on, wade: realm.fly ? 0 : world.waterDepth(x, z),
+    dead: P.dead, title: g.title, paused: g.paused || gui.blocking, inside, mine, sector: s.sector, biome: s.biome, village: town,
+    night: g.nightK > 0.5, hours: g.hours % 24, season: dateOf(g.day).season, winter: !!L.ice, rain: weather.rain, snow: weatherU.snow.value,
+    waterNear: SND.water.near, waterfallNear: SND.water.fall, fight, boss, npcs: SND.npcs,
+  });
 }
 function tick(dt) {
   g.coop?.update(dt, camera); // 联机：暂停时道友也照样在动
@@ -1023,6 +1063,11 @@ function updatePlayer(dt) {
 function ambience(dt) {
   if (g.nightK > 0.5 && world.mineFactor < 0.5 && Math.random() < dt * 8) {
     fx.mote(P.pos.x + (Math.random() - 0.5) * 30, 0.5 + Math.random() * 1.5, P.pos.z + (Math.random() - 0.5) * 24, '#d8ff7a', { life: 3, size: 0.5, vy: 0.15, vx: (Math.random() - 0.5) * 0.6, vz: (Math.random() - 0.5) * 0.6 });
+  }
+  // 池塘上空的萤火虫：夜里离池塘 30 米内，贴着水面和岸边慢慢飘、一闪一闪
+  if (g.nightK > 0.4 && world.mineFactor < 0.5 && Math.hypot(P.pos.x - POND.x, P.pos.z - POND.z) < 30 && Math.random() < dt * 10) {
+    const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * (POND.r + 4);
+    fx.mote(POND.x + Math.cos(a) * r, 0.3 + Math.random() * 1.6, POND.z + Math.sin(a) * r, '#e4ff8a', { life: 4 + Math.random() * 2, size: 0.55, vy: 0.08, vx: (Math.random() - 0.5) * 0.4, vz: (Math.random() - 0.5) * 0.4, bright: 1 });
   }
   if (world.mineFactor > 0.5 && Math.random() < dt * 14) {
     fx.mote(P.pos.x + (Math.random() - 0.5) * 30, 3 + Math.random() * 2, P.pos.z + (Math.random() - 0.5) * 24, '#b8a8ff', { life: 4, size: 0.35, vy: -0.4, bright: 0.8 });
@@ -1232,6 +1277,7 @@ function startPlay() {
       if (info) box.append(btn(`继续 · ${info.text}`, () => { if (readSave()) startPlay(); else g.toast('存档读不出来'); }, 'wide'));
       box.append(btn(info ? '新的开始（覆盖存档）' : '开始问道', () => { if (info) clearSave(); newGame(); startPlay(); }, 'wide'));
     }
+    box.append(btn('⚡ 渡劫试炼（不存档，不动现有存档）', () => { lockSave(); newGame(); startPlay(); g.toast('试炼模式：全程不存档。用左下「🛠 作弊」选天劫', 4); }, 'wide'));
     box.append(titleCloudLine(cloud, g, build));
   };
   box.append(el('div', '', '☁ 正在连接云存档…'));
@@ -1245,13 +1291,14 @@ function startPlay() {
   cloud.whenReady(4000).then(() => {
     build();
     if (cloud.state === 'conflict') askConflict(cloud, build);   // 启动时就冲突了（那时还没订阅）
-    if (new URLSearchParams(location.search).has('skipTitle')) { if (saveInfo() && !saveInfo().future) readSave(); else newGame(); startPlay(); }
+    if (new URLSearchParams(location.search).has('trial')) { lockSave(); newGame(); startPlay(); }
+    else if (new URLSearchParams(location.search).has('skipTitle')) { if (saveInfo() && !saveInfo().future) readSave(); else newGame(); startPlay(); }
   });
 }
 requestAnimationFrame(frame);
 // 调试入口
 g.zoom = () => camZoomU; // 调试用
-window.game = g; g.combo = runner; g.combat = combat; g.renderer = renderer;
+window.game = g; g.cfx = cfx; g.combo = runner; g.combat = combat; g.renderer = renderer;
 // 脚本化测试：game.step(秒) 按固定步长推进（不受帧率影响），最后渲染一帧
 g.step = (sec, h = 1 / 60, render = true) => { for (let t = 0; t < sec; t += h) tick(h); if (render) drawFrame(); };
 g.fogCull = fogCull; g.shCull = shCull; g.shBatch = shBatch; g.scene = scene; g.camera = camera;

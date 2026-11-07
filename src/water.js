@@ -5,7 +5,7 @@ import { weatherU, clamp } from './util.js';
 
 // 水面倒影的共享 uniform：角色倒影贴图 + 投影矩阵（main.js 每帧在池塘附近渲一次）
 // pud / pudY：没在池塘边、地上有积水时改成照地面水洼（镜面放在玩家脚下的高度 pudY）
-export const waterFxU = { tRef: { value: null }, texM: { value: new THREE.Matrix4() }, on: { value: 0 }, pud: { value: 0 }, pudY: { value: 0 } };
+export const waterFxU = { tRef: { value: null }, texM: { value: new THREE.Matrix4() }, on: { value: 0 }, pud: { value: 0 }, pudY: { value: 0 }, lamp: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] } };
 export const WATER_COLORS = { shallow: '#6ad0d8', deep: '#2a7ab8', foam: '#f0fbff' };
 // UniformsUtils.merge 会克隆每个 uniform，共享的（uTime、结冰、天空色）要重新挂回去，不然时间冻住、冬天不结冰
 function fogU(o) { return Object.assign(THREE.UniformsUtils.merge([THREE.UniformsLib.fog, o]), o); }
@@ -26,14 +26,14 @@ export function makeLabWater(area) {
       cShallow: { value: new THREE.Color(C.shallow) }, cDeep: { value: new THREE.Color(C.deep) }, cFoam: { value: new THREE.Color(C.foam) },
       uSky: weatherU.sky, uCaus: { value: 1 }, uFlow: { value: new THREE.Vector2(0.3, 0.2) },
       uChar: { value: area.char ? 1 : 0 }, uRain: weatherU.rain,
-    }), { tRef: waterFxU.tRef, texM: waterFxU.texM, uOn: waterFxU.on }),
+    }), { tRef: waterFxU.tRef, texM: waterFxU.texM, uOn: waterFxU.on, uLamp: waterFxU.lamp }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
     fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMode, uCaus, uLight; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
-      uniform sampler2D tRef; uniform mat4 texM; uniform float uChar, uOn, uRain;
+      uniform sampler2D tRef; uniform mat4 texM; uniform float uChar, uOn, uRain; uniform vec3 uLamp[4];
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -98,7 +98,7 @@ export function makeLabWater(area) {
           float wave = fract(d * 5.0 + uTime * 0.45 + nb * 0.35);
           float rings = smoothstep(0.1, 0.0, abs(wave - 0.5)) * (1.0 - smoothstep(0.08, 0.38, d));
           c = mix(c, cFoam, max(foam, rings * 0.7));
-          a = mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
+          a = mix(0.6, 0.88, smoothstep(0.0, 0.5, d));
           // 倒影：云 + 角色，随水波扭曲；溪流里沿流向拉长顺流滚动。岸边渐隐
           {
             vec3 rp = ripples(p) * uRain;
@@ -122,7 +122,22 @@ export function makeLabWater(area) {
               c = mix(c, rc.rgb * 0.85, rc.a * inner * (0.4 + 0.4 * fr));
             }
             c += rp.z * 0.18 * inner;
-            a = max(a, mix(a, 0.95, inner));
+            a = mix(a, 0.92, inner * fr * 0.5);
+            // 夜里：暖色灯笼的光晕 + 水面倒影的碎光，加一点冷色月光闪点（uLight 之后还会乘一次，这里先除掉）
+            float nk = clamp((1.0 - uLight) / 0.72, 0.0, 1.0);
+            if (nk > 0.01) {
+              vec3 add = vec3(0.0);
+              for (int i = 0; i < 4; i++) {
+                vec3 Lp = uLamp[i]; if (Lp.z < 0.01) continue;
+                vec2 dd = p - Lp.xy; vec3 Lv = normalize(vec3(Lp.x, 1.8, Lp.y) - vW);
+                float spec = pow(max(dot(R, Lv), 0.0), 40.0);
+                add += vec3(1.0, 0.6, 0.26) * Lp.z * (0.55 * exp(-dot(dd, dd) * 0.22) * (0.4 + 0.6 * inner) + 1.4 * spec * inner);
+              }
+              vec3 Lm = normalize(vec3(0.35, 0.55, -0.6));
+              add += vec3(0.55, 0.7, 1.0) * pow(max(dot(R, Lm), 0.0), 120.0) * 0.8 * inner;
+              c += add * nk * 0.5 / max(uLight, 0.28);
+              a = max(a, min(0.92, 0.6 + dot(add, vec3(0.33)) * nk));
+            }
           }
         } else {
           vec2 v = cell(p * 0.6);
