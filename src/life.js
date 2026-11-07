@@ -56,6 +56,7 @@ export class Life {
     this.ending = true;
     const g = this.g, P = g.player, inv = g.inv, fade = document.getElementById('fade');
     g.paused = true; fade.classList.add('on');
+    if (kind === 'sleep') g.audio?.cue('sleep');
     setTimeout(() => {
       let note = '';
       if (kind === 'sleep') {
@@ -140,7 +141,7 @@ export class Life {
     if (it.use) return it.use(g);                 // 特殊物品（破境丹等）自己处理
     if (!(it.heal || it.qiHeal || it.xp)) return false;
     if (P.pillCd > 0) return false;
-    inv.take(id); P.pillCd = 0.8;
+    inv.take(id); P.pillCd = 0.8; g.audio?.cue('use');
     g.emit?.('pill', id);
     const M = P.mods || {}, tk = it.base || id;
     const k = it.cat === 'pill' ? 0.7 ** (((this.tox[tk] = (this.tox[tk] || 0) + 1) - 1) * (1 - (M.tox || 0))) * (1 + (M.pillPow || 0)) : 1;
