@@ -3,6 +3,7 @@
 //   node --env-file=.env scripts/gen-image.mjs <out.png> "<prompt>" [model] [size] [quality]
 // Defaults: model gpt-image-2.5-sunburst (use gpt-image-2.5-flare only when speed is asked for), quality medium
 // Optional: REF=<image.png> uses a reference image (images/edits endpoint)
+// Optional: TRANSPARENT=1 requests a true alpha-channel PNG (background: transparent)
 // Optional: OPENAI_BASE_URL (default https://api.openai.com/v1)
 import fs from "node:fs";
 import path from "node:path";
@@ -26,13 +27,14 @@ if (process.env.REF) {
   fd.append("prompt", prompt);
   fd.append("size", size);
   fd.append("quality", quality);
+  if (process.env.TRANSPARENT) { fd.append("background", "transparent"); fd.append("output_format", "png"); }
   fd.append("image", new Blob([fs.readFileSync(process.env.REF)], { type: "image/png" }), "ref.png");
   res = await fetch(`${base}/images/edits`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
 } else {
   res = await fetch(`${base}/images/generations`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model, prompt, size, quality, n: 1 }),
+    body: JSON.stringify({ model, prompt, size, quality, n: 1, ...(process.env.TRANSPARENT ? { background: "transparent", output_format: "png" } : {}) }),
   });
 }
 const body = await res.json().catch(() => ({}));
