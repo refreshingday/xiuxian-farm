@@ -63,7 +63,7 @@ export class Social {
       choices.push({ label: this.did(f, a) ? label + '（已参加）' : label, off: this.did(f, a), fn: () => !this.did(f, a) && this.act(f, a) });
     }
     choices.push({ label: '离开' });
-    g.ui.dialog({ name: f.name, sub: '节日', line: f.intro, choices });
+    g.ui.dialog({ name: f.name, sub: '节日', line: f.intro, choices, portrait: false });
   }
   act(f, a) {
     const g = this.g, inv = g.inv;
@@ -124,7 +124,7 @@ export class Social {
     if (!D) return;
     if (P.hp < P.maxHp * 0.2 || P.dead) { // 点到为止
       g.enemies.remove(D.foe); this.duel = null; P.hp = Math.max(P.hp, P.maxHp * 0.2); P.dead = false;
-      g.ui.dialog({ name: D.f.name, line: `第 ${D.round} 场惜败！明年再来。`, info: `赢了 ${D.round - 1} 场：${(D.round - 1) * 150} 文` }); g.inv.money += (D.round - 1) * 150;
+      g.ui.dialog({ name: D.f.name, portrait: false, line: `第 ${D.round} 场惜败！明年再来。`, info: `赢了 ${D.round - 1} 场：${(D.round - 1) * 150} 文` }); g.inv.money += (D.round - 1) * 150;
       return;
     }
     if (D.foe.alive) return;
@@ -134,7 +134,7 @@ export class Social {
     for (const v of g.village.list) v.addAff(10);
     const crush = this.spouse ? null : g.village.list.filter((v) => v.d.romance).sort((a, b) => b.aff - a.aff)[0];
     if (crush && D.f.id === 'flower') crush.addAff(100);
-    g.ui.dialog({ name: D.f.name, line: '三场全胜！今年的魁首是你！', info: `奖：800 文、5 灵石，全村好感 +10${crush && D.f.id === 'flower' ? `；${crush.name}看你的眼神不一样了（好感 +100）` : ''}` });
+    g.ui.dialog({ name: D.f.name, portrait: false, line: '三场全胜！今年的魁首是你！', info: `奖：800 文、5 灵石，全村好感 +10${crush && D.f.id === 'flower' ? `；${crush.name}看你的眼神不一样了（好感 +100）` : ''}` });
   }
   // 节日装饰：广场上一圈灯笼
   updateDeco() {

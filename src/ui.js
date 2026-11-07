@@ -1,6 +1,7 @@
 // 界面：对话框（分页 + 选项）、弹出面板（背包 / 商店 / 菜单 / 任务 …）、快捷栏。
 // 对话或面板打开时游戏暂停（GDD：只在菜单和对话时暂停）
 import { item, CAT_NAME } from './items.js';
+import { portraitByName } from './portraits.js';
 
 const $ = (id) => document.getElementById(id);
 export const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -23,7 +24,8 @@ export class UI {
   get blocking() { return this.dialogOpen || !!this.panelOpen; }
 
   // ---------- 对话 ----------
-  // d = { name, sub, lines: [...] 或 line, info, hint, choices: [{ label, fn, off }], onClose }
+  // d = { name, sub, lines: [...] 或 line, info, hint, choices: [{ label, fn, off }], onClose, portrait }
+  // portrait：立绘地址；false = 不要立绘。不给就按名字找（this.portraitOf 由 main.js 接到村民），找不到用默认立绘。旁白没有立绘。
   dialog(d) {
     this.d = d; this.page = 0; this.dialogOpen = true;
     document.body.classList.add('talking');
@@ -32,6 +34,9 @@ export class UI {
   get lines() { return this.d.lines || [this.d.line ?? '']; }
   renderDialog() {
     const d = this.d, box = $('dialog'), lines = this.lines, last = this.page >= lines.length - 1, t = lines[this.page];
+    const pic = this.portraitFor(d), img = box.querySelector('.dportrait');
+    box.classList.toggle('hasPortrait', !!pic); box.classList.toggle('narrate', !d.name || !!d.narrate);
+    if (pic) { if (img.getAttribute('src') !== pic) { img.src = pic; img.classList.remove('in'); void img.offsetWidth; } img.classList.add('in'); }
     box.querySelector('.dname').textContent = d.name || '';
     box.querySelector('.dsub').textContent = d.sub || '';
     box.querySelector('.dline').textContent = d.name && !d.narrate ? `「${t}」` : t;
@@ -42,6 +47,11 @@ export class UI {
     box.querySelector('.dmore').hidden = last;
     if (d.name && !d.narrate && !d.silent) snd('talk', d.name, t); else snd('page');
     box.classList.remove('hidden');
+  }
+  portraitFor(d) {
+    if (d.portrait === false || d.narrate || !d.name) return null;
+    if (typeof d.portrait === 'string') return d.portrait;
+    return this.portraitOf?.(d.name) || portraitByName(d.name);
   }
   advance() {
     if (!this.dialogOpen) return;

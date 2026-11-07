@@ -28,6 +28,7 @@ import { Events } from './events.js';
 import { Realm, foeLevel, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
 import { fmtNum } from './stats.js';
 import { Village, loadVillageData } from './village.js';
+import { portraitById, preloadPortraits } from './portraits.js';
 import { Town } from './town.js';
 import { Farm } from './farm.js';
 import { Alchemy } from './alchemy.js';
@@ -552,6 +553,9 @@ const life = new Life(g); g.life = life;
 // 青竹村 21 位村民（village.js / data/villagers.json）
 const town = new Town(g); g.town = town; // 青竹村街景（townplan.js 的 Lynch 五要素布局）
 const village = new Village(g, g.villageData); g.village = village;
+// 对话立绘：说话人是村民就用他的立绘（被夺了灵根 / 重伤也照样认得出是谁）
+gui.portraitOf = (name) => { const v = village.list.find((v) => v.name === name); return v ? portraitById(v.d.id) : null; };
+preloadPortraits();
 life.on((P) => {
   const cx = Math.floor(P.pos.x / CHUNK), cz = Math.floor(P.pos.z / CHUNK);
   for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
