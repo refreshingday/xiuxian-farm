@@ -9,7 +9,7 @@ import { item, itemName } from './items.js';
 import { near } from './life.js';
 import { btn, el } from './ui.js';
 import { TYPES } from './enemies.js';
-import { levelInfo } from './realm.js';
+import { levelInfo, foeLevel } from './realm.js';
 import { glow, mesh } from './util.js';
 
 const FEST = [
@@ -115,7 +115,7 @@ export class Social {
   nextFoe() {
     const D = this.duel, g = this.g;
     D.round++;
-    const e = g.enemies.spawn('sparring', D.at.x, D.at.z - 3, Math.max(0, Math.floor(g.player.layer / 2) + D.round - 1));
+    const e = g.enemies.spawn('sparring', D.at.x, D.at.z - 3, Math.max(0, Math.round(foeLevel(g.player.layer)) + D.round - 2));
     e.state = 'chase'; e.trial = true; D.foe = e;
     g.toast(`比武第 ${D.round} 场`, 1.4);
   }

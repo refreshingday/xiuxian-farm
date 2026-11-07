@@ -9,6 +9,7 @@ import { RINGS, dangerFor, sectorAt } from './worldmap.js';
 import { SECTOR_MOBS, TYPES } from './enemies.js';
 import { MINE, regionName } from './world.js';
 import { levelInfo } from './realm.js';
+import { foeHpMul, foeDmgMul } from './stats.js';
 import { near } from './life.js';
 import { itemName } from './items.js';
 
@@ -227,7 +228,7 @@ export class Jobs {
       else if (d > 2.4) { const sp = Math.min(7.5, 3 + d * 0.6); n.pos.x += dx / d * sp * dt; n.pos.z += dz / d * sp * dt; move = sp / 6; n.yaw = lerpAngle(n.yaw, Math.atan2(dx, dz), 1 - Math.exp(-8 * dt)); }
       g.world.resolve(n.pos, 0.35);
       let hurt = 0;
-      for (const e of g.enemies.list) if (e.alive && !e.hidden && Math.hypot(e.pos.x - n.pos.x, e.pos.z - n.pos.z) < e.r + 0.7) hurt += e.dmg * 0.5 * dt;
+      for (const e of g.enemies.list) if (e.alive && !e.hidden && Math.hypot(e.pos.x - n.pos.x, e.pos.z - n.pos.z) < e.r + 0.7) hurt += e.dmg * (e.npcK ?? 1) * 0.5 * dt;
       if (hurt) { n.hp -= hurt; n.c.flash = 0.1; if ((n.numT -= dt) <= 0) { n.numT = 0.8; g.fx.num(n.pos, `${n.name}受伤`, 'hurt'); } }
       if (n.hp <= 0) return this.fail(R, `${n.name}被害了`);
       const left = Math.hypot(J.x - n.pos.x, J.z - n.pos.z);
@@ -264,7 +265,7 @@ export class Jobs {
     if (R.stage === 'go') { if (d < 14) { R.stage = 'fight'; R.engaged = true; R.wave = 0; R.next = 1.5; g.toast(`守住${J.name}！一共三波`, 2.2); } return; }
     if (d > 35) { if ((R.away = (R.away || 0) + dt) > 8) return this.fail(R, `你离开太久，${J.name}被妖兽毁了`); } else R.away = 0;
     let hurt = 0;
-    for (const e of this.alive(R)) if (!e.hidden && Math.hypot(e.pos.x - J.x, e.pos.z - J.z) < e.r + 1.2) hurt += e.dmg * 0.6 * dt;
+    for (const e of this.alive(R)) if (!e.hidden && Math.hypot(e.pos.x - J.x, e.pos.z - J.z) < e.r + 1.2) hurt += e.dmg * (e.npcK ?? 1) * 0.6 * dt;
     if (hurt) { N.hp -= hurt; if ((N.numT -= dt) <= 0) { N.numT = 0.8; g.fx.num({ x: J.x, z: J.z }, `阵眼 ${pct(N)}`, 'hurt'); } }
     if (N.hp <= 0) return this.fail(R, `${J.name}被毁了`);
     if (!this.alive(R).length) {
@@ -396,7 +397,7 @@ export class Jobs {
     fx.shockRing(x, z, 2.8, '#bfe8ff'); fx.burst({ x, z }, '#dff4ff', 26, { speed: 6, up: 5, life: 0.5, y: 0.3 });
     g.shake(0.4); g.sfx?.impact?.({ heavy: 1 });
     for (const e of [...g.enemies.list]) if (e.alive && !e.boss && Math.hypot(e.pos.x - x, e.pos.z - z) < 2.4 + e.r) g.enemies.damage(e, e.maxHp * 0.35, x, z, 4);
-    if (Math.hypot(P.pos.x - x, P.pos.z - z) < 2.4 + P.r) P.hurt(14 + lvl * 3, x, z, 8);
+    if (Math.hypot(P.pos.x - x, P.pos.z - z) < 2.4 + P.r) P.hurt((14 + lvl * 3) * foeDmgMul(lvl), x, z, 8);
   }
   // 同伴：委托人（小孩、高人除外）或随便一个村民跟着你，自己找妖兽打
   allyUp(R) {
@@ -422,8 +423,8 @@ export class Jobs {
     else if (d > stop) { const sp = Math.min(8, 2.5 + d * 0.8); v.pos.x += dx / d * sp * dt; v.pos.z += dz / d * sp * dt; move = sp / 6; }
     if (d > 0.1) v.yaw = lerpAngle(v.yaw, Math.atan2(dx, dz), 1 - Math.exp(-8 * dt));
     g.world.resolve(v.pos, v.r);
-    if (tgt && td < tgt.r + 1.4 && A.cd <= 0) { A.cd = 1.2; A.atk = 0.35; g.enemies.damage(tgt, 12 + R.J.lvl * 4, v.pos.x, v.pos.z, 5); }
-    for (const e of g.enemies.list) if (e.alive && !e.hidden && Math.hypot(e.pos.x - v.pos.x, e.pos.z - v.pos.z) < e.r + 0.8) A.hp -= e.dmg * 0.4 * dt;
+    if (tgt && td < tgt.r + 1.4 && A.cd <= 0) { A.cd = 1.2; A.atk = 0.35; g.enemies.damage(tgt, (12 + R.J.lvl * 4) * foeHpMul(R.J.lvl), v.pos.x, v.pos.z, 5); }
+    for (const e of g.enemies.list) if (e.alive && !e.hidden && Math.hypot(e.pos.x - v.pos.x, e.pos.z - v.pos.z) < e.r + 0.8) A.hp -= e.dmg * (e.npcK ?? 1) * 0.4 * dt;
     if (A.hp <= 0) { v.injured = g.day + 3; this.release(R); g.toast(`${v.name}受了重伤，被路过的猎户背回了村里（卧床 3 天）`, 3); return; }
     v.job.anim = { move, attack: A.atk > 0 ? 1 - A.atk / 0.35 : -1, cast: 0 };
   }

@@ -26,6 +26,7 @@ import { Gamepad, PAD } from './gamepad.js';
 import { TUNE } from './combo.js';
 import { Events } from './events.js';
 import { Realm, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
+import { fmtNum } from './stats.js';
 import { Village, loadVillageData } from './village.js';
 import { Town } from './town.js';
 import { Farm } from './farm.js';
@@ -199,17 +200,18 @@ g.xpNeed = xpNeed;
 g.xpScale = () => xpScale(P.layer);
 g.killXpK = (lvl) => killXpK(P.layer, lvl);
 g.atkMul = () => atkMul();
-// 招式伤害按炼气一层设计，随境界放大（每进一个大境界再跳一截）；兵器淬火另算
-const atkMul = () => (1 + P.layer * 0.25 + levelInfo(P.layer).realm * 0.5) * (1 + P.atkBonus);
+// 招式伤害按炼气一层设计，随境界和攻击点放大（stats.js：小境界约 +31%，大境界一倍多）；兵器淬火另算
+const atkMul = () => 1.25 * (P.atkK || 1) * (1 + P.atkBonus);
 
-P.hurt = (dmg, fx0, fz0, knock = 6) => {
+// raw：按最大气血百分比算的伤害（天劫、陨铁坠落），不吃防御倍率，否则高境界就不疼了
+P.hurt = (dmg, fx0, fz0, knock = 6, raw = false) => {
   if (P.iframe > 0 || P.dead || g.cheatOn?.god) return false;
   const M = P.mods;
-  dmg = Math.round(dmg * Math.max(0.3, 1 - (M.dmgTaken || 0) - (g.nightK > 0.5 ? M.nightDef || 0 : 0)));
+  dmg = Math.round(dmg / (raw ? 1 : P.defK || 1) * Math.max(0.3, 1 - (M.dmgTaken || 0) - (g.nightK > 0.5 ? M.nightDef || 0 : 0)));
   P.hp -= dmg; P.iframe = 0.6; P.c.flash = 0.12;
   const dx = P.pos.x - fx0, dz = P.pos.z - fz0, d = Math.hypot(dx, dz) || 1;
   P.kx += dx / d * knock; P.kz += dz / d * knock;
-  fx.num(P.pos, '-' + dmg, 'hurt');
+  fx.num(P.pos, '-' + fmtNum(dmg), 'hurt');
   fx.burst(P.pos, '#ff6a5a', 8, { speed: 4, life: 0.3 });
   sfx.impact({ heavy: 0.6 });
   g.shake(0.35);
@@ -221,9 +223,9 @@ P.hurt = (dmg, fx0, fz0, knock = 6) => {
 // 持续伤害（毒雾、火地）：不给无敌帧、不击退；闪避中踩过去不扣
 P.dot = (dmg) => {
   if (P.dead || P.dashT > 0) return;
-  dmg = Math.max(1, Math.round(dmg * Math.max(0.3, 1 - (P.mods.dmgTaken || 0))));
-  if (P.hp <= dmg) { P.iframe = 0; P.hurt(dmg, P.pos.x, P.pos.z, 0); return; }
-  P.hp -= dmg; P.c.flash = 0.08; fx.num(P.pos, '-' + dmg, 'hurt');
+  dmg = Math.max(1, Math.round(dmg / (P.defK || 1) * Math.max(0.3, 1 - (P.mods.dmgTaken || 0))));
+  if (P.hp <= dmg) { P.iframe = 0; P.hurt(dmg, P.pos.x, P.pos.z, 0, true); return; }
+  P.hp -= dmg; P.c.flash = 0.08; fx.num(P.pos, '-' + fmtNum(dmg), 'hurt');
 };
 function die() {
   P.dead = true; P.hp = 0;
@@ -316,6 +318,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyL') quests.openLog();
   if (e.code === 'KeyM') landmarks.open();
   if (e.code === 'KeyK') realm.openRoots();
+  if (e.code === 'KeyI') realm.openStats();
   if (e.code === 'KeyG') realm.toggleFly();
   if (e.code === 'KeyP') g.toast(weather.toggle() ? '下雨了' : '雨停了');
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
@@ -575,6 +578,7 @@ function openMenu() {
     body.append(btn('🎒 背包', () => { gui.closePanel(); openBag(); }, 'wide'));
     body.append(btn('📜 任务', () => { gui.closePanel(); quests.openLog(); }, 'wide'));
     body.append(btn('🗺 地图', () => { gui.closePanel(); landmarks.open(); }, 'wide'));
+    body.append(btn('📊 属性' + (realm.ptsLeft() > 0 ? `（${realm.ptsLeft()} 点未分配）` : ''), () => { gui.closePanel(); realm.openStats(); }, 'wide'));
     body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
     body.append(btn('👥 联机同游', () => coop.openPanel(), 'wide'));
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
@@ -1119,12 +1123,12 @@ function updateUI() {
   updateRhythm();
   if (!runner.move && !runner.open && comboEl.textContent) showMove(null);
   ui.hpFill.style.width = (P.hp / P.maxHp * 100) + '%';
-  ui.hpText.textContent = `${Math.ceil(P.hp)} / ${P.maxHp}`;
+  ui.hpText.textContent = `${fmtNum(Math.ceil(P.hp))} / ${fmtNum(P.maxHp)}`;
   ui.qiFill.style.width = (P.qi / P.maxQi * 100) + '%';
   ui.qiText.textContent = `${Math.floor(P.qi)} / ${P.maxQi}`;
   const L = levelInfo(P.layer), full = L.top && P.xp >= xpNeed();
   ui.xpFill.style.width = Math.min(100, P.xp / xpNeed() * 100) + '%';
-  ui.realm.textContent = L.name + (full ? '（圆满 · 待渡劫）' : `　修为 ${Math.floor(P.xp)}/${xpNeed()}`);
+  ui.realm.textContent = L.name + (full ? '（圆满 · 待渡劫）' : `　修为 ${Math.floor(P.xp)}/${xpNeed()}`) + (realm.ptsLeft() > 0 ? `　📊 ${realm.ptsLeft()} 点未分配（I）` : '');
   ui.rootTag.textContent = P.roots.map((r) => r.e).join('') + '灵根 · ' + ['凡品', '良品', '上品', '极品'][P.roots[0].grade];
   ui.skFly.classList.toggle('hidden', L.realm < 1); ui.skFly.classList.toggle('on', realm.fly);
   const d = dateOf(g.day);

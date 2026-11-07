@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { DAY_START, DAY_END, SEC_PER_HOUR, dateOf, rollWeather } from './calendar.js';
 import { item, itemName } from './items.js';
 import { glow } from './util.js';
+import { fmtNum } from './stats.js';
 
 // 离点 p 不到 r 米就返回距离，否则 false
 export const near = (P, p, r) => { const d = Math.hypot(P.pos.x - p.x, P.pos.z - p.z); return d < r && d; };
@@ -143,7 +144,7 @@ export class Life {
     g.emit?.('pill', id);
     const M = P.mods || {}, tk = it.base || id;
     const k = it.cat === 'pill' ? 0.7 ** (((this.tox[tk] = (this.tox[tk] || 0) + 1) - 1) * (1 - (M.tox || 0))) * (1 + (M.pillPow || 0)) : 1;
-    if (it.heal) { const v = Math.round(it.heal * k); P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + v, 'heal'); }
+    if (it.heal) { const v = Math.round(it.heal * k * (P.hpK || 1)); /* 回血跟气血倍率一起涨 */ P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + fmtNum(v), 'heal'); }
     if (it.qiHeal) P.qi = Math.min(P.maxQi, P.qi + it.qiHeal * k * P.maxQi / 100);
     if (it.xp) g.addXP(it.xp * k * g.xpScale(), P.pos); // 培元丹随境界水涨船高，免得筑基以后没用
     if (k < 1 && it.cat === 'pill' && this.tox[tk] > 1) g.fx.num({ x: P.pos.x + 0.6, z: P.pos.z }, '丹毒 ' + Math.round(k * 100) + '%', 'hurt');

@@ -7,6 +7,7 @@ import { VILLAGE_R } from './world.js';
 import { ITEMS, itemName } from './items.js';
 import { near } from './life.js';
 import { btn, el } from './ui.js';
+import { STATS, STAT_KEYS, statMul, freePts, capPts, spentPts, cleanAlloc, autoSpread, autoPts, totalPts, fmtNum, isMajor, foeHpMul, SMALL, BIG, SMALL_AUTO, BIG_AUTO } from './stats.js';
 
 const NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 export const REALMS = ['炼气', '筑基', '金丹', '元婴', '化神', '渡劫'];
@@ -43,7 +44,7 @@ export class Realm {
     this.trib = null; this.dark = 0; this.cool = 0; this.fly = false;
     const P = g.player;
     P.roots = P.roots || [{ e: '金', grade: 0 }];
-    P.hpBonus = P.hpBonus || 0; P.karma = P.karma || 0; P.stolen = P.stolen || [];
+    P.hpBonus = P.hpBonus || 0; P.alloc = P.alloc || { atk: 0, hp: 0, def: 0 }; P.karma = P.karma || 0; P.stolen = P.stolen || [];
     for (const e of ['金', '木', '水', '火', '土', '雷', '冰', '风', '暗']) ITEMS['root_' + e].use = () => this.acquireRoot(e);
     ITEMS.pill_purify.use = () => { if (!P.karma) { g.toast('你心中没有戾气', 1.4); return false; } g.inv.take('pill_purify'); this.addKarma(-50); g.toast(`洗去戾气，业力 ${P.karma}`, 2); return true; };
     for (const k of ['pill_break', 'pill_break2', 'pill_break3', 'pill_break4', 'pill_break5']) ITEMS[k].use = () => this.tryBreak(k);
@@ -64,6 +65,41 @@ export class Realm {
   // 生活被动强度：没有这条灵根 0，凡品 0.1 … 极品 0.4
   passive(e) { const r = this.active().find((x) => x.e === e); return r ? 0.1 * (r.grade + 1) : 0; }
   rootText() { return this.g.player.roots.map((r) => `${r.e}·${ROOT_GRADE[r.grade]}${this.active().includes(r) ? '' : '（未激活）'}`).join(' ') + `　修炼 ×${this.mul().toFixed(2)}`; }
+
+  // ---------- 属性点（stats.js）：攻击 / 气血 / 防御，固定一部分 + 玩家自己分配 ----------
+  ptsLeft() { const P = this.g.player; return freePts(P.layer) - spentPts(P.alloc); }
+  remindPts() { const n = this.ptsLeft(); if (n > 0) this.g.after?.(1.5, () => this.ptsLeft() > 0 && this.g.toast(`还有 ${n} 点属性点没分配\n按 I 打开属性面板`, 4)); }
+  addPt(k, n) {
+    const P = this.g.player, cap = capPts(P.layer);
+    n = Math.min(n, this.ptsLeft(), cap - P.alloc[k]);
+    if (n <= 0) return this.g.toast(this.ptsLeft() <= 0 ? '没有属性点了' : `${STATS[k].name}已经到上限（单项最多占总点数 40%）`, 1.8);
+    P.alloc[k] += n; this.recalc(); this.g.ui.refresh();
+  }
+  openStats() {
+    const g = this.g, P = g.player, M = P.mods || {};
+    g.ui.panel('属性', (body) => {
+      const L = P.layer, left = this.ptsLeft(), cap = capPts(L), auto = autoPts(L);
+      body.append(el('div', 'pmoney', `${levelInfo(L).name}　属性点 ${totalPts(L)}（固定 ${auto * 3}，自由 ${freePts(L)}）　<b>未分配 ${left}</b>`));
+      const x = (v) => (v >= 100 ? fmtNum(v) : v.toFixed(2)), val = { atk: `攻击倍率 ×${x(g.atkMul?.() ?? P.atkK)}`, hp: `气血上限 ${fmtNum(P.maxHp)}`, def: `受到伤害 ÷${x(P.defK)}` };
+      for (const k of STAT_KEYS) {
+        const a = P.alloc[k], full = a >= cap;
+        body.append(g.ui.row(STATS[k].icon, `${STATS[k].name}　${val[k]}`,
+          `${STATS[k].desc}　固定 ${auto} + 自由 ${a}${full ? '（已到上限）' : `（上限 ${cap}）`}`,
+          left > 0 && !full ? [btn('+1', () => this.addPt(k, 1)), btn('+7', () => this.addPt(k, 7)), btn('+21', () => this.addPt(k, 21))] : []));
+      }
+      const bs = el('div', 'pbtns');
+      if (left > 0) bs.append(btn('⚖ 剩下的平均分配', () => { P.alloc = autoSpread(P.alloc, P.layer); this.recalc(); g.ui.refresh(); }));
+      if (spentPts(P.alloc)) bs.append(btn('↺ 重新分配', () => { if (confirm('把自由点全部收回来重新分配？')) { P.alloc = { atk: 0, hp: 0, def: 0 }; this.recalc(); g.ui.refresh(); } }));
+      body.append(bs);
+      body.append(el('div', 'pcat', '其他属性（功法、灵根、炼器给的，不能加点）'));
+      const pct = (v) => Math.round(v * 100) + '%';
+      body.append(g.ui.row('💧', `灵力上限 ${P.maxQi}`, '随境界成长，功法另加'));
+      body.append(g.ui.row('💥', `暴击率 ${pct(0.12 + (M.crit || 0))}`, '暴击伤害 ×1.8'));
+      body.append(g.ui.row('🔰', `减伤 ${pct(Math.min(0.7, M.dmgTaken || 0))}`, `功法给的，最多 70%${M.nightDef ? `；夜里再减 ${pct(M.nightDef)}` : ''}`));
+      body.append(g.ui.row('🗡', `兵器加成 +${pct(P.atkBonus || 0)}`, '炼器、剑阶、剑冢、任务'));
+      body.append(el('div', 'pempty', `每升一个小境界 +${SMALL} 点（三项各固定 ${SMALL_AUTO}，自由 ${SMALL - SMALL_AUTO * 3}）；突破大境界 +${BIG} 点（各固定 ${BIG_AUTO}，自由 ${BIG - BIG_AUTO * 3}）。每点让那一项 ×1.028，三项平均分配时小境界每项强约 31%，大境界强一倍多。`));
+    });
+  }
 
   // ---------- 灵根：机缘、提升品级、夺取 / 归还、业力 ----------
   acquireRoot(e) {
@@ -144,10 +180,12 @@ export class Realm {
     g.ui.dialog({ name: v.name, line: '……灵根回来了。我不会原谅你，但……谢谢你还回来。', hint: '好感会随着送礼慢慢回升。' });
   }
 
-  // 按等级重算属性（任务给的护甲等加成另算）
+  // 按等级 + 属性点重算属性（任务、炼甲给的气血加在底子上，跟着倍率一起涨）
   recalc(full) {
     const P = this.g.player, L = P.layer, r = levelInfo(L).realm, M = P.mods || {};
-    const hp = Math.round((100 + (L - 1) * 12 + r * 60 + P.hpBonus + (M.hp || 0)) * (1 + (M.hpPct || 0))), qi = 100 + (L - 1) * 8 + r * 40 + (M.qiMax || 0);
+    const A = P.alloc = cleanAlloc(P.alloc, L);
+    P.atkK = statMul(L, A.atk); P.hpK = statMul(L, A.hp); P.defK = statMul(L, A.def);
+    const hp = Math.round((100 + P.hpBonus + (M.hp || 0)) * P.hpK * (1 + (M.hpPct || 0))), qi = 100 + (L - 1) * 8 + r * 40 + (M.qiMax || 0);
     if (full) { P.hp = hp; P.qi = qi; }
     P.hp = Math.min(P.hp + Math.max(0, hp - P.maxHp), hp); P.qi = Math.min(P.qi + Math.max(0, qi - P.maxQi), qi);
     P.maxHp = hp; P.maxQi = qi;
@@ -166,7 +204,7 @@ export class Realm {
       this.recalc(true);
       fx.burst(P.pos, '#9ef0ff', 50, { speed: 3, up: 6, life: 1.2, grav: -2 });
       fx.shockRing(P.pos.x, P.pos.z, 5, '#9ef0ff', 0.6);
-      g.toast(`突破！${levelInfo(P.layer).name}`, 3);
+      g.toast(`突破！${levelInfo(P.layer).name}\n属性点 +${SMALL - SMALL_AUTO * 3}（按 I 分配）`, 3);
       g.emit?.('layer', P.layer);
     }
   }
@@ -245,7 +283,7 @@ export class Realm {
     for (let i = T.fires.length - 1; i >= 0; i--) {
       const f = T.fires[i]; f.t -= dt;
       if (Math.random() < 0.6) g.fx.mote(f.x + (Math.random() - 0.5) * 3, 0.3, f.z + (Math.random() - 0.5) * 3, '#ff7a2a', { vy: 2, life: 0.6, size: 1.2 });
-      if (Math.hypot(P.pos.x - f.x, P.pos.z - f.z) < 2.2 && P.iframe <= 0) P.hurt(P.maxHp * 0.06 * T.k, f.x, f.z, 2);
+      if (Math.hypot(P.pos.x - f.x, P.pos.z - f.z) < 2.2 && P.iframe <= 0) P.hurt(P.maxHp * 0.06 * T.k, f.x, f.z, 2, true);
       if (f.t <= 0) T.fires.splice(i, 1);
     }
     if (T.t >= 90) this.passTrib();
@@ -257,8 +295,8 @@ export class Realm {
       g.cfx?.bolt(x, z, '#d8c8ff', 18); g.cfx?.flash(x, z, '#c8b8ff', 45, 0.3, 3);
       g.fx.shockRing(x, z, r + 0.4, '#c8a8ff', 0.35); g.fx.burst({ x, z }, '#e8e0ff', 16, { speed: 6, up: 5, life: 0.4, y: 0.3 });
       g.shake(0.5); this.sfx((s) => s.thunderClap());
-      if (Math.hypot(P.pos.x - x, P.pos.z - z) < r + P.r) P.hurt(P.maxHp * k, x, z, 6);
-      for (const e of [...g.enemies.list]) if (Math.hypot(e.pos.x - x, e.pos.z - z) < r + e.r) g.enemies.damage(e, 80, x, z, 8);
+      if (Math.hypot(P.pos.x - x, P.pos.z - z) < r + P.r) P.hurt(P.maxHp * k, x, z, 6, true);
+      for (const e of [...g.enemies.list]) if (Math.hypot(e.pos.x - x, e.pos.z - z) < r + e.r) g.enemies.damage(e, 80 * foeHpMul(e.lvl), x, z, 8);
     });
   }
   passTrib() {
@@ -270,7 +308,7 @@ export class Realm {
     g.fx.shockRing(P.pos.x, P.pos.z, 12, '#ffe7a8', 1);
     g.emit?.('layer', P.layer); g.emit?.('breakthrough', T.target);
     if (!T.home) { g.addStones(10 + T.target * 5, P.pos); g.addItem('yaodan', 3, P.pos); }
-    g.ui.dialog({ narrate: true, lines: ['雷云散去，天光倾泻而下。', `你突破到了「${levelInfo(P.layer).name}」！`], info: '解锁：' + UNLOCK[T.target], hint: T.home ? '' : '野外渡劫，额外得到灵石和妖丹。' });
+    g.ui.dialog({ narrate: true, lines: ['雷云散去，天光倾泻而下。', `你突破到了「${levelInfo(P.layer).name}」！`], info: '解锁：' + UNLOCK[T.target] + `\n属性点 +${(isMajor(P.layer) ? BIG - BIG_AUTO * 3 : SMALL - SMALL_AUTO * 3)}（按 I 分配）`, hint: T.home ? '' : '野外渡劫，额外得到灵石和妖丹。' });
     g.save?.();
   }
   // GDD：失败时修为退回圆满前一点，3 天内不能再渡，破境丹作废
@@ -301,6 +339,6 @@ export class Realm {
     if (this.fly) { P.qi -= dt * 3 * (1 - (P.mods?.flyQi || 0)); if (P.qi <= 0) { P.qi = 0; this.fly = false; g.toast('灵力耗尽，落地', 1.2); } }
     this.updateTrib(dt);
   }
-  save() { const P = this.g.player; return { roots: P.roots, hpBonus: P.hpBonus, cool: this.cool, karma: P.karma, stolen: P.stolen }; }
-  load(s) { const P = this.g.player; P.roots = s.roots; P.hpBonus = s.hpBonus || 0; this.cool = s.cool || 0; P.karma = s.karma || 0; P.stolen = s.stolen || []; this.recalc(false); }
+  save() { const P = this.g.player; return { roots: P.roots, hpBonus: P.hpBonus, cool: this.cool, karma: P.karma, stolen: P.stolen, alloc: P.alloc }; }
+  load(s) { const P = this.g.player; P.roots = s.roots; P.hpBonus = s.hpBonus || 0; this.cool = s.cool || 0; P.karma = s.karma || 0; P.stolen = s.stolen || []; P.alloc = s.alloc || { atk: 0, hp: 0, def: 0 }; this.recalc(false); this.remindPts(); }
 }
