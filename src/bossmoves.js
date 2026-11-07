@@ -14,8 +14,10 @@ const lead = (P, k = 0.3) => ({ x: P.pos.x + P.vel.x * k, z: P.pos.z + P.vel.z *
 function hit(P, dmg, x, z, knock, slow) { if (P.hurt(dmg, x, z, knock) && slow) P.slowT = Math.max(P.slowT || 0, slow); }
 
 // 地面一击：红圈前摇，落下时圈里的挨打。o.zone = 留下一片持续伤害 / 减速的地；o.slow = 打中后减速几秒
+// 联机：o.ghost = 道友那边算的妖王放的（只画、只打自己，不再往外发）
 function strike(en, e, x, z, r, dur, dmg, o = {}) {
   const g = en.game, P = g.player, col = o.color || e.T.c[2];
+  if (!o.ghost) g.mobs?.tele({ k: 'c', x, z, r, dur, dmg, kn: o.knock ?? 8, sl: o.slow || 0, col, sh: o.shake ?? 0.3, n: o.n ?? 14 });
   g.fx.circle(x, z, r, dur, () => {
     if (!e.alive) return;
     g.fx.shockRing(x, z, r * 1.15, col); g.fx.burst({ x, z }, col, o.n ?? 14, { speed: 5, y: 0.2, up: 3 });
@@ -28,6 +30,7 @@ function strike(en, e, x, z, r, dur, dmg, o = {}) {
 // 直线一击：从 (x, z) 朝 yaw 方向一条长 len、宽 w 的预警带
 function beam(en, e, x, z, yaw, len, w, dur, dmg, o = {}) {
   const g = en.game, P = g.player, col = o.color || e.T.c[2], s = Math.sin(yaw), c = Math.cos(yaw);
+  if (!o.ghost) g.mobs?.tele({ k: 'l', x, z, yaw, len, w, dur, dmg, kn: o.knock ?? 9, sl: o.slow || 0, col, sh: o.shake ?? 0.25 });
   g.fx.line(x, z, yaw, len, w, dur, () => {
     if (!e.alive) return;
     for (let d = 0; d < len; d += 1.4) g.fx.burst({ x: x + s * d, z: z + c * d }, col, 2, { speed: 3, up: 3, y: 0.2, life: 0.4 });
@@ -50,10 +53,10 @@ function dashes(en, e, n, o) {
   act(e, 99, o.open ?? 1.2, (dt, mv, dist, toP) => {
     t -= dt;
     e.dashing = ph === 'dash' && !e.hitOnce; // 拼刀判定
-    if (ph === 'aim') { if (t <= 0) { e.chargeDir = toP; g.fx.line(e.pos.x, e.pos.z, toP, o.spd * o.dur + 2, o.w ?? 2.6, o.wind); ph = 'wind'; t = o.wind; } return; }
+    if (ph === 'aim') { if (t <= 0) { e.chargeDir = toP; tele(en, e.pos.x, e.pos.z, toP, o.spd * o.dur + 2, o.w ?? 2.6, o.wind); ph = 'wind'; t = o.wind; } return; }
     mv.face = e.chargeDir;
     if (ph === 'wind') { if (t <= 0) { ph = 'dash'; t = o.dur; e.hitOnce = false; g.shake(0.25); } return; }
-    mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = o.spd;
+    mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = o.spd; e.touchT = g.time + 0.2;
     g.fx.mote(e.pos.x + rnd(-1, 1), 0.3, e.pos.z + rnd(-1, 1), o.color || e.T.c[2], { life: 0.5, size: 1.4 });
     if (o.trail && (trail -= dt) <= 0) { trail = 0.1; en.zone({ x: e.pos.x, z: e.pos.z, r: 1.4, life: o.trail.life ?? 4, dmg: o.trail.dmg ?? 0, slow: o.trail.slow, color: o.trail.color }); }
     if (!e.hitOnce && dist < e.r + P.r + 0.3 && !g.tryClash?.(e)) { e.hitOnce = true; P.hurt(e.dmg * (o.mul ?? 1), e.pos.x, e.pos.z, 12); }
@@ -69,6 +72,21 @@ function leap(en, e, x, z, dur, r, dmg, o = {}) {
     e.pos.x = x0 + (x - x0) * k; e.pos.z = z0 + (z - z0) * k; e.hop = Math.sin(k * Math.PI) * (o.h ?? 2.4);
     if (k >= 1) e.hop = 0;
   };
+}
+
+// 只画一条预警线（伤害靠冲过来撞人）：联机时道友那边也画
+export function tele(en, x, z, yaw, len, w, dur) {
+  en.game.fx.line(x, z, yaw, len, w, dur);
+  en.game.mobs?.tele({ k: 'l', x, z, yaw, len, w, dur, dmg: 0 });
+}
+// 道友那边的妖王出招：这边照样画预警，落下时打得到自己
+export function ghostTele(en, d) {
+  if (!en.boss?.alive) return; // 这边没看到那只妖王（各打各的）
+  const g = en.game, e = { get alive() { return !!en.boss?.alive; }, T: { c: [0, 0, d.col || '#ff7a2a'] } };
+  const o = { ghost: true, color: d.col, knock: d.kn, slow: d.sl, shake: d.sh, n: d.n };
+  if (d.k === 'c') { if (d.dmg > 0) strike(en, e, d.x, d.z, d.r, d.dur, d.dmg, o); else g.fx.circle(d.x, d.z, d.r, d.dur); }
+  else if (d.dmg > 0) beam(en, e, d.x, d.z, d.yaw, d.len, d.w, d.dur, d.dmg, o);
+  else g.fx.line(d.x, d.z, d.yaw, d.len, d.w, d.dur);
 }
 
 const FIRE = '#ff7a2a', ICE = '#9ee8ff', POISON = '#7aff4a', WATER = '#5ab8ff', DARK = '#b07aff';
@@ -154,7 +172,7 @@ export const SIG = {
   whirl(en, e, toP, p2) {
     const g = en.game, P = g.player; let cd = 0, shot = 0;
     act(e, p2 ? 3.6 : 3, 2.2, (dt, mv, dist, toP) => {
-      mv.mx = Math.sin(toP); mv.mz = Math.cos(toP); mv.spd = p2 ? 5 : 4.2; mv.face = e.yaw + 1.5; // 一直往前转
+      mv.mx = Math.sin(toP); mv.mz = Math.cos(toP); mv.spd = p2 ? 5 : 4.2; mv.face = e.yaw + 1.5; e.touchT = g.time + 0.2; // 一直往前转
       if (Math.random() < 0.6) g.fx.mote(e.pos.x + rnd(-2.5, 2.5), 0.8, e.pos.z + rnd(-2.5, 2.5), e.T.c[2], { life: 0.3, size: 1.2 });
       if ((cd -= dt) <= 0 && dist < e.r + P.r + 1.2) { cd = 0.5; P.hurt(e.dmg * 0.6, e.pos.x, e.pos.z, 14); }
       if (e.type === 'swordpuppet' && (shot -= dt) <= 0) { shot = 0.35; en.shoot(e.pos.x, e.pos.z, e.yaw, 9, e.dmg * 0.45, e.T.c[2], 1.2); }

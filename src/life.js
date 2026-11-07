@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { DAY_START, DAY_END, SEC_PER_HOUR, dateOf, rollWeather } from './calendar.js';
 import { item, itemName } from './items.js';
 import { glow } from './util.js';
+import { fmtNum } from './stats.js';
 
 // 离点 p 不到 r 米就返回距离，否则 false
 export const near = (P, p, r) => { const d = Math.hypot(P.pos.x - p.x, P.pos.z - p.z); return d < r && d; };
@@ -83,6 +84,13 @@ export class Life {
   }
   newDay() {
     const g = this.g;
+    // 在道友的房间里过夜：只回满状态，自己存档里的日子、农田、委托、村子都不往前走
+    if (g.coop?.visiting) {
+      g.hours = DAY_START; this.tox = {};
+      for (const e of [...g.enemies.list]) if (!e.boss) g.enemies.remove(e);
+      const d = dateOf(g.day);
+      return [...this.dayHooks.filter((f) => f.visit).map((f) => f(d)), '（在道友的世界里过夜，自己的日子不往前走）'].filter(Boolean);
+    }
     g.day++; g.hours = DAY_START; g.world.day = g.day;
     g.weatherToday = rollWeather(g.day); g.weather.setDay(g.weatherToday === 'rain');
     g.inv.newDay(); this.tox = {};
@@ -136,7 +144,7 @@ export class Life {
     g.emit?.('pill', id);
     const M = P.mods || {}, tk = it.base || id;
     const k = it.cat === 'pill' ? 0.7 ** (((this.tox[tk] = (this.tox[tk] || 0) + 1) - 1) * (1 - (M.tox || 0))) * (1 + (M.pillPow || 0)) : 1;
-    if (it.heal) { const v = Math.round(it.heal * k); P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + v, 'heal'); }
+    if (it.heal) { const v = Math.round(it.heal * k * (P.hpK || 1)); /* 回血跟气血倍率一起涨 */ P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + fmtNum(v), 'heal'); }
     if (it.qiHeal) P.qi = Math.min(P.maxQi, P.qi + it.qiHeal * k * P.maxQi / 100);
     if (it.xp) g.addXP(it.xp * k * g.xpScale(), P.pos); // 培元丹随境界水涨船高，免得筑基以后没用
     if (k < 1 && it.cat === 'pill' && this.tox[tk] > 1) g.fx.num({ x: P.pos.x + 0.6, z: P.pos.z }, '丹毒 ' + Math.round(k * 100) + '%', 'hurt');

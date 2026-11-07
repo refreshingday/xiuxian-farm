@@ -144,22 +144,45 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { const 
 /** kind: 'step' 涉水脚步 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
 export function waterSound(kind, vol = 1) {
   const a = AC; if (!a || a.state !== 'running') return;
-  // 全部用低通噪声（Q 很低，不共振）——不用正弦音高、不用高频，免得听起来像敲金属
-  const P = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], enter: [0.38, 900, 260, 0.4], plunge: [0.7, 800, 200, 0.55], exit: [0.3, 750, 300, 0.28], land: [0.2, 260, 90, 0.7] }[kind];
-  const [len, f0, f1, g] = P, t = a.currentTime, r = 0.88 + Math.random() * 0.24;
-  const layer = (len2, fa, fb, gain, attack = 0.02, off = 0) => {
-    const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = r;
+  waterVoice(a, master, noiseBuf, kind, vol, a.currentTime);
+}
+// 真正出声的部分（也给离线渲染试听用）。全部是低通噪声（Q 0.25，不共振、没有音高）。
+// 入水 / 出水（v2026.11.04.20 重做）：原来是快起音 + 320→110Hz 的低频"噗"，听起来像撞到硬东西；
+// 现在是：慢一点起音的"哗"（截止频率高、往下扫，响度带随机起伏 = 水的翻涌）+ 截止频率乱跳的"咕噜"晃水声 + 几滴回落的水珠
+export function waterVoice(a, out, nb, kind, vol, t) {
+  const R = Math.random, r = 0.9 + R() * 0.2;
+  // fa→fb：截止频率扫动；jit：响度随机起伏（0 = 平滑）；wob：截止频率乱跳（0 = 不跳）
+  const layer = (len, fa, fb, gain, attack, off = 0, jit = 0, wob = 0) => {
+    const src = a.createBufferSource(); src.buffer = nb; src.playbackRate.value = r;
     const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.25;
-    lp.frequency.setValueAtTime(fa * r, t + off); lp.frequency.exponentialRampToValueAtTime(fb, t + off + len2);
-    const env = a.createGain(); env.gain.setValueAtTime(0, t + off); env.gain.linearRampToValueAtTime(gain * vol, t + off + attack); env.gain.exponentialRampToValueAtTime(0.001, t + off + len2);
-    src.connect(lp).connect(env).connect(master);
-    src.start(t + off, Math.random() * 0.5, len2 + 0.05);
+    const t0 = t + off, f = lp.frequency, gn = a.createGain(), g = gn.gain;
+    f.setValueAtTime(fa * r, t0);
+    if (wob) for (let i = 1, n = Math.ceil(len / 0.045); i <= n; i++) f.linearRampToValueAtTime(Math.max(150, (fa + (fb - fa) * i / n) * (1 - wob + R() * wob * 2)), t0 + len * i / n);
+    else f.exponentialRampToValueAtTime(fb, t0 + len);
+    g.setValueAtTime(0, t0); g.linearRampToValueAtTime(gain * vol, t0 + attack);
+    if (jit) for (let i = 1, n = Math.ceil((len - attack) / 0.035); i < n; i++) {
+      const u = i / n; g.linearRampToValueAtTime(gain * vol * Math.pow(1 - u, 2.2) * (1 - jit + R() * jit), t0 + attack + (len - attack) * u);
+    }
+    g.exponentialRampToValueAtTime(0.0005, t0 + len);
+    src.connect(lp).connect(gn).connect(out);
+    src.start(t0, R() * 0.5, len + 0.05);
   };
-  layer(len, f0, f1, g);
-  if (kind === 'enter' || kind === 'plunge') { // 水花入水：再叠一层更低更慢的"噗"，和几声小气泡（也是低通噪声）
-    layer(len * 1.3, 320, 110, g * 0.9, 0.05);
-    const n = kind === 'plunge' ? 4 : 2;
-    for (let k = 0; k < n; k++) layer(0.07, 420 + Math.random() * 150, 200, g * 0.22, 0.01, 0.1 + k * 0.07 + Math.random() * 0.05);
+  const drips = (n, from, span, gain) => { for (let k = 0; k < n; k++) layer(0.05 + R() * 0.05, 2200 + R() * 1200, 900, gain * (0.5 + R() * 0.5), 0.004, from + R() * span); };
+  if (kind === 'enter') { // 走进水里：轻的"唰"，带一点水珠
+    layer(0.42, 2600, 700, 0.3, 0.05, 0, 0.5);
+    layer(0.5, 1000, 500, 0.12, 0.08, 0.05, 0.4, 0.45);
+    drips(3, 0.15, 0.4, 0.05);
+  } else if (kind === 'plunge') { // 下到深水：大一点的"哗啦"，接晃水声和回落的水花
+    layer(0.65, 3400, 650, 0.32, 0.06, 0, 0.55);
+    layer(0.9, 1300, 450, 0.16, 0.12, 0.08, 0.5, 0.5);
+    drips(7, 0.25, 0.75, 0.06);
+  } else if (kind === 'exit') { // 从水里出来：身上的水往下淌，"哗——"慢起慢收，后面滴答
+    layer(0.6, 2000, 600, 0.22, 0.14, 0, 0.5, 0.25);
+    layer(0.5, 1100, 500, 0.1, 0.1, 0.1, 0.45, 0.5);
+    drips(6, 0.3, 0.9, 0.05);
+  } else {
+    const [len, f0, f1, gn] = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], land: [0.2, 260, 90, 0.7] }[kind];
+    layer(len, f0, f1, gn, 0.02);
   }
 }
 

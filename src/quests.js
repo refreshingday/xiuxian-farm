@@ -22,7 +22,7 @@ export class Quests {
     this.active = [];  // { id, def, prog, from: story | personal | board, exp }
     this.done = new Set(); this.flags = new Set();
     this.board = [];   // 委托板上还没接的：{ id, def, exp }
-    this.seq = 0; this.t = 0;
+    this.seq = 0; this.t = 0; this.sel = null;
     const bump = (type, test) => {
       for (const q of this.active) q.def.goals.forEach((go, i) => { if (go.type === type && test(go)) q.prog[i] = (q.prog[i] || 0) + 1; });
       this.dirty = true;
@@ -46,11 +46,11 @@ export class Quests {
   // ---------- 进度 ----------
   cur(q, i) {
     const go = q.def.goals[i], g = this.g;
-    if (go.type === 'have') return Math.min(go.n, g.inv.count(go.item));
-    if (go.type === 'layer') return Math.min(go.n, g.player.layer);
-    return Math.min(go.n, q.prog[i] || 0);
+    if (go.type === 'have') return Math.min(go.n ?? 1, g.inv.count(go.item));
+    if (go.type === 'layer') return Math.min(go.n ?? 1, g.player.layer);
+    return Math.min(go.n ?? 1, q.prog[i] || 0);
   }
-  complete(q) { return q.def.goals.every((go, i) => this.cur(q, i) >= go.n); }
+  complete(q) { return q.def.goals.every((go, i) => this.cur(q, i) >= (go.n ?? 1)); }
   goalText(go) {
     if (go.text) return go.text;
     return {
@@ -183,11 +183,12 @@ export class Quests {
       if (!this.board.length) body.append(el('div', 'pempty', '今天的委托都被接走了，明天再来看看。'));
       for (const b of this.board) {
         body.append(g.ui.row('📄', `${b.def.title} <i>${b.exp - g.day + 1} 天内</i>`, `${b.def.desc}　奖励 ${this.describe(b.def.reward)}`,
-          [btn('接下', () => { this.board.splice(this.board.indexOf(b), 1); this.accept(b.id, 'board', b.def, b.exp); g.ui.refresh(); })]));
+          [...(this.previewTargets(b.def).length ? [btn('🗺 看地方', () => { g.ui.closePanel(); g.bigmap.open({ preview: this.previewTargets(b.def) }); })] : []),
+            btn('接下', () => { this.board.splice(this.board.indexOf(b), 1); this.accept(b.id, 'board', b.def, b.exp); g.ui.refresh(); })]));
       }
     });
   }
-  count(q, i) { const go = q.def.goals[i]; return go.type === 'job' ? '' : ` ${this.cur(q, i)}/${go.n}`; }
+  count(q, i) { const go = q.def.goals[i]; return go.type === 'job' || go.type === 'reach' || go.n == null ? '' : ` ${this.cur(q, i)}/${go.n ?? 1}`; }
   progText(q) { return q.def.goals.map((go, i) => this.goalText(go) + this.count(q, i)).join('，'); }
   openLog() {
     const g = this.g;
@@ -195,7 +196,10 @@ export class Quests {
       if (!this.active.length) body.append(el('div', 'pempty', '没有进行中的任务。村民头上有 ❗ 的可以接委托，委托板每天也会有新活。'));
       for (const q of this.active) {
         const tag = { story: '主线', personal: '委托', board: '委托板', sect: '宗门' }[q.from];
-        body.append(g.ui.row(this.complete(q) ? '✅' : '📜', `${q.def.title} <i>${tag}</i>`, `${q.def.desc}<br>${this.progText(q)}<br>奖励：${this.describe(q.def.reward)}`));
+        const has = this.targets().some((t) => t.qid === q.id);
+        body.append(g.ui.row(this.complete(q) ? '✅' : '📜', `${q.def.title} <i>${tag}${this.sel === q.id ? ' · 追踪中' : ''}</i>`, `${q.def.desc}<br>${this.progText(q)}<br>奖励：${this.describe(q.def.reward)}`,
+          [btn(has ? '🗺 地图' : '无固定地点', () => { if (has) { g.ui.closePanel(); g.bigmap.open({ quest: q.id }); } }, has ? '' : 'off'),
+            btn(this.sel === q.id ? '取消追踪' : '追踪', () => { this.track(q.id); g.ui.refresh(); })]));
       }
     });
   }
@@ -225,16 +229,30 @@ export class Quests {
         if (story) continue;
         const v = q.from === 'personal' ? g.village.byId[q.def.giver] : null;
         const p = q.from === 'board' ? g.world.board : v && !v.away ? v.pos : null;
-        if (p) out.push({ x: p.x, z: p.z, ic: '❓', story, title });
+        if (p) out.push({ x: p.x, z: p.z, ic: '❓', story, title, qid: q.id, back: true });
         continue;
       }
       q.def.goals.forEach((go, i) => {
-        if (this.cur(q, i) >= go.n) return;
+        if (this.cur(q, i) >= (go.n ?? 1)) return;
         let p = go.x != null ? go : null;
         if (!p && go.type === 'talk') { const v = g.village.byId[go.who]; if (v && !v.away) p = v.pos; }
         if (!p && go.type === 'kill') p = g.enemies.lairs.find((l) => l.type === go.target);
-        if (p) out.push({ x: p.x, z: p.z, ic: '📍', story, title });
+        if (p) out.push({ x: p.x, z: p.z, ic: '📍', story, title, qid: q.id, goal: this.goalText(go) });
       });
+    }
+    return out;
+  }
+  // 追踪：选中的任务在地图上高亮、屏幕边缘箭头也指向它（再点一次取消）
+  track(id) { this.sel = this.sel === id ? null : id; this.dirty = true; }
+  selected() { return this.sel && this.active.some((q) => q.id === this.sel) ? this.sel : null; }
+  // 还没接的委托（委托板 / 对话里）能指到哪：有固定地点的才有（reach 坐标、妖王巢穴、要找的村民）
+  previewTargets(def) {
+    const g = this.g, out = [];
+    for (const go of def.goals || []) {
+      let p = go.x != null ? go : null;
+      if (!p && go.type === 'talk') { const v = g.village.byId[go.who]; if (v) p = v.pos; }
+      if (!p && go.type === 'kill') p = g.enemies.lairs.find((l) => l.type === go.target);
+      if (p) out.push({ x: p.x, z: p.z, ic: '📍', title: def.title, goal: this.goalText(go) });
     }
     return out;
   }
@@ -264,11 +282,11 @@ export class Quests {
   }
 
   save() {
-    return { active: this.active.map((q) => ({ id: q.id, prog: q.prog, from: q.from, exp: q.exp, def: q.from === 'board' || q.from === 'sect' ? q.def : undefined })), done: [...this.done], flags: [...this.flags], board: this.board, seq: this.seq };
+    return { active: this.active.map((q) => ({ id: q.id, prog: q.prog, from: q.from, exp: q.exp, def: q.from === 'board' || q.from === 'sect' ? q.def : undefined })), done: [...this.done], flags: [...this.flags], board: this.board, seq: this.seq, sel: this.sel };
   }
   load(s) {
     this.active = s.active.map((q) => ({ ...q, def: q.def || this.defs[q.id] })).filter((q) => q.def);
-    this.done = new Set(s.done); this.flags = new Set(s.flags); this.board = s.board || []; this.seq = s.seq || 0;
+    this.done = new Set(s.done); this.flags = new Set(s.flags); this.board = s.board || []; this.seq = s.seq || 0; this.sel = s.sel || null;
     this.dirty = true;
   }
 }
