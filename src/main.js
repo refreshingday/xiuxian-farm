@@ -793,7 +793,7 @@ function fogCullBegin() {
 function fogCullEnd() { for (const o of fogCull.hidden) { o.visible = true; o.matrixWorldAutoUpdate = true; } }
 let mirrorScan = 0;
 function mirrorPass() {
-  const ok = !g.title && !P.dead && P.c.root.visible;
+  const ok = !g.title && !P.dead;
   const near = ok && weatherU.ice.value < 0.5 && Math.hypot(P.pos.x - POND.x, P.pos.z - POND.z) < POND.r + 12;
   // 不在池塘边、地上有积水（雨后）：镜面放在脚下地面高度，照地上的水洼（同高的水洼才有人影，见 world.js GROUND_WET）
   // 水洼不再跟池塘二选一（以前离池塘 16 米内水洼倒影会突然没了）：同一面镜子，池塘边镜面在水面高度 0.03，地面水洼按和镜面的高差决定能不能用（world.js uPudY）
