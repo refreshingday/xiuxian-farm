@@ -98,7 +98,7 @@ export function makeLabWater(area) {
           float wave = fract(d * 5.0 + uTime * 0.45 + nb * 0.35);
           float rings = smoothstep(0.1, 0.0, abs(wave - 0.5)) * (1.0 - smoothstep(0.08, 0.38, d));
           c = mix(c, cFoam, max(foam, rings * 0.7));
-          a = mix(0.42, 0.78, smoothstep(0.0, 0.5, d));
+          a = mix(0.6, 0.88, smoothstep(0.0, 0.5, d));
           // 倒影：云 + 角色，随水波扭曲；溪流里沿流向拉长顺流滚动。岸边渐隐
           {
             vec3 rp = ripples(p) * uRain;
@@ -122,7 +122,7 @@ export function makeLabWater(area) {
               c = mix(c, rc.rgb * 0.85, rc.a * inner * (0.4 + 0.4 * fr));
             }
             c += rp.z * 0.18 * inner;
-            a = mix(a, 0.86, inner * fr * 0.5);
+            a = mix(a, 0.92, inner * fr * 0.5);
             // 夜里：暖色灯笼的光晕 + 水面倒影的碎光，加一点冷色月光闪点（uLight 之后还会乘一次，这里先除掉）
             float nk = clamp((1.0 - uLight) / 0.72, 0.0, 1.0);
             if (nk > 0.01) {
@@ -136,7 +136,7 @@ export function makeLabWater(area) {
               vec3 Lm = normalize(vec3(0.35, 0.55, -0.6));
               add += vec3(0.55, 0.7, 1.0) * pow(max(dot(R, Lm), 0.0), 120.0) * 0.8 * inner;
               c += add * nk * 0.5 / max(uLight, 0.28);
-              a = max(a, min(0.9, 0.42 + dot(add, vec3(0.33)) * nk));
+              a = max(a, min(0.92, 0.6 + dot(add, vec3(0.33)) * nk));
             }
           }
         } else {
