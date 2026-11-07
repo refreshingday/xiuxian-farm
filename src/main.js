@@ -41,7 +41,7 @@ import { UI, btn, el } from './ui.js';
 import { Cheat, startWithQuest } from './cheat.js';
 import { siteOf } from './sectsites.js';
 import { Life, near } from './life.js';
-import { register, hasSave, saveInfo, writeSave, readSave, clearSave } from './save.js';
+import { register, hasSave, saveInfo, writeSave, readSave, clearSave, lockSave, saveLocked } from './save.js';
 
 // ---------- 渲染 ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -545,7 +545,7 @@ function openMenu() {
     body.append(btn('📜 任务', () => { gui.closePanel(); quests.openLog(); }, 'wide'));
     body.append(btn('🗺 地图', () => { gui.closePanel(); landmarks.open(); }, 'wide'));
     body.append(btn('🌱 灵根', () => { gui.closePanel(); realm.openRoots(); }, 'wide'));
-    body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast('已存档'); }, 'wide'));
+    body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast(saveLocked() ? '试炼模式：不存档，真存档没动' : '已存档'); }, 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
     body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
     body.append(btn('❓ 操作说明', () => { gui.closePanel(); document.getElementById('help').classList.remove('hidden'); }, 'wide'));
@@ -1000,7 +1000,9 @@ function startPlay() {
   const box = document.getElementById('titleBtns'), info = saveInfo();
   if (info) box.append(btn(`继续 · ${info.text}`, () => { readSave(); startPlay(); }, 'wide'));
   box.append(btn(info ? '新的开始（覆盖存档）' : '开始问道', () => { if (info) clearSave(); newGame(); startPlay(); }, 'wide'));
-  if (new URLSearchParams(location.search).has('skipTitle')) { if (info) readSave(); else newGame(); startPlay(); }
+  box.append(btn('⚡ 渡劫试炼（不存档，不动现有存档）', () => { lockSave(); newGame(); startPlay(); g.toast('试炼模式：全程不存档。用左下「🛠 作弊」选天劫', 4); }, 'wide'));
+  if (new URLSearchParams(location.search).has('trial')) { lockSave(); newGame(); startPlay(); }
+  else if (new URLSearchParams(location.search).has('skipTitle')) { if (info) readSave(); else newGame(); startPlay(); }
 }
 requestAnimationFrame(frame);
 // 调试入口

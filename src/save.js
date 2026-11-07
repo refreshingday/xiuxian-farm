@@ -8,7 +8,13 @@ export function register(key, save, load) { parts.push({ key, save, load }); }
 export function hasSave() { try { return !!localStorage.getItem(KEY); } catch { return false; } }
 export function saveInfo() { try { return JSON.parse(localStorage.getItem(KEY))?.meta ?? null; } catch { return null; } }
 
+// 试炼模式（作弊面板）：上锁后任何路径都写不进存档，真存档原样保留
+let locked = false;
+export function lockSave() { locked = true; }
+export function saveLocked() { return locked; }
+
 export function writeSave(meta) {
+  if (locked) return false;
   const data = { v: 1, meta: { ...meta, at: Date.now() } };
   for (const p of parts) data[p.key] = p.save();
   try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch { return false; }
