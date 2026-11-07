@@ -3,6 +3,7 @@
 //   滚轮或 ＋ － 缩放，按住拖动看别处（◎ 回到自己，10 秒不动也会自己回来），点一下开舆图（bigmap.js），N 键切 30 / 60 / 120 / 240 米。
 //   上面叠地标、村民、近处妖兽、任务目的地；选中（追踪）的任务高亮，其余的变淡。
 // 任务指针：目的地在屏幕外就在屏幕边缘出一个箭头 + 距离。追踪中的任务优先，其次主线，否则指最近的。
+// 殒身之处另有一个红箭头（life.grave），走到跟前或天亮消失。
 import * as THREE from 'three';
 import { screenOf } from './hpbar.js';
 import { TileMap, project, unproject } from './maptiles.js';
@@ -17,6 +18,7 @@ export class Minimap {
     this.g = g;
     this.wrap = $('miniWrap'); this.cv = $('mini'); this.ctx = this.cv.getContext('2d');
     this.ptr = $('qptr'); this.ptrI = this.ptr.querySelector('i'); this.ptrB = this.ptr.querySelector('b');
+    this.dptr = $('dptr'); this.dptrI = this.dptr.querySelector('i'); this.dptrB = this.dptr.querySelector('b'); this.dmark = $('dmark');
     this.tiles = g.tiles = new TileMap(g.world);
     this.size = 0; this.fx = 0; this.fz = -1;
     this.range = 60; this.pan = { x: 0, z: 0 }; this.panT = 0; this.rot = 0; this.view = null;
@@ -83,6 +85,7 @@ export class Minimap {
       this.draw(P, fx, fz, S, dpr);
     }
     this.pointer(P, fx, fz);
+    this.gravePtr(P, fx, fz);
   }
 
   draw(P, fx, fz, S, dpr) {
@@ -104,6 +107,13 @@ export class Minimap {
       c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = 2; if (isMain) c.scale(1.25 * pulse, 1.25 * pulse);
       c.beginPath(); c.moveTo(5, 0); c.lineTo(-4, 4.5); c.lineTo(-4, -4.5); c.closePath(); c.stroke(); c.fill(); c.restore(); c.globalAlpha = 1;
     }
+    // 殒身之处在圈外：红箭头贴圆边
+    if (r.grave) {
+      const a = Math.atan2(r.grave.y - R, r.grave.x - R), m = R - 8;
+      c.save(); c.translate(R + Math.cos(a) * m, R + Math.sin(a) * m); c.rotate(a);
+      c.fillStyle = '#ff4a4a'; c.strokeStyle = '#000'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(5, 0); c.lineTo(-4, 4.5); c.lineTo(-4, -4.5); c.closePath(); c.stroke(); c.fill(); c.restore();
+    }
     // 北
     { const [nx, ny] = at(v.cx, v.cz - 100000), a = Math.atan2(ny - R, nx - R); r.txt('北', R + Math.cos(a) * (R - 9), R + Math.sin(a) * (R - 9), 'bold 10px "STKaiti","KaiTi",serif', 'rgba(255,255,255,.9)'); }
     c.restore();
@@ -112,14 +122,33 @@ export class Minimap {
     this.tiles.pump(7);
   }
 
+  // 殒身之处：不在屏幕里就在屏幕边缘出红箭头 + 距离；在屏幕里就在那儿立一个 ☠
+  gravePtr(P, fx, fz) {
+    const g = this.g, gv = g.ui.blocking || P.dead ? null : g.life?.grave, mk = this.dmark;
+    if (!gv) { this.dptr.hidden = true; mk.hidden = true; return; }
+    const on = this.edge(this.dptr, this.dptrI, P, fx, fz, gv);
+    mk.hidden = !on;
+    if (on) {
+      const [sx, sy] = screenOf(g.camera, gv.x, 1.6 + Math.sin(g.time * 3) * 0.12, gv.z);
+      mk.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px) translate(-50%, -100%)`;
+    }
+    this.dptrB.textContent = '殒身处 ' + Math.round(Math.hypot(gv.x - P.pos.x, gv.z - P.pos.z)) + ' 米';
+  }
   // 屏幕边缘箭头：目的地不在屏幕里才出现（在屏幕里有头顶的 📍 / ❗ / ❓）
   pointer(P, fx, fz) {
     const g = this.g, ptr = this.ptr, t = g.ui.blocking ? null : this.primary(P);
     if (!t || t.d < 5) { ptr.hidden = true; return; }
-    const cam = g.camera, mob = document.body.classList.contains('mobile');
+    this.edge(ptr, this.ptrI, P, fx, fz, t);
+    ptr.classList.toggle('ret', t.ic === '❓');
+    this.ptrB.textContent = Math.round(t.d) + ' 米';
+    ptr.title = t.title;
+  }
+  // 把箭头 ptr 摆到屏幕边上指向 t；t 本身就在屏幕里时藏起箭头、返回 true
+  edge(ptr, ptrI, P, fx, fz, t) {
+    const g = this.g, cam = g.camera, mob = document.body.classList.contains('mobile');
     const W = innerWidth, H = innerHeight, ml = 50, mr = mob ? 50 : 250, mt = mob ? 70 : 190, mb = mob ? 100 : 150;
     const [sx, sy, front] = screenOf(cam, t.x, 1.5, t.z);
-    if (front && sx > ml && sx < W - mr && sy > mt && sy < H - mb) { ptr.hidden = true; return; }
+    if (front && sx > ml && sx < W - mr && sy > mt && sy < H - mb) { ptr.hidden = true; return true; }
     const [ox, oy] = screenOf(cam, P.pos.x, 1, P.pos.z);
     let vx = sx - ox, vy = sy - oy;
     if (!front) { vx = -vx; vy = -vy; }
@@ -128,9 +157,7 @@ export class Minimap {
     const s = Math.min(tx, ty);
     ptr.hidden = false;
     ptr.style.transform = `translate(${Math.round(ox + vx * s)}px, ${Math.round(oy + vy * s)}px) translate(-50%, -50%)`;
-    ptr.classList.toggle('ret', t.ic === '❓');
-    this.ptrI.style.transform = `rotate(${Math.atan2(vy, vx)}rad)`;
-    this.ptrB.textContent = Math.round(t.d) + ' 米';
-    ptr.title = t.title;
+    ptrI.style.transform = `rotate(${Math.atan2(vy, vx)}rad)`;
+    return false;
   }
 }

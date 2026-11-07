@@ -112,6 +112,12 @@
   #qptr i { font-style: normal; font-size: 20px; line-height: 1; }
   #qptr b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; font-size: 12px; font-weight: normal; white-space: nowrap; color: #fff; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
   #qptr.ret { border-color: #7dffb0; color: #7dffb0; }
+  #dptr { position: fixed; left: 0; top: 0; z-index: 3; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(30, 6, 6, .78); border: 2px solid #ff4a4a; color: #ff4a4a; pointer-events: none; }
+  #dptr[hidden], #dmark[hidden] { display: none; }
+  #dptr i { font-style: normal; font-size: 18px; line-height: 1; }
+  #dptr b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; font-size: 12px; font-weight: normal; white-space: nowrap; color: #ffb0a8; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+  #dmark { position: fixed; left: 0; top: 0; z-index: 2; pointer-events: none; font-size: 26px; color: #ff6a5a; text-shadow: 0 0 8px #000; text-align: center; line-height: 1; }
+  #dmark span { display: block; font-size: 11px; color: #ffb0a8; margin-top: 2px; }
   @keyframes qptr { 50% { box-shadow: 0 0 14px currentColor; } }
   /* 连招节奏条（设置里开）：绿 = 快，黄 = 慢，灰 = 断 */
   #rhythm { position: fixed; left: 50%; bottom: 176px; transform: translateX(-50%); width: 220px; height: 8px; border-radius: 4px; background: rgba(138,143,150,.5); overflow: hidden; pointer-events: none; transition: opacity .2s; }
@@ -163,7 +169,9 @@
   #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(255, 30, 20, .7); opacity: 0; }
   #hurt.on { animation: hurt .45s ease-out; }
   @keyframes hurt { from { opacity: 1; } to { opacity: 0; } }
-  #dead { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(40, 0, 0, .55); font-family: "STKaiti", "KaiTi", serif; font-size: 34px; letter-spacing: 6px; }
+  #dead { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(40, 0, 0, .55); font-family: "STKaiti", "KaiTi", serif; font-size: 34px; letter-spacing: 6px; flex-direction: column; text-align: center; }
+  #dead .why { margin-top: 18px; font-family: sans-serif; font-size: 17px; letter-spacing: 1px; line-height: 1.8; color: #f3d9d4; }
+  #dead .why b { color: #ffe7a8; } #dead .why b.d { color: #ff6a5a; font-size: 20px; }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0d1224; font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; }
   #dmg { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
   .dn { position: absolute; left: 0; top: 0; font-weight: 700; font-size: 18px; color: #fff; text-shadow: 0 1px 0 #000, 0 0 6px rgba(0,0,0,.8); white-space: nowrap; }
@@ -266,10 +274,11 @@
 
 <div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
 <div id="money" class="panel"></div>
-<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="statBtn">📊<span> 属性</span><i class="ptsDot">!</i></button><button id="mpBtn">👥<span> 联机</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
+<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="statBtn">📊<span> 属性</span><i class="ptsDot">!</i></button><button id="mpBtn">👥<span> 联机</span></button><button id="soundBtn">🔊<span> 声音</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
 <div id="qtrack" hidden></div><div id="markLayer"></div>
 <div id="miniWrap"><canvas id="mini"></canvas><div id="miniB"><button id="miniC" title="回到自己" hidden>◎</button><button id="miniIn" title="放大（滚轮）">＋</button><button id="miniOut" title="缩小（滚轮）">－</button></div></div>
 <div id="qptr" hidden><i>➤</i><b></b></div>
+<div id="dptr" hidden><i>➤</i><b></b></div><div id="dmark" hidden>☠<span>殒身处</span></div>
 <div id="hotbar"></div><div id="hotName"></div>
 <div id="hpLayer"></div>
 

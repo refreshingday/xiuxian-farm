@@ -217,6 +217,7 @@ P.hurt = (dmg, fx0, fz0, knock = 6, raw = false) => {
   if (P.iframe > 0 || P.dead || g.cheatOn?.god) return false;
   const M = P.mods;
   dmg = Math.round(dmg / (raw ? 1 : P.defK || 1) * Math.max(0.3, 1 - (M.dmgTaken || 0) - (g.nightK > 0.5 ? M.nightDef || 0 : 0)));
+  P.lastHit = { dmg, hp: Math.ceil(P.hp), maxHp: Math.round(P.maxHp), src: P.dotSrc || hitSource(fx0, fz0) }; // 死亡画面用
   P.hp -= dmg; P.iframe = 0.6; P.c.flash = 0.12;
   const dx = P.pos.x - fx0, dz = P.pos.z - fz0, d = Math.hypot(dx, dz) || 1;
   P.kx += dx / d * knock; P.kz += dz / d * knock;
@@ -233,21 +234,31 @@ P.hurt = (dmg, fx0, fz0, knock = 6, raw = false) => {
 P.dot = (dmg) => {
   if (P.dead || P.dashT > 0) return;
   dmg = Math.max(1, Math.round(dmg / (P.defK || 1) * Math.max(0.3, 1 - (P.mods.dmgTaken || 0))));
-  if (P.hp <= dmg) { P.iframe = 0; P.hurt(dmg, P.pos.x, P.pos.z, 0, true); return; }
+  if (P.hp <= dmg) { P.iframe = 0; P.dotSrc = '毒雾 / 灼地'; P.hurt(dmg, P.pos.x, P.pos.z, 0, true); P.dotSrc = null; return; }
   P.hp -= dmg; P.c.flash = 0.08; fx.num(P.pos, '-' + fmtNum(dmg), 'hurt');
 };
+// 谁打的：伤害源头附近最近的活妖兽（弹丸打中时源头是弹丸，退一步找 30 米内离你最近的）
+function hitSource(x, z) {
+  let best = null, bd = 4;
+  for (const e of enemies.list) { if (e.alive === false) continue; const d = Math.hypot(e.pos.x - x, e.pos.z - z); if (d < bd) { bd = d; best = e; } }
+  if (!best) { bd = 30; for (const e of enemies.list) { if (e.alive === false) continue; const d = e.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = e; } } }
+  return best ? (best.T?.name || '妖兽') + (best.lvl ? ` Lv${best.lvl}` : '') : '不明之物';
+}
 function die() {
   P.dead = true; P.hp = 0;
   P.lastDeath = { x: P.pos.x, z: P.pos.z }; // 作弊面板「回到上次死亡点」用
   combat.cancel();
   const lost = life.deathDrop();
-  document.getElementById('dead').classList.remove('hidden');
+  life.markGrave(P.pos.x, P.pos.z); // 小地图 / 舆图标红 ✕，屏幕边缘红箭头
+  const H = P.lastHit, dEl = document.getElementById('dead');
+  dEl.innerHTML = '<div>重伤昏迷……</div>' + (H ? `<div class="why">最后一击：<b>${H.src}</b> 造成 <b class="d">${fmtNum(H.dmg)}</b> 点伤害<br>受击时你还剩 <b>${fmtNum(H.hp)}</b> / ${fmtNum(H.maxHp)} 血</div>` : '');
+  dEl.classList.remove('hidden');
   fx.burst(P.pos, '#ffffff', 30, { speed: 5, up: 4 });
   P.c.root.visible = false;
-  g.after(2.8, () => {
+  g.after(3.6, () => {
     P.dead = false; P.hp = P.maxHp; P.qi = P.maxQi; P.pos.set(life.bed.x + 1.3, 0, life.bed.z + 0.6); P.c.root.visible = true; P.iframe = 2;
     document.getElementById('dead').classList.add('hidden');
-    g.toast('你在家中醒来，伤势已愈' + (lost ? '\n' + lost : ''), 4);
+    g.toast('你在家中醒来，伤势已愈' + (H ? `\n被 ${H.src} 一击 ${fmtNum(H.dmg)} 点（当时剩 ${fmtNum(H.hp)} 血）` : '') + '\n殒身之处已在地图上标出' + (lost ? '\n' + lost : ''), 5);
   });
 }
 // 境界、灵根、天劫、御剑（realm.js）
@@ -368,6 +379,7 @@ touch.bind(document.getElementById('skWeap'), tap(cycleWeapon));
 document.getElementById('hotbar').addEventListener('pointerdown', (e) => { const s = e.target.closest('.hs'); if (!s) return; e.stopPropagation(); sfx.unlock(); hotKey(+s.dataset.i); });
 document.getElementById('bagBtn').addEventListener('click', () => openBag());
 document.getElementById('menuBtn').addEventListener('click', () => openMenu());
+document.getElementById('soundBtn').addEventListener('click', () => { if (!g.title) openSound(); });
 const statBtn = document.getElementById('statBtn');
 statBtn.addEventListener('click', () => { if (!gui.blocking && !g.title) realm.openStats(); });
 document.getElementById('questBtn').addEventListener('click', () => quests.openLog());
@@ -596,6 +608,7 @@ function openMenu() {
     body.append(btn('💾 存档', () => { g.save(); gui.closePanel(); g.toast(saveLocked() ? '试炼模式：不存档，真存档没动' : '已存档'); }, 'wide'));
     body.append(btn('☁ 云存档 · ' + (cloud.state === 'ok' ? (cloud.user?.anon ? '游客' : '已登录') : cloud.state === 'conflict' ? '要选存档' : cloud.state === 'off' ? '关' : '未连上'), () => openCloudPanel(gui, cloud, g), 'wide'));
     body.append(btn('📂 读档' + (info ? `（${info.text}）` : ''), () => { if (readSave()) { gui.closePanel(); g.toast('已读档'); } }, 'wide' + (info ? '' : ' off')));
+    body.append(btn('🔊 声音', () => { gui.closePanel(); openSound(); }, 'wide'));
     body.append(btn('⚙ 设置', () => { gui.closePanel(); openSettings(); }, 'wide'));
     body.append(btn('❓ 操作说明', () => { gui.closePanel(); setHelp(true); }, 'wide'));
     body.append(btn('🔄 重新开始', () => { if (confirm('放弃当前进度，从头开始？')) { clearSave(); location.reload(); } }, 'wide'));
@@ -606,14 +619,20 @@ const settings = { music: 0.6, amb: 0.8, voice: 0.8, vol: 0.7, shake: true, rhyt
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lingtian-settings') || '{}')); } catch { /* 无痕模式 */ }
 const applySettings = () => { sfx.setVolume(settings.vol); audio.setVolumes({ music: settings.music, amb: settings.amb, voice: settings.voice }); g.noShake = !settings.shake; document.getElementById('rhythm').hidden = !settings.rhythm; setOutline(settings.outline); world.setInk(settings.outline); try { localStorage.setItem('lingtian-settings', JSON.stringify(settings)); } catch { /* 存不了就算了 */ } };
 applySettings();
+// 音量滑条：总音量 / 背景音乐 / 环境声 / 说话声（声音面板和设置里共用）
+function volumeRows(body) {
+  for (const [k, icon, name] of [['vol', '🔊', '总音量'], ['music', '🎵', '背景音乐'], ['amb', '🌿', '环境声'], ['voice', '💬', '说话声']]) {
+    const row = el('div', 'prow'), pct = el('span', '', Math.round(settings[k] * 100) + '%');
+    pct.style.cssText = 'min-width:3.2em;text-align:right;';
+    const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings[k]; r.style.flex = '1';
+    r.addEventListener('input', () => { settings[k] = +r.value; pct.textContent = Math.round(settings[k] * 100) + '%'; applySettings(); });
+    row.append(el('span', 'pic', icon), el('div', 'ptxt', `<b>${name}</b>`), r, pct); body.append(row);
+  }
+}
+function openSound() { gui.panel('声音', (body) => volumeRows(body)); }
 function openSettings() {
   gui.panel('设置', (body) => {
-    for (const [k, icon, name] of [['vol', '🔊', '总音量'], ['music', '🎵', '音乐'], ['amb', '🌿', '环境声'], ['voice', '💬', '说话声']]) {
-      const row = el('div', 'prow');
-      const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = settings[k]; r.style.flex = '1';
-      r.addEventListener('input', () => { settings[k] = +r.value; applySettings(); });
-      row.append(el('span', 'pic', icon), el('div', 'ptxt', `<b>${name}</b>`), r); body.append(row);
-    }
+    volumeRows(body);
     for (const [k, name, desc] of [['shake', '震屏', '打击时镜头抖动'], ['rhythm', '连招节奏提示', '招式名下面显示「快 / 慢 / 断」的时间条'], ['outline', '描边', '人物、树、房子外面的深色描边（默认关）'], ['fpsCap', '锁 30 帧', '帧率固定在 30，不忽高忽低（默认关 = 不限帧率）']]) {
       body.append(gui.row(k === 'shake' ? '📳' : k === 'outline' ? '✏️' : k === 'fpsCap' ? '🎞' : '⏱', name, desc, [btn(settings[k] ? '开' : '关', () => { settings[k] = !settings[k]; applySettings(); gui.refresh(); }, settings[k] ? 'on' : '')]));
     }

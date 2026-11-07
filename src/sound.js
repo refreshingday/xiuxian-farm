@@ -39,18 +39,18 @@ export const SURFACE_NAME = { grass: '草地', wetgrass: '湿草', leaves: '落�
 
 // ---------- 背景音乐的调式（五声音阶，半音数） ----------
 const GONG = [0, 2, 4, 7, 9], YU = [0, 3, 5, 7, 10], SHANG = [0, 2, 5, 7, 10], JUE = [0, 3, 5, 8, 10];
-// root = MIDI 主音；bpm；dens = 每拍出音概率；reg = 旋律音区（音阶级数范围）；drum = 鼓；flute = 箫；drone = 持续低音
+// root = MIDI 主音；bpm；dens = 每拍出音概率；reg = 旋律音区（音阶级数范围）；drum = 鼓；flute = 箫
 const MOODS = {
-  title:   { root: 50, scale: GONG, bpm: 58, dens: 0.42, reg: [5, 13], drum: 0, flute: 0.5, drone: 0.5 },
-  village: { root: 50, scale: GONG, bpm: 74, dens: 0.55, reg: [5, 14], drum: 0, flute: 0.25, drone: 0.35 },
-  wild:    { root: 52, scale: SHANG, bpm: 66, dens: 0.38, reg: [4, 12], drum: 0, flute: 0.35, drone: 0.45 },
-  night:   { root: 47, scale: YU, bpm: 52, dens: 0.28, reg: [4, 11], drum: 0, flute: 0.6, drone: 0.5 },
-  snow:    { root: 49, scale: YU, bpm: 54, dens: 0.3, reg: [6, 14], drum: 0, flute: 0.55, drone: 0.4 },
-  desert:  { root: 50, scale: JUE, bpm: 60, dens: 0.34, reg: [4, 12], drum: 0.25, flute: 0.5, drone: 0.6 },
-  dark:    { root: 45, scale: JUE, bpm: 50, dens: 0.24, reg: [3, 10], drum: 0.15, flute: 0.3, drone: 0.7 }, // 沼泽 / 古战场 / 火山
-  mine:    { root: 43, scale: YU, bpm: 46, dens: 0.18, reg: [3, 9], drum: 0, flute: 0, drone: 0.8 },
-  fight:   { root: 52, scale: YU, bpm: 128, dens: 0.6, reg: [5, 13], drum: 1, flute: 0, drone: 0.4 },
-  boss:    { root: 45, scale: JUE, bpm: 140, dens: 0.66, reg: [4, 12], drum: 1.3, flute: 0, drone: 0.7 },
+  title:   { root: 50, scale: GONG, bpm: 58, dens: 0.42, reg: [5, 13], drum: 0, flute: 0.5 },
+  village: { root: 50, scale: GONG, bpm: 74, dens: 0.55, reg: [5, 14], drum: 0, flute: 0.25 },
+  wild:    { root: 52, scale: SHANG, bpm: 66, dens: 0.38, reg: [4, 12], drum: 0, flute: 0.35 },
+  night:   { root: 47, scale: YU, bpm: 52, dens: 0.28, reg: [4, 11], drum: 0, flute: 0.6 },
+  snow:    { root: 49, scale: YU, bpm: 54, dens: 0.3, reg: [6, 14], drum: 0, flute: 0.55 },
+  desert:  { root: 50, scale: JUE, bpm: 60, dens: 0.34, reg: [4, 12], drum: 0.25, flute: 0.5 },
+  dark:    { root: 45, scale: JUE, bpm: 50, dens: 0.24, reg: [3, 10], drum: 0.15, flute: 0.3 }, // 沼泽 / 古战场 / 火山
+  mine:    { root: 43, scale: YU, bpm: 46, dens: 0.18, reg: [3, 9], drum: 0, flute: 0 },
+  fight:   { root: 52, scale: YU, bpm: 128, dens: 0.6, reg: [5, 13], drum: 1, flute: 0 },
+  boss:    { root: 45, scale: JUE, bpm: 140, dens: 0.66, reg: [4, 12], drum: 1.3, flute: 0 },
 };
 const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
 const degMidi = (M, d) => M.root + M.scale[((d % 5) + 5) % 5] + 12 * Math.floor(d / 5);
@@ -72,7 +72,7 @@ export class GameAudio {
     this.c = c; this.ready = true;
     const bus = (v) => { const g = c.createGain(); g.gain.value = v; g.connect(this.sfx.master); return g; };
     this.fxBus = bus(this.vol.fx); this.voiceBus = bus(this.vol.voice); this.ambBus = bus(this.vol.amb); this.musicBus = bus(0);
-    this.musicBus.gain.setTargetAtTime(this.vol.music * 1.2, c.currentTime, 1.5); // 音乐淡入
+    this.musicBus.gain.setTargetAtTime(this.vol.music * 0.96, c.currentTime, 1.5); // 音乐淡入
     this.musicVerb = c.createGain(); this.musicVerb.gain.value = 0.55; this.musicBus.connect(this.musicVerb).connect(this.sfx.verb);
     this.voiceVerb = c.createGain(); this.voiceVerb.gain.value = 0.12; this.voiceBus.connect(this.voiceVerb).connect(this.sfx.verb);
     this.nb = this.sfx.noiseBuf;
@@ -97,7 +97,6 @@ export class GameAudio {
       fire: loop('highpass', 1800, 0.3, 'lowpass', 4500), // 火山地带的噼啪底噪
       crowd: loop('bandpass', 700, 0.3),              // 村里远处的人声嘈杂（底噪，人声颗粒另外随机出）
     };
-    this.drone = this.makeDrone();
     this.nextT = c.currentTime + 0.3;
   }
   setVolumes(v) {
@@ -105,7 +104,7 @@ export class GameAudio {
     if (!this.ready) return;
     const t = this.c.currentTime;
     this.fxBus.gain.setTargetAtTime(this.vol.fx, t, 0.05); this.voiceBus.gain.setTargetAtTime(this.vol.voice, t, 0.05);
-    this.ambBus.gain.setTargetAtTime(this.vol.amb, t, 0.05); this.musicBus.gain.setTargetAtTime(this.vol.music * 1.2, t, 0.1);
+    this.ambBus.gain.setTargetAtTime(this.vol.amb, t, 0.05); this.musicBus.gain.setTargetAtTime(this.vol.music * 0.96, t, 0.1);
   }
   get ok() { return this.ready && this.sfx.ok; }
 
@@ -339,14 +338,6 @@ export class GameAudio {
     if (big) { this.burst(this.musicBus, t, { dur: 0.32, lp: 260, lp1: 70, gain: 2.2 * k, attack: 0.008 }); this.burst(this.musicBus, t, { dur: 0.06, lp: 1200, lp1: 500, hp: 200, gain: 0.35 * k, attack: 0.003 }); }
     else this.burst(this.musicBus, t, { dur: 0.08, lp: 2400, lp1: 1000, hp: 700, gain: 0.35 * k, attack: 0.003 });
   }
-  makeDrone() {
-    const c = this.c, lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 0.3;
-    const g = c.createGain(); g.gain.value = 0; lp.connect(g).connect(this.musicBus);
-    const os = [0, 7, 12.05].map((st) => { const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = midiHz(this.M.root - 24 + st); const og = c.createGain(); og.gain.value = st ? 0.35 : 0.6; o.connect(og).connect(lp); o.start(); return [o, st]; });
-    const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 0.07; lg.gain.value = 180; lfo.connect(lg).connect(lp.frequency); lfo.start();
-    return { g, os };
-  }
-
   // 每帧：排下一小段音乐（提前 0.35 秒）
   music(dt) {
     const c = this.c, now = c.currentTime, M = this.M;
@@ -392,8 +383,6 @@ export class GameAudio {
     const fast = (id === 'fight' || id === 'boss') !== (this.mood === 'fight' || this.mood === 'boss');
     this.mood = id; this.M = MOODS[id];
     if (fast) { this.beat = 0; this.phrase = []; } // 进出战斗马上换，其余等这一句结束
-    const t = this.c.currentTime;
-    for (const [o, st] of this.drone.os) o.frequency.setTargetAtTime(midiHz(this.M.root - 24 + st), t, 0.8);
   }
 
   // ================= 每帧更新 =================
@@ -416,7 +405,6 @@ export class GameAudio {
     if (s.boss) mood = 'boss'; else if (this.fightT > 0) mood = 'fight';
     this.setMood(mood);
     this.music(dt);
-    this.drone.g.gain.setTargetAtTime(this.M.drone * 0.05, t, 1.2);
     // ---- 持续环境声 ----
     const L = this.L, set = (o, v, tc = 0.6) => o.g.gain.setTargetAtTime(v, t, tc);
     const outside = !s.inside && !s.mine, B = s.biome > 0.5 ? s.sector : '';

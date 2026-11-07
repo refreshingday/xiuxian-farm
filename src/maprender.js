@@ -61,10 +61,17 @@ export function paintMap(c, g, tiles, v, o) {
     if (big) txt(t.title.length > 12 ? t.title.slice(0, 12) + '…' : t.title, x, y - 17, 'bold 12px sans-serif', mine ? '#ffe9a0' : '#fff', 3.5);
     c.globalAlpha = 1;
   }
+  // 殒身之处（life.grave）：红 ✕；不在视野里就交给调用方贴边画箭头
+  let grave = null;
+  const gv = g.life?.grave;
+  if (gv) {
+    const [x, y] = at(gv.x, gv.z);
+    if (vis(x, y, 10)) { txt('✕', x, y, 'bold 15px sans-serif', '#ff4a4a', 3.5); if (big) txt('殒身处', x, y + 14, '11px sans-serif', '#ffb0a8', 3); } else grave = { x, y };
+  }
   // 自己
   const [px, py] = at(P.pos.x, P.pos.z);
   c.save(); c.translate(px, py); c.rotate(v.rot + Math.PI - P.yaw);
   c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 1.5;
   c.beginPath(); c.moveTo(0, -7); c.lineTo(5, 5); c.lineTo(0, 2.5); c.lineTo(-5, 5); c.closePath(); c.stroke(); c.fill(); c.restore();
-  return { out, px, py, txt };
+  return { out, grave, px, py, txt };
 }
