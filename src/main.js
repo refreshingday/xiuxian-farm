@@ -25,7 +25,7 @@ import { Home } from './home.js';
 import { Gamepad, PAD } from './gamepad.js';
 import { TUNE } from './combo.js';
 import { Events } from './events.js';
-import { Realm, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
+import { Realm, foeLevel, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
 import { fmtNum } from './stats.js';
 import { Village, loadVillageData } from './village.js';
 import { Town } from './town.js';
@@ -295,12 +295,20 @@ world.onSpawn = (cx, cz, rng) => {
   }
 };
 let spawnT = 4, golemT = 0;
+// 野外越久、杀得越多，妖怪越多（有上限）；回村里待一会儿就慢慢降下来
+const heat = { t: 0, kills: 0 }, HEAT_CAP = 8;
+const heatBonus = () => Math.min(HEAT_CAP, Math.floor(heat.t / 45) + Math.floor(heat.kills / 4));
+function heatTick(dt) {
+  if (Math.hypot(P.pos.x, P.pos.z) > VILLAGE_R + 8) heat.t += dt;
+  else { heat.t = Math.max(0, heat.t - dt * 3); heat.kills = Math.max(0, heat.kills - dt * 0.2); }
+}
 function ambientSpawns(dt) {
-  spawnT -= dt; golemT -= dt;
+  spawnT -= dt; golemT -= dt; heatTick(dt);
+  const hb = heatBonus();
   const near = enemies.list.filter((e) => e.type !== 'golem' && !e.boss && !e.raid && e.pos.distanceTo(P.pos) < 35 * Math.min(camZoom, 1.6)).length;
   if (spawnT <= 0) {
-    spawnT = (2.5 - g.nightK * 1.2) * (g.bloodMoon ? 0.6 : 1);
-    if (near < 11 + g.nightK * 7 && !P.dead) {
+    spawnT = (2.5 - g.nightK * 1.2) * (g.bloodMoon ? 0.6 : 1) / (1 + hb * 0.12);
+    if (near < 11 + g.nightK * 7 + hb && !P.dead) {
       const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * Math.min(camZoom, 1.6);
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
       if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)), dangerAt(x, z)).amb = true;
@@ -737,6 +745,8 @@ g.onEnemyHit = (e, amt, crit) => {
 };
 g.onEnemyGone = (e) => {
   const dead = e.hp <= 0;
+  if (dead && e.amb) heat.kills++;
+  e.warn?.remove(); e.warn = null;
   if (e.bar) {
     if (dead) { e.bar.hp = 0; e.bar.die(); fadingBars.push({ bar: e.bar, x: e.pos.x, y: barY(e), z: e.pos.z, t: 0.9 }); }
     else e.bar.remove();
@@ -751,7 +761,19 @@ function placeBar(bar, dt, x, y, z) {
   bar.place(sx, sy);
   if (!front) bar.el.style.visibility = 'hidden';
 }
+// 比自己强太多的妖怪头上挂个 ❗（高 3 级以上）；强太多更多就是 ☠
+function updateWarn() {
+  const mine = foeLevel(P.layer);
+  for (const e of enemies.list) {
+    const gap = e.lvl - mine, far = e.pos.distanceTo(P.pos) > 40;
+    if (gap < 3 || e.boss || far) { if (e.warn) { e.warn.remove(); e.warn = null; } continue; }
+    if (!e.warn) { e.warn = document.createElement('div'); e.warn.className = 'warn'; e.warn.textContent = gap >= 6 ? '☠' : '❗'; hpLayer.appendChild(e.warn); }
+    const [sx, sy, front] = screenOf(camera, e.pos.x, barY(e) + e.pos.y + groundY(e.pos.x, e.pos.z) + 0.7, e.pos.z);
+    e.warn.style.transform = `translate(${sx}px,${sy}px) translate(-50%,-100%)`; e.warn.style.visibility = front ? '' : 'hidden';
+  }
+}
 function updateHpBars(dt) {
+  updateWarn();
   for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, barY(e) + e.pos.y + groundY(e.pos.x, e.pos.z), e.pos.z);
   for (let i = fadingBars.length - 1; i >= 0; i--) {
     const f = fadingBars[i]; f.t -= dt; placeBar(f.bar, dt, f.x, f.y, f.z);

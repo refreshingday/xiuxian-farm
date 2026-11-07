@@ -13,6 +13,8 @@
   .hidden { display: none !important; }
   /* 血条（hpbar.js，与试炼场同款） */
   #hpLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .warn { position: absolute; left: 0; top: 0; font-size: 22px; line-height: 1; color: #ff4d4d; text-shadow: 0 0 4px #000, 0 0 8px #f00; animation: warnp .8s ease-in-out infinite alternate; pointer-events: none; }
+  @keyframes warnp { from { opacity: .55 } to { opacity: 1 } }
   .hb { position: absolute; left: 0; top: 0; width: 66px; transform-origin: 50% 100%; will-change: transform, opacity; pointer-events: none; }
   .hb-frame { position: relative; height: 8px; background: rgba(8, 12, 14, .78); border: 1px solid rgba(255, 231, 168, .6); border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.7); overflow: hidden; }
   .hb-trail, .hb-fill, .hb-flash { position: absolute; inset: 0; transform-origin: 0 50%; }

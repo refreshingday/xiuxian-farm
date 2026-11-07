@@ -1,8 +1,8 @@
 // 历法（GDD 第 3 节「时间与历法」）
-// 一天 = 6:00 到次日 2:00，1 游戏小时 = 1 现实分钟（一天约 20 分钟）。
+// 一天 = 6:00 到次日 2:00，1 游戏小时 = 30 现实秒（一天约 10 分钟）。
 // 一季 14 天、一年 56 天、一周 7 天（一季正好两周）。月相 14 天一轮：每季第 1 天新月，第 8 天满月。
 export const DAY_START = 6, DAY_END = 26;   // 小时从 6 走到 26（= 次日 2:00）
-export const SEC_PER_HOUR = 60;
+export const SEC_PER_HOUR = 30;
 export const SEASON_DAYS = 14, YEAR_DAYS = 56;
 export const SEASONS = ['春', '夏', '秋', '冬'];
 export const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
