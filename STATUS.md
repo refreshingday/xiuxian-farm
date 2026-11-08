@@ -1,7 +1,7 @@
 # STATUS — 灵田问道
 
 Level: ⬜ 未做 · 🟨 原型/占位 · 🟩 可玩 · ✅ 打磨完
-Format: `- 功能 — level — 日期 — why / 备注`
+Format: `- 功能 — level — 时间戳 — why / 备注`（新条目 / 改动用完整时间戳 `YYYY-MM-DD HH:MM:SS.mmm +0800`，取法：`date +"%Y-%m-%d %H:%M:%S.%3N %z"`；旧条目只有日期）
 Update when a feature lands or changes level. Newest notes at top of each section.
 
 ## 方向 / 规划

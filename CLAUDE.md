@@ -1,7 +1,7 @@
 # 灵田问道 — notes for Claude
 
 - **Bump the version on every commit.** Edit `VERSION` in `src/version.js` (format `YYYY.MM.DD.N`, N = nth commit that day). It shows as a small overlay at the bottom-right of `index.html`, `arena.html` and `lab.html` so the user can tell whether the hosted page is up to date.
-- Update `STATUS.md` when a feature lands or changes level.
+- Update `STATUS.md` when a feature lands or changes level. Every new/changed entry gets a **full timestamp to the millisecond** — run `date +"%Y-%m-%d %H:%M:%S.%3N %z"` (Bash) right before writing it, e.g. `2026-11-08 22:33:37.468 +0800`. Never guess the time.
 - Environment rules live in `ENVIRONMENT.md` (e.g. every waterfall gets a small pond at its foot) — read it before touching terrain/water/trees, and add new rules there.
 - Push to the session branch **and** `main`. Before pushing `main`, `git fetch origin main` and merge it — other sessions push there too; never skip the push silently.
 - Hosted page: https://refreshingday.github.io/xiuxian-farm/ — always include this link in replies to the user.
