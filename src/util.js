@@ -117,6 +117,8 @@ export const wind = { value: 0 };
 export const weatherU = { rain: { value: 0 }, wet: { value: 0 }, sky: { value: new THREE.Color(0xbfd4e8) },
   // 季节：叶子 / 草的色调（秋天发黄发红）、积雪和结冰（冬天）、地上的落叶（秋天）。main.js 按日期设置
   season: { value: new THREE.Vector3(1, 1, 1) }, grassT: { value: new THREE.Vector3(1, 1, 1) }, snow: { value: 0 }, ice: { value: 0 }, litter: { value: 0 },
+  // 草丛配色：地面草地贴图的平均色 / 地面参考色（线性），草叶乘上它就和地面同色（world.js 载入贴图后算）
+  grassMatch: { value: new THREE.Vector3(1, 1, 1) },
   autumn: { value: 0 } }; // 秋叶：按明暗换成红橙（深绿也能变红，不只是乘个色调）
 const SEASON_UNI = 'uniform vec3 uSeason;\nuniform float uSnow, uAutumn;\n';
 const seasonU = (s) => { s.uniforms.uSeason = weatherU.season; s.uniforms.uSnow = weatherU.snow; s.uniforms.uAutumn = weatherU.autumn; };
@@ -168,14 +170,15 @@ function leafPatch(s, mat) {
 // 草卡：顶点都在卡的根部，在视空间展开成正对镜头的一片（俯视也不会变成一条线）；
 // aGrass = (左右, 高度, 贴图截取宽度, 卡序号)，每丛按位置随机截取 / 镜像贴图，越高随风摆得越多
 function grassPatch(s) {
-  s.uniforms.uWind = wind; s.uniforms.uGrassT = weatherU.grassT; s.uniforms.uSnow = weatherU.snow; s.uniforms.uWet = weatherU.wet;
-  s.fragmentShader = 'uniform vec3 uGrassT;\nuniform float uSnow, uWet;\n#define GRASS_ROOT vec3(2.6, 1.9, 2.0)\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  s.uniforms.uWind = wind; s.uniforms.uGrassT = weatherU.grassT; s.uniforms.uSnow = weatherU.snow; s.uniforms.uWet = weatherU.wet; s.uniforms.uGrassMatch = weatherU.grassMatch;
+  s.fragmentShader = 'uniform vec3 uGrassT, uGrassMatch;\nuniform float uSnow, uWet;\n#define GRASS_ROOT vec3(2.6, 1.9, 2.0)\n#define GRASS_K vec3(0.82, 0.89, 1.25)\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
   #ifdef USE_MAP
     // 草叶贴图根部画得很暗：提亮到和地面贴图同色，草丛和地面接得上（用户 2026-11-08：根部不要暗）
     diffuseColor.rgb *= mix(GRASS_ROOT, vec3(1.0), smoothstep(0.0, 0.75, vMapUv.y));
   #endif
+  diffuseColor.rgb *= uGrassMatch * GRASS_K;
   diffuseColor.rgb *= uGrassT;
-  diffuseColor.rgb *= mix(1.0, 0.9, uWet); // 雨后跟着地面草地变暗（地面 ×0.84 但还有水光反射，实测 ×0.9 亮度最接近），不然草丛比地面亮一截
+  diffuseColor.rgb *= mix(1.0, 0.84, uWet); // 雨后和地面草地一样 ×0.84（地面着色器 GROUND_FRAG 同值），实测才对得上
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.95, 1.0), uSnow * 0.8);`);
   s.vertexShader = 'attribute vec4 aGrass;\nuniform float uWind;\n' + s.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
   {
