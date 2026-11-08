@@ -1,6 +1,7 @@
 # 灵田问道 — notes for Claude
 
 - **Bump the version on every commit.** Edit `VERSION` in `src/version.js` (format `YYYY.MM.DD.N`, N = nth commit that day). It shows as a small overlay at the bottom-right of `index.html`, `arena.html` and `lab.html` so the user can tell whether the hosted page is up to date.
+- **Tell the user the expected version whenever you edit a file that will ship.** Before/when editing game files that will end up in a commit, `git fetch origin main` and state the version they should expect to see (e.g. "this will be v2026.11.08.10") — computed from the higher of local and `origin/main` `VERSION` +1. Repeat it in the final reply after pushing. Skip this for edits that don't ship (scratch files, notes outside the repo, memory).
 - Update `STATUS.md` when a feature lands or changes level. Every new/changed entry gets a **full timestamp to the millisecond** — run `date +"%Y-%m-%d %H:%M:%S.%3N %z"` (Bash) right before writing it, e.g. `2026-11-08 22:33:37.468 +0800`. Never guess the time.
 - Environment rules live in `ENVIRONMENT.md` (e.g. every waterfall gets a small pond at its foot) — read it before touching terrain/water/trees, and add new rules there.
 - Push to the session branch **and** `main`. Before pushing `main`, `git fetch origin main` and merge it — other sessions push there too; never skip the push silently.
