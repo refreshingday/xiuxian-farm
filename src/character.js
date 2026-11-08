@@ -9,6 +9,7 @@ import { attackList, attackPose, attackStance } from './hero_attack.js';
 import { shoulderFix, SHOULDER, trimSleeves, SLEEVE } from './hero_shoulder.js';
 let sleeveTrim = null;
 import { parseOBJ } from './hero_obj.js';
+import { applyMxWeights } from './hero_mx_weights.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -84,6 +85,24 @@ for (let i = 0; i < n; i++) {
   let st = 0; for (const [, v] of e) st += v;
   e.forEach(([k, v], j) => { sIdx[i * 4 + j] = idx[k]; sWt[i * 4 + j] = v / st; });
 }
+// 可选：Blender 里手刷的权重（assets/models/chibi_wuxia/hero_rig.blend → scripts/blender/export_weights.py 导出 hero_weights.json）。
+// 文件不存在就沿用上面的自动权重；骨骼名/位置仍以 BONES 为准，所以动画不受影响。
+try {
+  const r = await fetch('assets/models/chibi_wuxia/hero_weights.json');
+  if (r.ok) {
+    const W = await r.json(), Q = W.q, slot = new Map(), bi = W.bones.map(nm => idx[nm]);
+    for (let j = 0; j < W.pos.length / 3; j++) slot.set(W.pos[j * 3] + ',' + W.pos[j * 3 + 1] + ',' + W.pos[j * 3 + 2], j);
+    let miss = 0;
+    for (let i = 0; i < n; i++) {
+      const qx = Math.round(pos.getX(i) * Q), qy = Math.round(pos.getY(i) * Q), qz = Math.round(pos.getZ(i) * Q);
+      let j = slot.get(qx + ',' + qy + ',' + qz);
+      for (let d = 0; j === undefined && d < 27; d++) j = slot.get((qx + d % 3 - 1) + ',' + (qy + (d / 3 | 0) % 3 - 1) + ',' + (qz + (d / 9 | 0) - 1)); // 量化边界容差
+      if (j === undefined) { miss++; continue; }
+      for (let k = 0; k < 4; k++) { sIdx[i * 4 + k] = bi[W.idx[j * 4 + k]]; sWt[i * 4 + k] = W.wt[j * 4 + k]; }
+    }
+    console.log(`hero_weights.json loaded (${miss} unmatched vertices keep auto-weights)`);
+  }
+} catch (e) { console.warn('hero_weights.json 加载失败，使用自动权重', e); }
 geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sIdx, 4));
 geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sWt, 4));
 
@@ -358,6 +377,8 @@ try {
   const loader = new FBXLoader(), base = 'assets/models/chibi_wuxia/anim/';
   const first = await loader.loadAsync(base + MX_CLIPS[0][1]);
   first.traverse(o => { if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }); o.frustumCulled = false; } });
+  const skinned = []; first.traverse(o => { if (o.isSkinnedMesh) skinned.push(o); });
+  for (const o of skinned) await applyMxWeights(o, 'assets/models/chibi_wuxia/hero_mx_weights.json');
   first.traverse(o => { if (o.isSkinnedMesh) { makeFists(o); window.__hairMoved = sharpenHair(o, tex.image); sleeveTrim = trimSleeves(o); } });
   first.scale.setScalar(1.6 / 0.9995); // FBX 里身高约 1.0，统一成 1.6
   mxModel = first; mxRoot.add(first); mxMixer = new THREE.AnimationMixer(first);
