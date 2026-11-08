@@ -36,14 +36,16 @@ function geos() {
     .scale(1, 1, 0.33).toNonIndexed(); G.blade.computeVertexNormals();
   G.guard = new THREE.BoxGeometry(0.26, 0.05, 0.07).translate(0, 0.1, 0);
   G.grip = new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6);
-  // 刀：刀背笔直，刃口往前鼓、越往刀头越宽，刀尖斜削；圆盘护手，长柄
+  // 大刀：比剑长一截、宽两三倍。刀背笔直，刃口往前鼓、越往刀头越宽，刀头斜削带弧；大圆盘护手，双手长柄，柄尾铁环 + 红穗
   const ds = new THREE.Shape();
-  ds.moveTo(-0.035, 0.12); ds.lineTo(-0.035, 0.96);
-  ds.quadraticCurveTo(0.04, 1.02, 0.12, 0.86);
-  ds.quadraticCurveTo(0.1, 0.45, 0.055, 0.12); ds.lineTo(-0.035, 0.12);
-  G.daoBlade = new THREE.ExtrudeGeometry(ds, { depth: 0.022, bevelEnabled: false, curveSegments: 6 }).translate(0, 0, -0.011);
-  G.daoGuard = new THREE.CylinderGeometry(0.1, 0.1, 0.035, 12).translate(0, 0.1, 0);
-  G.daoGrip = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 6).translate(0, -0.04, 0);
+  ds.moveTo(-0.045, 0.12); ds.lineTo(-0.045, 1.42);
+  ds.quadraticCurveTo(0.07, 1.54, 0.22, 1.3);
+  ds.quadraticCurveTo(0.2, 0.62, 0.075, 0.12); ds.lineTo(-0.045, 0.12);
+  G.daoBlade = new THREE.ExtrudeGeometry(ds, { depth: 0.03, bevelEnabled: false, curveSegments: 8 }).translate(0, 0, -0.015);
+  G.daoGuard = new THREE.CylinderGeometry(0.14, 0.14, 0.045, 14).translate(0, 0.1, 0);
+  G.daoGrip = new THREE.CylinderGeometry(0.032, 0.034, 0.44, 6).translate(0, -0.1, 0);
+  G.daoRing = new THREE.TorusGeometry(0.045, 0.012, 6, 12).translate(0, -0.37, 0);
+  G.daoTassel = new THREE.ConeGeometry(0.05, 0.2, 6).translate(0, -0.5, 0);
   return G;
 }
 
@@ -127,6 +129,7 @@ export function createChibi(a) {
     dao.add(mesh(g.daoBlade, M('#dfe3e8', { emissive: '#ff9a5a', ei: 0.2 })));
     dao.add(mesh(g.daoGuard, M('#8a6a3a')));
     dao.add(mesh(g.daoGrip, M('#6a2a22')));
+    dao.add(mesh(g.daoRing, M('#8a6a3a')), mesh(g.daoTassel, M('#c0302a')));
     sword.add(jian, dao);
     jian.rotation.y = dao.rotation.y = Math.PI / 2; // 刃口朝上下（不是平躺着）
     sword.rotation.x = 1.7;

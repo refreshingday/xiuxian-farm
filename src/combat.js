@@ -536,7 +536,7 @@ export class Combat {
       if (y <= 0) { if (P.vy < -9) fx.burst(P.pos, '#d8d0c0', 6, { speed: 3, up: 1, life: 0.3, y: 0.1, bright: 1 }); y = 0; P.vy = 0; }
     }
     // 冲刺 / 突刺 / 跃击时留残影
-    const ghosting = (m && ((m.lunge && m.sweep && t < m.lunge[1]) || (m.leap && t < m.leap.t1) || this.motion.some((s) => s.d > 1.5 && t < s.t1))) || P.dashT > 0;
+    const ghosting = (m && ((m.lunge && m.sweep && t < m.lunge[1]) || (m.leap && t < m.leap.t1) || !m.heavy && this.motion.some((s) => s.d > 1.5 && t < s.t1))) || P.dashT > 0; // 刀冲步不拖剑的青色残影，靠扬尘
     if (ghosting) { this.ghostT -= dt; if (this.ghostT <= 0) { this.ghostT = 0.035; this.cfx.ghost(P.c.root, m?.leap ? m.color : '#9ef0ff', 0.28); } }
     return { vx, vz, y, ghost: !!(m && (m.sweep || m.leap)) };
   }

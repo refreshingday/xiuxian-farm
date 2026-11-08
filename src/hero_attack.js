@@ -1,7 +1,7 @@
 // 攻击动画：直接跑主游戏自己的 animCombo（comboAnim.js），在一个替身 chibi 上摆出姿势，
 // 再把替身的肩 / 肘 / 腰 / 腿换算成 Mixamo 骨骼的世界对齐旋转。这样姿势和出手时间都和游戏一致。
 import * as THREE from 'three';
-import { animCombo } from './comboAnim.js';
+import { animCombo, daoKeyVal } from './comboAnim.js';
 import { KITS } from './comboKit.js';
 
 const g = () => new THREE.Group();
@@ -74,6 +74,12 @@ const sm = k => k * k * (3 - 2 * k), cl = k => Math.min(1, Math.max(0, k));
 // 返回 null = 空中招 / 跳劈（腿交给原来的收腿姿势）
 export function attackStance(m, t) {
   if (m.air || m.pose === 'leap') return null;
+  if (m.keys) { // 刀的关键帧招式：弓步深浅直接跟关键帧的 st 走
+    const S = ST.over, k = daoKeyVal(m, t, 'st'), o = { lead: S.lead, lift: 0 };
+    for (const key in S.R) o[key] = S.R[key] + (S.H[key] - S.R[key]) * k;
+    o.shift = 0.09 * k;
+    return o;
+  }
   const S = ST[FAM[m.pose]]; if (!S) return null;
   const h = m.hits[0]?.t ?? m.lunge?.[1] ?? 0.2;
   // 起手 0.07 秒沉进架势；到出手点压到最低，略过冲一点再回一半；收招段（cancel → dur）再回到架势

@@ -11,6 +11,7 @@ import { AIR_FX, AIR_SFX } from './comboAir.js';
 import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
 import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
 import { KITS, SKILL_KEYS, ELEM, KE, showWeapon } from './comboKit.js';
+import { attachHeroModel } from './hero_model.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { TouchControls } from './touch.js';
@@ -318,6 +319,7 @@ const P = {
   leapFrom: new THREE.Vector2(), leapTo: new THREE.Vector2(), leapY0: 0, leapY1: 0, leapOn: false, motion: [], sweepHit: new Set(),
 };
 P.pos = P.c.root.position;
+const heroModel = attachHeroModel(P.c); // 和主游戏同一只 Q 版武侠模型（?hero=old 退回方块小人）
 P.pos.set(1, 0, 0);
 scene.add(P.c.root);
 // 拳：双手一团拳劲光；符：右手夹着一张符（甩出去后一会儿再摸出一张）
@@ -945,7 +947,7 @@ function updatePlayer(dt) {
     P.vy -= 30 * dt; y += P.vy * dt;
     if (y <= 0) { if (P.vy < -9) fx.burst(P.pos, '#d8d0c0', 6, { speed: 3, up: 1, life: 0.3, y: 0.1, bright: 1 }); y = 0; P.vy = 0; }
   }
-  const ghosting = (m && ((m.lunge && m.sweep && t < m.lunge[1]) || (m.leap && t < m.leap.t1) || P.motion.some((s) => s.d > 1.5 && t < s.t1))) || P.dashT > 0;
+  const ghosting = (m && ((m.lunge && m.sweep && t < m.lunge[1]) || (m.leap && t < m.leap.t1) || !m.heavy && P.motion.some((s) => s.d > 1.5 && t < s.t1))) || P.dashT > 0; // 刀冲步不拖剑的青色残影，靠扬尘
   if (ghosting) { P.ghostT = (P.ghostT || 0) - dt; if (P.ghostT <= 0) { P.ghostT = 0.035; cfx.ghost(P.c.root, m?.leap ? m.color : '#9ef0ff', 0.28); } }
   if (P.dashT > 0) {
     P.dashT -= dt;
@@ -968,6 +970,7 @@ function updatePlayer(dt) {
   animate(dt, m, t, Math.min(1, Math.hypot(vx, vz) / 6));
   if (y > 0.3 && !(m && m.pose === 'leap')) { P.c.legs[0].rotation.x = -0.8; P.c.legs[1].rotation.x = -0.3; } // 空中收腿
   P.c.root.visible = !(P.iframe > 0 && !m && Math.floor(realTime * 20) % 2 === 0);
+  if (heroModel.ready) { const rm = runner.move || P.skill?.m, rt = runner.move ? runner.t : P.skill?.t; heroModel.sync(P.c, dt, rm, rt); }
 }
 
 function animate(dt, m, t, moving) {
