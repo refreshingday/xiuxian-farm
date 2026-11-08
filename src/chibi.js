@@ -34,6 +34,14 @@ function geos() {
   G.blade = new THREE.BoxGeometry(0.07, 1.0, 0.02).translate(0, 0.62, 0);
   G.guard = new THREE.BoxGeometry(0.26, 0.05, 0.07).translate(0, 0.1, 0);
   G.grip = new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6);
+  // 刀：刀背笔直，刃口往前鼓、越往刀头越宽，刀尖斜削；圆盘护手，长柄
+  const ds = new THREE.Shape();
+  ds.moveTo(-0.035, 0.12); ds.lineTo(-0.035, 0.96);
+  ds.quadraticCurveTo(0.04, 1.02, 0.12, 0.86);
+  ds.quadraticCurveTo(0.1, 0.45, 0.055, 0.12); ds.lineTo(-0.035, 0.12);
+  G.daoBlade = new THREE.ExtrudeGeometry(ds, { depth: 0.022, bevelEnabled: false, curveSegments: 6 }).translate(0, 0, -0.011);
+  G.daoGuard = new THREE.CylinderGeometry(0.1, 0.1, 0.035, 12).translate(0, 0.1, 0);
+  G.daoGrip = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 6).translate(0, -0.04, 0);
   return G;
 }
 
@@ -105,22 +113,29 @@ export function createChibi(a) {
     legs.push(hp);
   }
 
-  let sword = null;
+  // 手里的兵器：sword 整组跟着挥，里面 jian（剑）/ dao（刀）二选一显示，见 comboKit.js showWeapon
+  let sword = null, jian = null, dao = null;
   if (a.sword) {
     sword = new THREE.Group();
-    sword.add(mesh(g.blade, M('#e4edf5', { emissive: '#7fd8ff', ei: 0.25 })));
-    sword.add(mesh(g.guard, M('#c9a24a')));
-    sword.add(mesh(g.grip, M('#5a3a2a')));
+    jian = new THREE.Group();
+    jian.add(mesh(g.blade, M('#e4edf5', { emissive: '#7fd8ff', ei: 0.25 })));
+    jian.add(mesh(g.guard, M('#c9a24a')));
+    jian.add(mesh(g.grip, M('#5a3a2a')));
+    dao = new THREE.Group(); dao.visible = false;
+    dao.add(mesh(g.daoBlade, M('#dfe3e8', { emissive: '#ff9a5a', ei: 0.2 })));
+    dao.add(mesh(g.daoGuard, M('#8a6a3a')));
+    dao.add(mesh(g.daoGrip, M('#6a2a22')));
+    sword.add(jian, dao);
     sword.rotation.x = 1.7;
     arms[0].hand.add(sword);
   }
 
-  addOutline(root, outlineMat('#2b1d14', 0.022), (m) => face.includes(m) || m.geometry === g.blade);
+  addOutline(root, outlineMat('#2b1d14', 0.022), (m) => face.includes(m) || m.geometry === g.blade || m.geometry === g.daoBlade);
 
   if (a.age === 'child') { rig.scale.setScalar(0.7); head.scale.setScalar(1.12); }
   if (a.age === 'elder') { body.rotation.x = 0.2; neck.rotation.x = -0.15; rig.scale.setScalar(0.95); }
 
-  return { root, rig, hips, body, head, arms, legs, sword, mats, phase: Math.random() * 10, flash: 0, lean: a.age === 'elder' ? 0.2 : 0 };
+  return { root, rig, hips, body, head, arms, legs, sword, jian, dao, mats, phase: Math.random() * 10, flash: 0, lean: a.age === 'elder' ? 0.2 : 0 };
 }
 
 const easeOut = (t) => 1 - (1 - t) * (1 - t);

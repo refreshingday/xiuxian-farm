@@ -1,4 +1,4 @@
-// 主世界的玩家战斗：拳 / 剑 / 符三种武器、灵力、四个技能槽、五行（GDD 第 4 节）。
+// 主世界的玩家战斗：拳 / 剑 / 符 / 刀四种武器、灵力、四个技能槽、五行（GDD 第 4 节）。
 // 招式、连招树、技能都在试炼场 arena.html 打磨（comboKit.js / comboAir.js / comboKitFx.js），
 // 这里把同一套规则接到主世界：目标是 enemies.js 的妖兽，位移交给 world.resolve 碰撞。
 import * as THREE from 'three';
@@ -6,11 +6,12 @@ import { clamp, angDiff } from './util.js';
 import { TUNE, ComboRunner } from './combo.js';
 import { AIR_FX, AIR_SFX } from './comboAir.js';
 import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
-import { KITS } from './comboKit.js';
+import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
+import { KITS, showWeapon } from './comboKit.js';
 import { animCombo } from './comboAnim.js';
 import { animChibi } from './chibi.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 const lerp = (a, b, k) => a + (b - a) * k;
 export const GRAV = 26;
@@ -56,7 +57,7 @@ export class Combat {
     this.kitI = (i + KITS.length) % KITS.length; const kit = this.kit = KITS[this.kitI];
     this.cancel();
     this.runner.moves = kit.moves; this.runner.tree = kit.tree;
-    if (this.P.c.sword) this.P.c.sword.visible = kit.id === 'sword';
+    showWeapon(this.P.c, kit.id);
     for (const m of this.fistGlow) m.visible = kit.id === 'fist';
     this.handPaper.g.visible = kit.id === 'talisman';
     this.onKit?.(kit);
@@ -605,6 +606,29 @@ const SKILLS = {
     const g0 = c.groundAt(3);
     c.placeBlast(g0.x, g0.z, { r: 2.2, dmg: 20, knock: 10, launch: 3, keep: true, delay: 0.5, glyph: '火' }, '#ffb84a');
     if (c.sfx.ok) c.sfx.paper(0.02);
+  },
+  dao_storm: (c) => { // 刀轮：拖刀转三圈，四周一大圈全劈飞
+    c.ring(3.8, 18, { knock: 14, launch: 3, stop: 0.06, shake: 0.4 }, '#ffb070');
+    DAO_SKILL_FX.dao_storm(c.fxCtx({ color: '#ffb070' }));
+    if (c.sfx.ok) { c.sfx.spin(0); c.sfx.slam(0.3); }
+  },
+  dao_wave: (c) => { // 刀罡：比剑气宽、慢一点、更重
+    const f = c.fwd(), P = c.P, h = { len: 7.5, w: 2.6, dmg: 26, knock: 16, launch: 2, stop: 0.07, shake: 0.45, skill: true }, m = c.spawnWaveMesh('#ff9a5a');
+    m.scale.set(1.6, 1.1, 1);
+    c.waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color: '#ff9a5a', hit: new Set(), m });
+    DAO_SKILL_FX.dao_wave(c.fxCtx({ color: '#ff9a5a' }));
+    if (c.sfx.ok) { c.sfx.swing({ lead: 0.02, pitch: 0.65, size: 1.6 }); c.sfx.galeRelease(); }
+  },
+  dao_split: (c) => { // 开天：一刀劈下，地面往前一段段炸开
+    const P = c.P, f = c.fwd(), x0 = P.pos.x, z0 = P.pos.z, ctx = c.fxCtx({ color: '#ff7a3a' });
+    DAO_SKILL_FX.dao_split(ctx);
+    if (c.sfx.ok) c.sfx.slam(1);
+    [2, 3.6, 5.2, 6.8, 8.4].forEach((d, i, a) => c.later(0.05 + i * 0.06, () => {
+      const x = x0 + f.x * d, z = z0 + f.y * d, last = i === a.length - 1;
+      c.ring(1.8, last ? 22 : 14, { knock: last ? 12 : 6, launch: last ? 6 : 3, stop: 0.03, shake: last ? 0.4 : 0.2 }, '#ff7a3a', x, z);
+      DAO_SKILL_FX.dao_split_seg(ctx, x, z, last);
+      if (c.sfx.ok) c.sfx.groundBoom(last ? 0.8 : 0.1);
+    }));
   },
   qi: (c) => { c.P.qi = Math.min(c.P.maxQi, c.P.qi + 40 * c.P.maxQi / 100); c.fx.burst(c.P.pos, '#9fdcff', 16, { speed: 2, up: 4, life: 0.7, grav: -1 }); },
 };

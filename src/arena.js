@@ -9,14 +9,15 @@ import { FX } from './fx.js';
 import { TUNE, ComboRunner } from './combo.js';
 import { AIR_FX, AIR_SFX } from './comboAir.js';
 import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
-import { KITS, SKILL_KEYS, ELEM, KE } from './comboKit.js';
+import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
+import { KITS, SKILL_KEYS, ELEM, KE, showWeapon } from './comboKit.js';
 import { ComboFX } from './comboFx.js';
 import { SFX } from './comboSfx.js';
 import { TouchControls } from './touch.js';
 import { animCombo } from './comboAnim.js';
 import { HealthBar, screenOf } from './hpbar.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 
 // 试炼场：只有平台 + 木桩 + 玩家，专门打磨战斗手感，不加载大世界
@@ -327,7 +328,7 @@ const fistGlow = P.c.arms.map((A) => {
 const handPaper = cfx.talisman('敕令', '#ffd27a', 0.6);
 handPaper.g.position.set(0, -0.14, 0.03); P.c.arms[0].hand.add(handPaper.g);
 
-// 当前武器（拳 / 剑 / 符）：决定连招树和技能槽，切换见 setKit
+// 当前武器（剑 / 拳 / 符 / 刀）：决定连招树和技能槽，切换见 setKit
 let kit = KITS[0];
 const runner = new ComboRunner(TUNE, kit.moves, kit.tree);
 runner.afford = (m) => { if (P.qi >= (m.qi || 0)) return true; P.atkCd = 0.7; return false; }; // 灵力不够就断回第一击，普攻冷却 0.7 秒
@@ -1002,7 +1003,7 @@ function setKit(i) {
   kitI = (i + KITS.length) % KITS.length; kit = KITS[kitI];
   if (runner.path !== null) { runner.cancel(); showMove(null); }
   runner.moves = kit.moves; runner.tree = kit.tree;
-  if (P.c.sword) P.c.sword.visible = kit.id === 'sword';
+  showWeapon(P.c, kit.id);
   for (const m of fistGlow) m.visible = kit.id === 'fist';
   handPaper.g.visible = kit.id === 'talisman';
   buildRoutes();
@@ -1011,7 +1012,7 @@ function setKit(i) {
     el.querySelector('.nm').textContent = s.name;
     const q = el.querySelector('.qc'); if (q) q.textContent = s.qi ? s.qi + ' 灵' : '回气';
   }
-  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = kit.id === 'sword' ? '斩' : kit.name;
+  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = { sword: '斩', dao: '劈' }[kit.id] || kit.name;
 }
 const cycleWeapon = () => setKit(kitI + 1);
 const SKILLS = {
@@ -1064,6 +1065,29 @@ const SKILLS = {
     const g0 = groundAt(3);
     placeBlast(g0.x, g0.z, { r: 2.2, dmg: 20, knock: 10, launch: 3, keep: true, delay: 0.5, glyph: '火' }, '#ffb84a');
     if (sfx.ok) sfx.paper(0.02);
+  },
+  dao_storm: () => { // 刀轮：拖刀转三圈，四周一大圈全劈飞
+    ring(3.8, 18, { knock: 14, launch: 3, stop: 0.06, shake: 0.4 }, '#ffb070');
+    DAO_SKILL_FX.dao_storm(fxCtx({ color: '#ffb070' }));
+    if (sfx.ok) { sfx.spin(0); sfx.slam(0.3); }
+  },
+  dao_wave: () => { // 刀罡：比剑气宽、慢一点、更重
+    const f = fwd(), h = { len: 7.5, w: 2.6, dmg: 26, knock: 16, launch: 2, stop: 0.07, shake: 0.45 }, m = spawnWaveMesh('#ff9a5a');
+    m.scale.set(1.6, 1.1, 1);
+    waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color: '#ff9a5a', hit: new Set(), m });
+    DAO_SKILL_FX.dao_wave(fxCtx({ color: '#ff9a5a' }));
+    if (sfx.ok) { sfx.swing({ lead: 0.02, pitch: 0.65, size: 1.6 }); sfx.galeRelease(); }
+  },
+  dao_split: () => { // 开天：一刀劈下，地面往前一段段炸开
+    const f = fwd(), x0 = P.pos.x, z0 = P.pos.z, c = fxCtx({ color: '#ff7a3a' });
+    DAO_SKILL_FX.dao_split(c);
+    if (sfx.ok) sfx.slam(1);
+    [2, 3.6, 5.2, 6.8, 8.4].forEach((d, i, a) => later(0.05 + i * 0.06, () => {
+      const x = x0 + f.x * d, z = z0 + f.y * d, last = i === a.length - 1;
+      ring(1.8, last ? 22 : 14, { knock: last ? 12 : 6, launch: last ? 6 : 3, stop: 0.03, shake: last ? 0.4 : 0.2 }, '#ff7a3a', x, z);
+      DAO_SKILL_FX.dao_split_seg(c, x, z, last);
+      if (sfx.ok) sfx.groundBoom(last ? 0.8 : 0.1);
+    }));
   },
   qi: () => { P.qi = Math.min(P.qiMax, P.qi + 40); },
 };

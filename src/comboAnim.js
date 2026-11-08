@@ -8,6 +8,7 @@ const SWING = {
   L: { from: [-2.5, 1.1, -1.2, 0.55], to: [-0.8, -1.1, -0.15, -0.6] },   // 左上 → 右下
   U: { from: [-0.6, -1.2, -0.9, -0.6], to: [-2.6, 0.9, -0.15, 0.5] },    // 右下 → 左上（撩）
   over: { from: [-3.1, -0.15, -1.4, -0.2], to: [-0.5, 0.05, -0.1, 0.1] }, // 竖劈
+  H: { from: [-1.45, -1.6, -0.5, -0.8], to: [-1.45, 1.5, -0.1, 0.8] },  // 横扫：右 → 左，腰跟着拧
 };
 const REST = [-0.2, 0, -0.3, 0];
 const ease = (k) => k * k * (3 - 2 * k);
@@ -102,9 +103,17 @@ export function animCombo(c, dt, m, t) {
   if (POSE2[m.pose]) {
     animChibi(c, dt, base);
     POSE2[m.pose](c, m, t, h0);
+  } else if (m.swings) { // 多段劈砍（狂刀）：每个判定一刀，方向按 swings 轮换，上一刀收势处接下一刀蓄力
+    animChibi(c, dt, base);
+    let i = 0;
+    while (i < m.hits.length - 1 && t > m.hits[i].t + 0.03) i++;
+    const t0 = i ? m.hits[i - 1].t + 0.03 : 0;
+    setPose(c, swingPose(SWING[m.swings[i % m.swings.length]], t - t0, m.hits[i].t - t0));
+    if (m.heavy) stance(c, 0.6, 0.15);
   } else if (SWING[m.pose]) {
     animChibi(c, dt, base);
     setPose(c, swingPose(SWING[m.pose], t, h0));
+    if (m.heavy) stance(c, clamp(t / h0, 0, 1), 0.22); // 刀：弓步沉身，劈得更有分量
   } else if (m.pose === 'leap') {
     const L = m.leap, k = clamp((t - L.t0) / (L.t1 - L.t0), 0, 1);
     animChibi(c, dt, base);
