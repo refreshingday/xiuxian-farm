@@ -169,7 +169,11 @@ function leafPatch(s, mat) {
 // aGrass = (左右, 高度, 贴图截取宽度, 卡序号)，每丛按位置随机截取 / 镜像贴图，越高随风摆得越多
 function grassPatch(s) {
   s.uniforms.uWind = wind; s.uniforms.uGrassT = weatherU.grassT; s.uniforms.uSnow = weatherU.snow;
-  s.fragmentShader = 'uniform vec3 uGrassT;\nuniform float uSnow;\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  s.fragmentShader = 'uniform vec3 uGrassT;\nuniform float uSnow;\n#define GRASS_ROOT vec3(2.6, 1.9, 2.0)\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  #ifdef USE_MAP
+    // 草叶贴图根部画得很暗：提亮到和地面贴图同色，草丛和地面接得上（用户 2026-11-08：根部不要暗）
+    diffuseColor.rgb *= mix(GRASS_ROOT, vec3(1.0), smoothstep(0.0, 0.75, vMapUv.y));
+  #endif
   diffuseColor.rgb *= uGrassT;
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.95, 1.0), uSnow * 0.8);`);
   s.vertexShader = 'attribute vec4 aGrass;\nuniform float uWind;\n' + s.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>

@@ -630,7 +630,7 @@ function grassCards() {
     for (let k = 0; k < 4; k++) { pos.push(x, 0, z); nor.push(0, 1, 0); }
     gr.push(-W, 0, u, i, W, 0, u, i, W, H, u, i, -W, H, u, i);
     uv.push(0, 0, 1, 0, 1, 1, 0, 1);
-    col.push(0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 1.15, 1.15, 1.05, 1.15, 1.15, 1.05);
+    col.push(1, 1, 1, 1, 1, 1, 1.15, 1.15, 1.05, 1.15, 1.15, 1.05); // 根部不压暗：要和地面贴图同色（用户 2026-11-08）
     idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
   const g = new THREE.BufferGeometry();
