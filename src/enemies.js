@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { flat, toon, glow, mesh, at, angDiff, lerpAngle, setFlash, clamp } from './util.js';
 import { ARENA, GATES, WALL_R, groundY, stepOK } from './world.js';
-import { SIG, tele, ghostTele } from './bossmoves.js';
-import { foeHpMul, foeDmgMul, fmtNum } from './stats.js';
+import { SIG } from './bossmoves.js';
 
 const G = {};
 function geos() {
@@ -91,10 +90,10 @@ const HURT_T = 0.4, STUN_MAX = 1.6, ARMOR_T = 1.4; // 受击硬直秒数 / 连�
 const NIGHT = 0.5; // nightK 超过这个算夜晚：敌人属性 +30%，掉落 +50%（GDD 第 3 节）；血月再 +50% / 掉落翻倍
 
 // ---------- 模型：几种骨架 × 配色 ----------
-export function build(T) {
+function build(T) {
   const g = geos(), mats = [];
   const M = (c, o = {}) => { const m = toon(c, { ...o, unique: true }); mats.push(m); return m; };
-  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); root.userData.anim = true; // 阴影合批跳过
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
   const parts = { body, legs: [], arms: [], wings: [], segs: [] };
   const part = (geo, mat, sx, sy, sz, x, y, z, parent = body) => { const m = mesh(geo, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); parent.add(m); return m; };
   const [ca, cb, ce] = T.c, a = M(ca), b = M(cb), eye = glow(ce, 3);
@@ -215,8 +214,7 @@ export class Enemies {
     this.lairs = [{ type: 'boss', x: ARENA.x, z: ARENA.y, deadDay: -99 }];
   }
 
-  // pow：算气血 / 伤害用的等级（可以带小数，野外按那一点的危险度）；lvl 是整数等级，修为、掉落、显示用它
-  spawn(type, x, z, lvl = 0, pow = lvl) {
+  spawn(type, x, z, lvl = 0) {
     const T = TYPES[type];
     // 村墙以内不刷妖兽：教学野猪、事件、委托这些脚本刷的怪，改到最近的村门外面，再让它们穿墙冲向目标
     let passWall = false;
@@ -226,13 +224,12 @@ export class Enemies {
     }
     const { root, parts, mats } = build(T);
     const g = this.game, night = g.nightK > NIGHT && !T.boss, blood = night && g.bloodMoon;
-    // 气血 / 伤害跟玩家同一条成长曲线（stats.js）：同级妖兽永远和刚到这一层的玩家差不多难打
-    const k = (night ? 1.3 : 1) * (blood ? 1.5 : 1), hpMul = foeHpMul(pow) * k, dmgMul = foeDmgMul(pow);
+    const k = (night ? 1.3 : 1) * (blood ? 1.5 : 1), hpMul = (1 + lvl * 0.35) * k;
     const e = {
       type, T, root, parts, mats, pos: root.position, r: T.r * (T.boss ? 1 : 1), hp: T.hp * hpMul, maxHp: T.hp * hpMul,
-      dmg: T.dmg * dmgMul * k, npcK: (1 + lvl * 0.2) / dmgMul, lvl, night, blood, speed: T.speed, yaw: Math.random() * 6.28, kx: 0, kz: 0,
+      dmg: T.dmg * (1 + lvl * 0.2) * k, lvl, night, blood, speed: T.speed, yaw: Math.random() * 6.28, kx: 0, kz: 0,
       state: 'idle', st: 0, cd: 1 + Math.random(), flash: 0, home: new THREE.Vector2(x, z),
-      tx: x, tz: z, walk: Math.random() * 6, touchCd: 0, alive: true, phase: 1, queue: [], hitOnce: false, chargeDir: 0,
+      tx: x, tz: z, walk: Math.random() * 6, alive: true, phase: 1, queue: [], hitOnce: false, chargeDir: 0,
       elem: T.elem, boss: !!T.boss, kind: T.kind, vy: 0, airSpin: 0, airRot: 0, spiked: false, rootT: 0, stuck: [],
       gen: 0, hop: 0, hasteT: 0, open: 0, tick: null, passWall,
       flinch: 0, flinchDir: 0, stunAcc: 0, armorT: 0, // 受击：后仰动画 / 连续被压的秒数 / 霸体剩余
@@ -248,7 +245,6 @@ export class Enemies {
 
   remove(e) {
     e.alive = false;
-    this.game.mobs?.gone(e);
     this.game.onEnemyGone?.(e);
     this.game.scene.remove(e.wrap || e.root);
     for (const m of e.mats) m.dispose();
@@ -260,15 +256,12 @@ export class Enemies {
   // tag = 伤害数字后缀（克 / 弱）
   damage(e, amt, fromX, fromZ, knock = 6, crit = false, h = null, tag = '') {
     if (!e.alive || e.hidden) return;
-    if (e.fake && !e.mirror) { this.poof(e); return; }
-    if (e.mirror) { this.hitMirror(e, amt, fromX, fromZ, knock, crit, h, tag); return; }
-    (e.hitters ||= new Set()).add(this.by || ''); // 联机：谁打过它（'' = 自己），打死后都有份
+    if (e.fake) { this.poof(e); return; }
     const P = this.game.player, air = e.pos.y > 0.02 || e.vy > 0;
     // GDD 第 4 节：技能能打断普通妖兽的前摇；妖王只能在破绽时被技能打断，打断后倒地，倒地时挨打 ×1.5
     if (e.boss && e.state === 'down') { amt *= 1.5; tag ||= '倒'; }
     if (h?.skill && e.boss && e.state === 'open') this.knockDown(e);
     else if (h?.skill && !e.boss && e.state === 'windup') { this.stagger(e, 0.8); this.game.fx.num(e.pos, '打断', 'crit'); }
-    if (this.game.cheatOn?.ohk) amt = Math.max(amt, e.hp); // 作弊：一击必杀
     e.hp -= amt;
     e.flash = 0.12;
     this.game.onEnemyHit?.(e, amt, crit);
@@ -278,7 +271,7 @@ export class Enemies {
     // 挑空：妖王挑不动，大块头沉一些。浮空时不能行动，前摇被打断（update 里处理）
     const lift = e.boss ? 0 : e.kind === 'brute' ? 0.6 : 1;
     if (h && lift) {
-      if (h.pull && !this.by) { // 吸到角色身前（道友打的不吸），连段不脱节
+      if (h.pull) { // 吸到角色身前，连段不脱节
         const tx = P.pos.x + Math.sin(P.yaw) * 1.5, tz = P.pos.z + Math.cos(P.yaw) * 1.5;
         e.kx = e.kx * (1 - h.pull) + (tx - e.pos.x) * h.pull * 5; e.kz = e.kz * (1 - h.pull) + (tz - e.pos.z) * h.pull * 5;
       }
@@ -287,7 +280,7 @@ export class Enemies {
       else if (air) e.vy = Math.max(e.vy * 0.3, (h.lift ?? 3.5) * clamp(1 + (P.pos.y + 0.2 - e.pos.y) * 0.8, 0.15, 1.6)); // 空中挨打会被托住
     }
     const fx = this.game.fx;
-    fx.num(e.pos, fmtNum(amt) + (crit ? '!' : '') + tag, crit ? 'crit' : '');
+    fx.num(e.pos, Math.round(amt) + (crit ? '!' : '') + tag, crit ? 'crit' : '');
     if (e.pos.y > 0) fx.nums.at(-1).p.y += e.pos.y;
     fx.burst(e.pos, crit ? '#ffe28a' : '#ffffff', crit ? 12 : 6, { speed: 5, up: 2, life: 0.3, y: 1 });
     this.game.sfx?.impact({ crit, heavy: Math.min(1, Math.max(0, (knock - 4) / 10)) });
@@ -311,9 +304,9 @@ export class Enemies {
     e.state = 'recover'; e.st = sec; e.cd = Math.max(e.cd, sec + 0.8);
   }
   // 受击硬直：普通妖兽挨打后短时间不能出手；被连续压制超过 STUN_MAX 秒就进入霸体，硬着头皮还手
-  // 正在出招（前摇 / 冲锋）不打断——打断前摇还是技能的活（GDD 第 4 节）；联机镜像的妖兽状态归主人算
+  // 正在出招（前摇 / 冲锋）不打断——打断前摇还是技能的活（GDD 第 4 节）
   hitStun(e) {
-    if (e.boss || e.fake || e.mirror || e.armorT > 0) return;
+    if (e.boss || e.fake || e.armorT > 0) return;
     if (e.state === 'windup' || e.state === 'charge') return;
     e.state = 'hurt'; e.st = Math.max(e.st, HURT_T);
     if (e.stunAcc >= STUN_MAX) { // 压太久了：霸体，马上出手
@@ -337,10 +330,7 @@ export class Enemies {
     const m = new THREE.Mesh(g.fx.circleGeo, new THREE.MeshBasicMaterial({ color: col.multiplyScalar(1.4), transparent: true, opacity: 0, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
     m.position.set(o.x, 0.06 + this.zones.length % 8 * 0.002, o.z); m.scale.setScalar(o.r); g.scene.add(m);
     this.zones.push({ ...o, m, t: 0, tick: 0 });
-    if (!this.ghostShot) g.mobs?.zone(o); // 联机：道友那边也留一片
   }
-  // 道友那边的妖王出招（联机）：这边也画预警、落下打得到自己
-  ghostTele(d) { this.ghostShot = true; try { ghostTele(this, d); } finally { this.ghostShot = false; } }
   updateZones(dt) {
     const g = this.game, P = g.player;
     for (let i = this.zones.length - 1; i >= 0; i--) {
@@ -360,58 +350,33 @@ export class Enemies {
 
   kill(e) {
     const g = this.game, fx = g.fx;
-    const mine = g.mobs ? g.mobs.killed(e) : true; // 联机：告诉大家它死了；自己打过才有份
-    this.killFx(e);
-    if (mine) this.reward(e);
-    if (e.boss) {
-      if (e.lair) e.lair.deadDay = g.day;
-      g.shake(1.2);
-      fx.clearTele(); this.clearZones();
-      for (const o of [...this.list]) if (o.fake && !o.mirror) this.poof(o);
-    }
-    if (mine) g.onKill?.(e);
-    this.remove(e);
-  }
-  killFx(e) {
-    const g = this.game;
     g.sfx?.kill();
-    g.fx.burst(e.pos, e.boss ? '#ff6a2a' : '#b9a8ff', e.boss ? 120 : 24, { speed: e.boss ? 9 : 5, up: 4, life: 0.8 });
-  }
-  // 打死妖兽的所得：修为、掉落、灵石（妖王另有材料、妖丹、丹方）
-  reward(e) {
-    const g = this.game;
+    fx.burst(e.pos, e.boss ? '#ff6a2a' : '#b9a8ff', e.boss ? 120 : 24, { speed: e.boss ? 9 : 5, up: 4, life: 0.8 });
     g.addXP(e.T.xp * (1 + e.lvl * 0.3) * (g.killXpK?.(e.lvl) ?? 1), e.pos);
     const luck = (e.night || g.nightK > NIGHT ? 1.5 : 1) * (e.blood ? 2 : 1) * (1 + (g.player.mods?.luck || 0));
     let k = 0;
-    for (const [id, p] of e.T.drops) if (g.cheatOn?.drop || Math.random() < p * luck) g.addItem(id, Math.random() < p * luck - 1 ? 2 : 1, { x: e.pos.x, z: e.pos.z + 0.5 * k++ });
+    for (const [id, p] of e.T.drops) if (Math.random() < p * luck) g.addItem(id, Math.random() < p * luck - 1 ? 2 : 1, { x: e.pos.x, z: e.pos.z + 0.5 * k++ });
     if (e.T.stones) { const [a, b] = e.T.stones; g.addStones(Math.round((a + Math.random() * (b - a)) * luck), e.pos); }
     if (e.boss) {
       g.addItem(e.T.drop, e.doubleDrop ? 2 : 1, e.pos); g.addItem('yaodan', 2 + Math.floor(e.lvl / 4), { x: e.pos.x, z: e.pos.z + 0.5 });
       g.addStones(8 + e.lvl * 2, { x: e.pos.x, z: e.pos.z + 1 });
       if (e.T.recipe && !g.alchemy?.known.has(e.T.recipe)) g.alchemy?.learn(e.T.recipe);
+      if (e.lair) e.lair.deadDay = g.day;
       g.toast(`击败 ${e.T.name}！获得 ${g.itemName?.(e.T.drop) ?? e.T.drop}`, 4);
+      g.shake(1.2);
+      fx.clearTele(); this.clearZones();
+      for (const o of [...this.list]) if (o.fake) this.poof(o);
     }
-  }
-  // 联机：打的是道友那边算的妖兽——这边只出打击感、先扣血条，伤害发给它的主人去结算
-  hitMirror(e, amt, fromX, fromZ, knock, crit, h, tag) {
-    const g = this.game, fx = g.fx;
-    if (g.cheatOn?.ohk) amt = Math.max(amt, e.hp);
-    e.hp = Math.max(0.01, e.hp - amt); e.flash = 0.12;
-    g.onEnemyHit?.(e, amt, crit);
-    fx.num(e.pos, fmtNum(amt) + (crit ? '!' : '') + tag, crit ? 'crit' : '');
-    if (e.pos.y > 0) fx.nums.at(-1).p.y += e.pos.y;
-    fx.burst(e.pos, crit ? '#ffe28a' : '#ffffff', crit ? 12 : 6, { speed: 5, up: 2, life: 0.3, y: 1 });
-    g.sfx?.impact({ crit, heavy: Math.min(1, Math.max(0, (knock - 4) / 10)) });
-    g.mobs?.hit(e, amt, fromX, fromZ, knock, crit, h, tag);
+    g.onKill?.(e);
+    this.remove(e);
   }
 
   shoot(x, z, yaw, speed, dmg, color, size = 1, y = 1.0) {
     const m = mesh(this.projGeo, glow(color, 3.5), { cast: false });
     m.position.set(x, y, z); m.scale.setScalar(size);
     this.game.scene.add(m);
-    const p = { m, vx: Math.sin(yaw) * speed, vz: Math.cos(yaw) * speed, life: 3.2, dmg, r: 0.3 * size, color, ghost: this.ghostShot };
+    const p = { m, vx: Math.sin(yaw) * speed, vz: Math.cos(yaw) * speed, life: 3.2, dmg, r: 0.3 * size, color };
     this.proj.push(p);
-    if (!this.ghostShot) this.game.mobs?.shot(x, z, yaw, speed, color, size, y, dmg);
     return p;
   }
 
@@ -439,11 +404,11 @@ export class Enemies {
 
     for (const e of [...this.list]) {
       if (!e.alive) continue;
-      if (e.mirror) { this.mirrorStep(e, dt); continue; }
       const dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, dist = Math.hypot(dx, dz);
       const toP = Math.atan2(dx, dz);
       let mx = 0, mz = 0, spd = 0, face = null;
-      e.st -= dt; e.cd -= dt; e.touchCd -= dt; e.rootT -= dt; e.slowT = (e.slowT || 0) - dt; e.hasteT -= dt; e.armorT -= dt;
+      e.st -= dt; e.cd -= dt; e.rootT -= dt; e.slowT = (e.slowT || 0) - dt; e.hasteT -= dt; e.armorT -= dt;
+      e.flinch = Math.max(0, e.flinch - dt * 4.5);
       if (e.fake && (e.life -= dt) <= 0) { this.poof(e); continue; }
       // 浮空受重力；浮空或被定身（缚符）时不能行动，前摇 / 冲锋被打断
       const air = e.pos.y > 0.02 || e.vy > 0;
@@ -536,9 +501,34 @@ export class Enemies {
       if (face !== null) e.yaw = lerpAngle(e.yaw, face, 1 - Math.exp(-10 * dt));
       e.root.rotation.y = e.yaw;
 
-      this.anim(e, dt, spd);
+      // 动画
+      e.walk += dt * (2 + spd * 3);
+      const sw = Math.sin(e.walk) * Math.min(1, spd / 2), pt = e.parts;
+      if (e.T.look === 'spider' || e.T.look === 'bug' || e.T.look === 'scorpion') pt.legs.forEach((l, i) => (l.children[0].rotation.x = Math.sin(e.walk * 1.5 + i * 1.3) * 0.35 * Math.min(1, spd)));
+      else pt.legs.forEach((l, i) => (l.rotation.x = (i % 2 ? sw : -sw) * 0.7));
+      for (const [i, w] of pt.wings.entries()) w.rotation.z = (i ? -1 : 1) * Math.sin(g.time * 14 + e.walk) * 0.6;
+      pt.segs.forEach((s, i) => (s.position.x = Math.sin(e.walk * 0.8 - i * 0.9) * 0.18 * (i / 5) * Math.min(1, spd + 0.3)));
+      if (pt.tail) pt.tail.rotation.z = Math.sin(e.walk * 1.4) * 0.4;
+      if (pt.arms.length) {
+        const up = e.state === 'windup' || (e.boss && (e.state === 'ring' || e.state === 'roar')) ? -2.6 : sw * 0.4;
+        for (const a of pt.arms) a.rotation.x += (up - a.rotation.x) * Math.min(1, dt * 12);
+      }
+      pt.body.position.y = (pt.float || pt.wings.length ? Math.sin(g.time * 3 + e.walk) * 0.15 : Math.abs(sw) * 0.06) + (e.state === 'windup' && e.kind === 'charger' ? -0.1 : 0) + e.hop;
+      // 受击后仰：先猛地往后一仰再弹回来（flinch 1→0），身子顺带压扁一下
+      const fk = e.flinch > 0 ? Math.sin(e.flinch * Math.PI) * (e.flinch > 0.5 ? 1 : 0.6) : 0;
+      const back = -fk * (e.boss ? 0.18 : 0.45) * Math.cos(e.flinchDir - e.yaw), side = fk * (e.boss ? 0.12 : 0.3) * Math.sin(e.flinchDir - e.yaw);
+      if (!pt.body.userData.s0) pt.body.userData.s0 = pt.body.scale.clone();
+      const s0 = pt.body.userData.s0, sq = fk * (e.boss ? 0.06 : 0.14);
+      pt.body.scale.set(s0.x * (1 + sq), s0.y * (1 - sq), s0.z * (1 + sq));
+      if (!e.boss) { pt.body.rotation.x = e.airRot + back; pt.body.rotation.z = e.state === 'windup' && e.kind === 'charger' ? pt.body.rotation.z : side; }
+      else { // 破绽：往前耷拉着喘气；倒地：侧躺
+        const k = Math.min(1, dt * 8);
+        pt.body.rotation.x += ((e.state === 'open' ? 0.3 : 0) - pt.body.rotation.x) * k;
+        pt.body.rotation.z += ((e.state === 'down' ? 1.25 : 0) - pt.body.rotation.z) * k;
+      }
+      if (e.flash > 0) { e.flash -= dt; setFlash(e.mats, e.flash > 0 ? 0.9 : 0); }
 
-      if (dist > 80 && !e.boss && !e.raid && !g.mobs?.handoffFar(e)) this.remove(e);
+      if (dist > 80 && !e.boss && !e.raid) this.remove(e);
       if (e.boss && dist > 45) { g.toast(`${e.T.name} 退回了巢穴深处`, 2.5); fx.clearTele(); this.clearZones(); this.remove(e); }
     }
     this.updateZones(dt);
@@ -556,53 +546,6 @@ export class Enemies {
     }
   }
 
-  // 动画（自己算的和道友那边同步过来的都用这一套）
-  anim(e, dt, spd) {
-    const g = this.game;
-    e.walk += dt * (2 + spd * 3);
-    const sw = Math.sin(e.walk) * Math.min(1, spd / 2), pt = e.parts;
-    if (e.T.look === 'spider' || e.T.look === 'bug' || e.T.look === 'scorpion') pt.legs.forEach((l, i) => (l.children[0].rotation.x = Math.sin(e.walk * 1.5 + i * 1.3) * 0.35 * Math.min(1, spd)));
-    else pt.legs.forEach((l, i) => (l.rotation.x = (i % 2 ? sw : -sw) * 0.7));
-    for (const [i, w] of pt.wings.entries()) w.rotation.z = (i ? -1 : 1) * Math.sin(g.time * 14 + e.walk) * 0.6;
-    pt.segs.forEach((s, i) => (s.position.x = Math.sin(e.walk * 0.8 - i * 0.9) * 0.18 * (i / 5) * Math.min(1, spd + 0.3)));
-    if (pt.tail) pt.tail.rotation.z = Math.sin(e.walk * 1.4) * 0.4;
-    if (pt.arms.length) {
-      const up = e.state === 'windup' || (e.boss && (e.state === 'ring' || e.state === 'roar')) ? -2.6 : sw * 0.4;
-      for (const a of pt.arms) a.rotation.x += (up - a.rotation.x) * Math.min(1, dt * 12);
-    }
-    pt.body.position.y = (pt.float || pt.wings.length ? Math.sin(g.time * 3 + e.walk) * 0.15 : Math.abs(sw) * 0.06) + (e.state === 'windup' && e.kind === 'charger' ? -0.1 : 0) + e.hop;
-    // 受击后仰：先猛地往后一仰再弹回来（flinch 1→0），身子顺带压扁一下
-    e.flinch = Math.max(0, (e.flinch || 0) - dt * 4.5);
-    const fk = e.flinch > 0 ? Math.sin(e.flinch * Math.PI) * (e.flinch > 0.5 ? 1 : 0.6) : 0, rel = (e.flinchDir || 0) - e.yaw;
-    const back = -fk * (e.boss ? 0.18 : 0.45) * Math.cos(rel), side = fk * (e.boss ? 0.12 : 0.3) * Math.sin(rel);
-    if (!pt.body.userData.s0) pt.body.userData.s0 = pt.body.scale.clone();
-    const s0 = pt.body.userData.s0, sq = fk * (e.boss ? 0.06 : 0.14);
-    pt.body.scale.set(s0.x * (1 + sq), s0.y * (1 - sq), s0.z * (1 + sq));
-    if (!e.boss) { pt.body.rotation.x = e.airRot + back; if (!(e.state === 'windup' && e.kind === 'charger')) pt.body.rotation.z = side; }
-    else { // 破绽：往前耷拉着喘气；倒地：侧躺
-      const k = Math.min(1, dt * 8);
-      pt.body.rotation.x += ((e.state === 'open' ? 0.3 : 0) - pt.body.rotation.x) * k;
-      pt.body.rotation.z += ((e.state === 'down' ? 1.25 : 0) - pt.body.rotation.z) * k;
-    }
-    if (e.flash > 0) { e.flash -= dt; setFlash(e.mats, e.flash > 0 ? 0.9 : 0); }
-  }
-  // 联机：道友那边算的妖兽，只追同步过来的位置 / 朝向，动画照常
-  mirrorStep(e, dt) {
-    const n = e.net; if (!n) return;
-    this.game.mobs?.status(e); // 定身 / 减速交给主人
-    // 妖王冲锋 / 旋风撞到自己（主人那边只撞得到主人）
-    const P = this.game.player;
-    if (e.boss && e.touch && !P.dead && !(e.touchCd > 0) && Math.hypot(P.pos.x - e.pos.x, P.pos.z - e.pos.z) < e.r + P.r + 0.6) { e.touchCd = 0.8; P.hurt(e.dmg, e.pos.x, e.pos.z, 12); }
-    e.touchCd = (e.touchCd || 0) - dt;
-    const k = 1 - Math.exp(-12 * dt), ox = e.pos.x, oz = e.pos.z;
-    if (Math.hypot(n.x - ox, n.z - oz) > 8) { e.pos.x = n.x; e.pos.z = n.z; }
-    else { e.pos.x += (n.x - ox) * k; e.pos.z += (n.z - oz) * k; }
-    e.pos.y += (n.y - e.pos.y) * k; if (e.pos.y < 0.01) e.pos.y = 0;
-    e.yaw = lerpAngle(e.yaw, n.yaw, k); e.root.rotation.y = e.yaw;
-    if (e.wrap) e.wrap.position.y = groundY(e.pos.x, e.pos.z);
-    this.anim(e, dt, Math.min(8, Math.hypot(e.pos.x - ox, e.pos.z - oz) / Math.max(dt, 1e-3)));
-  }
-
   // 落地：重摔会弹起；被「坠龙」砸下来的会震飞周围的（game.onSlam → combat.slamAround）
   land(e) {
     const g = this.game, fx = g.fx, v = -e.vy;
@@ -617,13 +560,6 @@ export class Enemies {
     else { e.vy = 0; e.airSpin = 0; e.airRot = Math.atan2(Math.sin(e.airRot), Math.cos(e.airRot)); e.spiked = false; }
   }
 
-  // 狂暴：身上发红光（二阶段；联机镜像 / 交接过来的也要变）
-  rage(e) {
-    if (e.raged) return; e.raged = true;
-    for (const m of e.mats) { m.userData.baseE?.set('#ff2a00'); m.userData.baseEI = 0.12; }
-    setFlash(e.mats, 0);
-  }
-
   // ---------- 妖王：多阶段，前摇清晰、以闪避为主 ----------
   bossAI(e, dt, dist, toP) {
     const g = this.game, P = g.player;
@@ -632,7 +568,8 @@ export class Enemies {
       e.phase = 2; e.state = 'roar'; e.st = 1.4; e.queue = ['summon']; e.gen++; e.tick = null; e.hop = 0;
       if (e.hidden) { e.hidden = false; e.root.visible = true; }
       g.toast(`${e.T.name} 狂暴了！`, 2.5); g.shake(1);
-      this.rage(e);
+      for (const m of e.mats) { m.userData.baseE?.set('#ff2a00'); m.userData.baseEI = 0.12; }
+      setFlash(e.mats, 0);
     }
     const p2 = e.phase === 2;
     switch (e.state) {
@@ -675,7 +612,7 @@ export class Enemies {
         if (e.st <= 0) { e.state = 'charge'; e.st = 0.85; e.hitOnce = false; g.shake(0.3); }
         break;
       case 'charge':
-        mv.face = e.chargeDir; mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = 17; e.touchT = g.time + 0.2;
+        mv.face = e.chargeDir; mv.mx = Math.sin(e.chargeDir); mv.mz = Math.cos(e.chargeDir); mv.spd = 17;
         g.fx.mote(e.pos.x + (Math.random() - 0.5) * 2, 0.3, e.pos.z + (Math.random() - 0.5) * 2, e.T.c[2], { life: 0.5, size: 1.5 });
         if (!e.hitOnce && dist < e.r + P.r + 0.3 && !g.tryClash?.(e)) { e.hitOnce = true; P.hurt(e.dmg * 1.2, e.pos.x, e.pos.z, 14); }
         if (e.st <= 0) this.openUp(e, p2 ? 0.7 : 1.0); // 冲过头了，收不住脚
@@ -698,7 +635,6 @@ export class Enemies {
       for (let i = 0; i < n; i++) g.after(i * 0.45, () => {
         if (!e.alive) return;
         const x = P.pos.x + P.vel.x * 0.3, z = P.pos.z + P.vel.z * 0.3;
-        g.mobs?.tele({ k: 'c', x, z, r: 2.8, dur, dmg: e.dmg, kn: 8, col, sh: 0.5, n: 20 });
         fx.circle(x, z, 2.8, dur, () => {
           if (!e.alive) return;
           fx.shockRing(x, z, 3.2, col); fx.burst({ x, z }, col, 20, { speed: 6, y: 0.2, up: 4 });
@@ -717,7 +653,7 @@ export class Enemies {
       });
     } else if (a === 'charge') {
       e.state = 'windupCharge'; e.st = p2 ? 0.7 : 0.9; e.chargeDir = toP;
-      tele(this, e.pos.x, e.pos.z, toP, 16, 3.2, e.st);
+      fx.line(e.pos.x, e.pos.z, toP, 16, 3.2, e.st);
     } else if (a === 'summon') {
       e.state = 'summon'; e.st = 1.2;
       const n = e.T.moon ? 2 + Math.round((g.moonK?.() ?? 0) * 2) : 2;
