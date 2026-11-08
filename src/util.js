@@ -168,13 +168,14 @@ function leafPatch(s, mat) {
 // 草卡：顶点都在卡的根部，在视空间展开成正对镜头的一片（俯视也不会变成一条线）；
 // aGrass = (左右, 高度, 贴图截取宽度, 卡序号)，每丛按位置随机截取 / 镜像贴图，越高随风摆得越多
 function grassPatch(s) {
-  s.uniforms.uWind = wind; s.uniforms.uGrassT = weatherU.grassT; s.uniforms.uSnow = weatherU.snow;
-  s.fragmentShader = 'uniform vec3 uGrassT;\nuniform float uSnow;\n#define GRASS_ROOT vec3(2.6, 1.9, 2.0)\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  s.uniforms.uWind = wind; s.uniforms.uGrassT = weatherU.grassT; s.uniforms.uSnow = weatherU.snow; s.uniforms.uWet = weatherU.wet;
+  s.fragmentShader = 'uniform vec3 uGrassT;\nuniform float uSnow, uWet;\n#define GRASS_ROOT vec3(2.6, 1.9, 2.0)\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
   #ifdef USE_MAP
     // 草叶贴图根部画得很暗：提亮到和地面贴图同色，草丛和地面接得上（用户 2026-11-08：根部不要暗）
     diffuseColor.rgb *= mix(GRASS_ROOT, vec3(1.0), smoothstep(0.0, 0.75, vMapUv.y));
   #endif
   diffuseColor.rgb *= uGrassT;
+  diffuseColor.rgb *= mix(1.0, 0.9, uWet); // 雨后跟着地面草地变暗（地面 ×0.84 但还有水光反射，实测 ×0.9 亮度最接近），不然草丛比地面亮一截
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.95, 1.0), uSnow * 0.8);`);
   s.vertexShader = 'attribute vec4 aGrass;\nuniform float uWind;\n' + s.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
   {
