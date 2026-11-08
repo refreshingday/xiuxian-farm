@@ -1225,7 +1225,7 @@ function storm(dt) {
 
 status('加载贴图…', 25);
 await loadCodex();
-await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, apple_leaf_a: {}, apple_leaf_c: {}, cliff_rock: { norm: 0.9 }, pine_needles: { norm: 0.88 }, ...CODEX_TEXTURES });
+await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 }, pine_needles: { norm: 0.88 }, ...CODEX_TEXTURES });
 status('生成地形与素材…', 55);
 await nextFrame();
 setupUI();

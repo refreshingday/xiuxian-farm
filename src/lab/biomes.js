@@ -226,7 +226,6 @@ export const BIOMES = [
       { id: 'tree', n: 14, k: ['grass'], r: [9, 22], s: [0.9, 1.3], gap: 3 },
       { id: 'fruitTree', n: 4, k: ['grass'], r: [4, 14], s: [0.9, 1.1], gap: 3 },
       { id: 'peach', n: 4, k: ['grass'], r: [6, 20], s: [0.9, 1.2], gap: 3 },
-      { id: 'appleTree', n: 5, k: ['grass'], r: [5, 18], s: [0.9, 1.15], gap: 3.2 },
       { id: 'bush', n: 18, k: ['grass'], s: [0.7, 1.3], gap: 1.2 },
       { id: 'berryBush', n: 6, k: ['grass'], s: [0.8, 1.1], gap: 1.2 },
       { id: 'rock', n: 14, k: ['grass', 'sand'], s: [0.4, 1.2], gap: 1 },
@@ -238,7 +237,7 @@ export const BIOMES = [
       { id: 'vein', n: 3, k: ['grass'], r: [14, 22], pick: [0], s: [0.8, 1.1], gap: 2 },
       { id: 'lily', n: 5, water: true, s: [0.8, 1.2], gap: 1 },
     ],
-    catalog: ['tree', 'fruitTree', 'appleTree', 'peach', 'bush', 'berryBush', 'rock', 'flower', 'grass', 'mushroom', 'stump', 'fence', 'crop', 'scarecrow', 'well', 'vein'],
+    catalog: ['tree', 'fruitTree', 'peach', 'bush', 'berryBush', 'rock', 'flower', 'grass', 'mushroom', 'stump', 'fence', 'crop', 'scarecrow', 'well', 'vein'],
   },
   // ================================================================ 竹林村落
   {

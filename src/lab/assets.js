@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage as foliageBase, foliageLeaves, cardMatFor } from './kit.js';
-import { vnoise, smooth, clamp, PNG } from '../util.js';
+import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage as foliageBase, foliageLeaves } from './kit.js';
+import { vnoise, smooth, clamp } from '../util.js';
 import { LH } from './biomes.js';
 
 // 素材库：每个素材 = { name, n(变体数), make(v) → Group }，变体之间形状不同而不只是换色。
@@ -70,13 +70,13 @@ function broadTree(v, leaf, accent, seed, o = {}) {
     const a = i * 2.1 + seed, top = T.t[2];
     k.add(G.tube([[top[0], top[1] - 0.3, top[2]], [top[0] + Math.cos(a) * 0.6, top[1] + 0.2, top[2] + Math.sin(a) * 0.6]], T.r * 0.5, T.r * 0.2, 5), grad(o.bark || '#7a5236', 0.6, 1));
   }
-  (o.real ? foliageLeaves : foliage)(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt, mat: o.cardMat || undefined, kind: o.cardMat ? o.cardKind : undefined });
+  (o.real ? foliageLeaves : foliage)(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt });
   if (o.fruit) {
     const r = rnd(seed);
-    for (let i = 0; i < (o.fruitN ?? 9); i++) {
+    for (let i = 0; i < 9; i++) {
       // 叶卡主要铺在树冠上半部、半径 0.55~0.9R 的壳层里：果子贴在上半部的壳层上，不会飘在冠外
       const c = T.c[Math.floor(r() * T.c.length)], a = r() * TAU, e = 0.15 + r() * 0.7, d = c[3] * 0.82;
-      k.add(G.sph(o.fruitR ?? 0.1, 7, 6), o.fruit, { at: [c[0] + Math.cos(a) * Math.cos(e) * d, c[1] + Math.sin(e) * d, c[2] + Math.sin(a) * Math.cos(e) * d], kind: 'leaf' });
+      k.add(G.sph(0.1, 6, 5), o.fruit, { at: [c[0] + Math.cos(a) * Math.cos(e) * d, c[1] + Math.sin(e) * d, c[2] + Math.sin(a) * Math.cos(e) * d], kind: 'leaf' });
     }
   }
   return k.build();
@@ -1499,21 +1499,6 @@ export const ASSETS = {
   ropeBridge:{ name: '绳吊桥', n: 2, make: (v) => ropeBridge(v) },
   fishHut:   { name: '渔屋', n: 2, make: (v) => fishHut(v) },
 };
-
-// 苹果树：以「果树」为底模（同样的 3 种树形 / 种子 / 叶色 / 叶簇卡片），果子换成更大、更多的红苹果。
-// 变体 1 = 果树原本的程序叶簇；变体 2、3 = 叶卡换成生成的透明苹果叶簇贴图 apple_leaf_{a,c}.png（缩到卡片中间，保留果树那种一团团的轮廓），
-// 贴图自带颜色，所以顶点色用浅灰只给明暗。
-const APPLE = [
-  { tex: null, fruit: '#e0392a' },
-  { tex: 'apple_leaf_a', fruit: '#d83a2a' },
-  { tex: 'apple_leaf_c', fruit: '#e8542e' },
-];
-ASSETS.appleTree = { name: '苹果树', n: 3, make: (v) => {
-  const A = APPLE[v], mat = A.tex && cardMatFor(PNG[A.tex]);
-  return broadTree([0, 2, 3][v], mat ? '#d4d4d4' : '#58a83a', mat ? null : '#9ad050', 21 + v, {
-    cardMat: mat || undefined, cardKind: 'apple' + v, fruit: grad(A.fruit, 0.8, 1.35), fruitN: 14, fruitR: 0.14,
-  });
-} };
 
 // 缓存：同一素材变体只建一次
 const built = new Map();
