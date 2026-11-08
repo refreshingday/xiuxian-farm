@@ -17,14 +17,15 @@ export const SWIM_IN = 0.55, SWIM_OUT = 0.42; // 水深（米）超过这个就�
 
 // ---------- 波纹圈 ----------
 const ringVS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
-const ringFS = `uniform float uT, uOp, uSeed; uniform vec3 uCol; varying vec2 vUv;
+const ringFS = `uniform float uT, uOp, uSeed, uSoft; uniform vec3 uCol; varying vec2 vUv;
   void main() {
-    vec2 p = vUv * 2.0 - 1.0; float d = length(p);
+    vec2 p = vUv * 2.0 - 1.0; float d = length(p), ang = atan(p.y, p.x);
+    // uSoft（踩水洼用）：圈的半径沿圆周轻轻起伏（不是正圆），剖面更宽更虚，像一圈模糊的水晕而不是一道线
+    d *= 1.0 + uSoft * (0.07 * sin(ang * 3.0 + uSeed) + 0.04 * sin(ang * 5.0 - uSeed * 1.3));
     // 软边：高斯式的剖面（中间最实、两边慢慢淡出去），不是一条硬边的线；圈越扩越细
-    float w = mix(0.17, 0.06, uT), c = 1.0 - w * 1.7, e = (d - c) / (w * 0.8);
-    float a = exp(-e * e * 1.6) * (1.0 - smoothstep(0.9, 1.0, d));
+    float w = mix(0.17, 0.06, uT) * (1.0 + uSoft * 1.4), c = 1.0 - w * 1.7, e = (d - c) / (w * 0.8);
+    float a = exp(-e * e * (1.6 - uSoft * 0.8)) * (1.0 - smoothstep(0.9, 1.0, d)) * (1.0 - uSoft * 0.25);
     // 沿圆周固定的断口花纹：越到后面断得越多
-    float ang = atan(p.y, p.x);
     float n = 0.5 + 0.25 * sin(ang * 5.0 + uSeed) + 0.25 * sin(ang * 3.0 - uSeed * 1.7);
     a *= smoothstep(uT * 1.05 - 0.32, uT * 1.05 + 0.1, n); // 断口也是慢慢淡掉的，不是一刀切
     a *= uOp * 0.8 * (1.0 - uT * uT);
@@ -41,7 +42,7 @@ export function createWaterFx(parent) {
   for (let i = 0; i < 48; i++) {
     const mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-      uniforms: { uT: { value: 0 }, uOp: { value: 1 }, uSeed: { value: 0 }, uCol: { value: foamCol } },
+      uniforms: { uT: { value: 0 }, uOp: { value: 1 }, uSeed: { value: 0 }, uSoft: { value: 0 }, uCol: { value: foamCol } },
       vertexShader: ringVS, fragmentShader: ringFS,
     });
     const m = new THREE.Mesh(plane, mat); m.visible = false; m.renderOrder = 3; m.frustumCulled = false;
@@ -49,11 +50,11 @@ export function createWaterFx(parent) {
     rings.push({ m, t: 0, life: 1, r0: 0.3, r1: 1, sx: 1, on: false });
   }
   let ri = 0;
-  function ring(x, y, z, r0, r1, life = 1, op = 0.9, yaw = 0, stretch = 1) {
+  function ring(x, y, z, r0, r1, life = 1, op = 0.9, yaw = 0, stretch = 1, soft = 0) {
     const R = rings[ri]; ri = (ri + 1) % rings.length;
     Object.assign(R, { t: 0, life, r0, r1, sx: stretch, on: true });
     R.m.position.set(x, y + 0.012, z); R.m.rotation.y = yaw; R.m.visible = true;
-    R.m.material.uniforms.uOp.value = op; R.m.material.uniforms.uSeed.value = Math.random() * 20;
+    R.m.material.uniforms.uOp.value = op; R.m.material.uniforms.uSeed.value = Math.random() * 20; R.m.material.uniforms.uSoft.value = soft;
   }
 
   // ---------- 水珠（受重力，落回水面时可能再起一个小圈）----------
@@ -61,19 +62,23 @@ export function createWaterFx(parent) {
   const dropMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   const drops = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), dropMat, DROPS);
   drops.frustumCulled = false; drops.renderOrder = 3; group.add(drops);
-  const D = Array.from({ length: DROPS }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), t: 0, life: 0, s: 0, floor: 0, ripple: false }));
+  // 半透明的水珠（踩水洼用）：同一个池子，soft 的画在这一层
+  const softMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthWrite: false });
+  const dropsSoft = new THREE.InstancedMesh(drops.geometry, softMat, DROPS);
+  dropsSoft.frustumCulled = false; dropsSoft.renderOrder = 4; group.add(dropsSoft);
+  const D = Array.from({ length: DROPS }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), t: 0, life: 0, s: 0, floor: 0, ripple: false, soft: false }));
   let di = 0;
-  function drop(x, y, z, vx, vy, vz, s, floor, ripple = false, life = 1.2) {
+  function drop(x, y, z, vx, vy, vz, s, floor, ripple = false, life = 1.2, soft = false) {
     const d = D[di]; di = (di + 1) % DROPS;
-    d.p.set(x, y, z); d.v.set(vx, vy, vz); d.t = 0; d.life = life; d.s = s; d.floor = floor; d.ripple = ripple;
+    d.p.set(x, y, z); d.v.set(vx, vy, vz); d.t = 0; d.life = life; d.s = s; d.floor = floor; d.ripple = ripple; d.soft = soft;
   }
   // 一簇水花：向上 + 向外随机散开
-  function splash(x, y, z, n, up, out, size, dir = null) {
+  function splash(x, y, z, n, up, out, size, dir = null, soft = false) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, o = out * (0.4 + Math.random() * 0.6);
       let vx = Math.cos(a) * o, vz = Math.sin(a) * o;
       if (dir) { vx += dir.x * out * 0.8; vz += dir.z * out * 0.8; }
-      drop(x + Math.cos(a) * 0.08, y + 0.02, z + Math.sin(a) * 0.08, vx, up * (0.55 + Math.random() * 0.6), vz, size * (0.6 + Math.random() * 0.6), y, i % 4 === 0);
+      drop(x + Math.cos(a) * 0.08, y + 0.02, z + Math.sin(a) * 0.08, vx, up * (0.55 + Math.random() * 0.6), vz, size * (0.6 + Math.random() * 0.6), y, !soft && i % 4 === 0, 1.2, soft);
     }
   }
 
@@ -100,17 +105,17 @@ export function createWaterFx(parent) {
     }
     for (let i = 0; i < DROPS; i++) {
       const d = D[i];
-      if (d.t >= d.life) { drops.setMatrixAt(i, _zero); continue; }
+      if (d.t >= d.life) { drops.setMatrixAt(i, _zero); dropsSoft.setMatrixAt(i, _zero); continue; }
       d.t += dt; d.v.y -= 9.8 * dt; d.p.addScaledVector(d.v, dt);
       if (d.p.y < d.floor && d.v.y < 0) {
         if (d.ripple) ring(d.p.x, d.floor, d.p.z, 0.04, 0.35, 0.6, 0.6);
-        d.t = d.life; drops.setMatrixAt(i, _zero); continue;
+        d.t = d.life; drops.setMatrixAt(i, _zero); dropsSoft.setMatrixAt(i, _zero); continue;
       }
       const k = d.s * Math.sqrt(1 - d.t / d.life);
       _s.set(k, k * (1 + Math.min(1.5, Math.abs(d.v.y) * 0.15)), k); // 下落时拉长一点
-      drops.setMatrixAt(i, _m.compose(d.p, _q, _s));
+      (d.soft ? dropsSoft : drops).setMatrixAt(i, _m.compose(d.p, _q, _s)); (d.soft ? drops : dropsSoft).setMatrixAt(i, _zero);
     }
-    drops.instanceMatrix.needsUpdate = true;
+    drops.instanceMatrix.needsUpdate = true; dropsSoft.instanceMatrix.needsUpdate = true;
     for (let i = 0; i < FOAMS; i++) {
       const f = F[i];
       if (f.t >= f.life) { foams.setMatrixAt(i, _zero); continue; }
@@ -121,7 +126,7 @@ export function createWaterFx(parent) {
     }
     foams.instanceMatrix.needsUpdate = true;
   }
-  function setColor(c) { foamCol.set(c).lerp(new THREE.Color('#ffffff'), 0.45); dropMat.color.copy(foamCol).multiplyScalar(0.85); foamMat.color.copy(foamCol).multiplyScalar(0.92); } // 稍暗一点，免得被泛光当成发光体
+  function setColor(c) { foamCol.set(c).lerp(new THREE.Color('#ffffff'), 0.45); dropMat.color.copy(foamCol).multiplyScalar(0.85); softMat.color.copy(dropMat.color); foamMat.color.copy(foamCol).multiplyScalar(0.92); } // 稍暗一点，免得被泛光当成发光体
   function clear() { for (const R of rings) { R.on = false; R.m.visible = false; } for (const d of D) d.t = d.life = 0; for (const f of F) f.t = f.life = 0; }
   return { group, ring, drop, splash, foam, update, setColor, clear };
 }
@@ -141,7 +146,7 @@ function ac() {
 // 浏览器要求用户先操作过才能出声
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { const a = ac(); if (a && a.state === 'suspended') a.resume(); }, { passive: true });
 
-/** kind: 'step' 涉水脚步 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
+/** kind: 'step' 涉水脚步 | 'puddle' 踩雨后水洼 | 'stroke' 划水 | 'enter' 入水 | 'plunge' 下深水 | 'exit' 出水 */
 export function waterSound(kind, vol = 1) {
   const a = AC; if (!a || a.state !== 'running') return;
   waterVoice(a, master, noiseBuf, kind, vol, a.currentTime);
@@ -181,8 +186,9 @@ export function waterVoice(a, out, nb, kind, vol, t) {
     layer(0.5, 1100, 500, 0.1, 0.1, 0.1, 0.45, 0.5);
     drips(6, 0.3, 0.9, 0.05);
   } else {
-    const [len, f0, f1, gn] = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], land: [0.2, 260, 90, 0.7] }[kind];
+    const [len, f0, f1, gn] = { step: [0.16, 800, 330, 0.2], stroke: [0.22, 600, 280, 0.18], land: [0.2, 260, 90, 0.7], puddle: [0.15, 1200, 400, 0.55] }[kind];
     layer(len, f0, f1, gn, 0.02);
+    if (kind === 'puddle') layer(0.11, 600, 240, gn * 0.6, 0.008, 0.05 + R() * 0.03); // 踩雨后水洼：啪嗒——第二下更低更轻的"嗒"（水落回地面）
   }
 }
 

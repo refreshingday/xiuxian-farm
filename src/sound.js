@@ -9,6 +9,7 @@
 //   · 脚步 / 落地 / 水声：只用低通 / 高通噪声（Q ≤ 0.3，不共振），不用带音高的振荡器，也不要快起音的低频"噗"
 //   · 不要"叮 / tin"的金属声：界面音、钱、拾取都用木头 / 纸 / 布的闷声，奖励用古筝拨弦（琴弦，不是金属铃）
 import { waterVoice } from './lab/swim.js';
+import { MUSIC } from './musicList.js';
 
 const R = Math.random, rnd = (a, b) => a + R() * (b - a), pick = (a) => a[Math.floor(R() * a.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -98,6 +99,7 @@ export class GameAudio {
       crowd: loop('bandpass', 700, 0.3),              // 村里远处的人声嘈杂（底噪，人声颗粒另外随机出）
     };
     this.nextT = c.currentTime + 0.3;
+    this.loadTracks();
   }
   setVolumes(v) {
     Object.assign(this.vol, v);
@@ -378,6 +380,45 @@ export class GameAudio {
     ph[14] = null; ph[15] = null; if (R() < 0.7) ph[12] = Math.round(d / 5) * 5; // 句尾落在主音上、留白
     this.melDeg = d; this.phrase = ph;
   }
+  // ================= 音乐文件 =================
+  // 读进来后按响度归一化：取最响的那 50% 片段的 RMS 对齐到同一个目标，再保证峰值不超过 0.9
+  async loadTracks() {
+    this.tracks = [];
+    let have = [];
+    try { have = await (await fetch('assets/music/index.json')).json(); } catch { /* 没有清单就全用合成古筝 */ }
+    for (const T of MUSIC) {
+      if (!have.includes(T.file.split('/').pop())) continue; // 只读清单里真有的文件，免得 404
+      try {
+        const r = await fetch(T.file); if (!r.ok) continue;
+        const buf = await this.c.decodeAudioData(await r.arrayBuffer());
+        const d = buf.getChannelData(0), win = Math.floor(buf.sampleRate * 0.4), rms = [];
+        let peak = 0;
+        for (let i = 0; i + win <= d.length; i += win) { let s = 0; for (let j = i; j < i + win; j += 4) { const v = d[j]; s += v * v; if (Math.abs(v) > peak) peak = Math.abs(v); } rms.push(Math.sqrt(s / (win / 4))); }
+        rms.sort((a, b) => b - a);
+        const loud = rms.slice(0, Math.max(1, rms.length >> 1)), level = loud.reduce((a, b) => a + b, 0) / loud.length || 1e-3;
+        T.norm = Math.min(0.12 / level, 0.9 / (peak || 1)); T.buf = buf;
+        this.tracks.push(T);
+      } catch { /* 文件坏了 / 没有：跳过，用合成古筝 */ }
+    }
+  }
+  pickTrack(mood) {
+    const list = (this.tracks || []).filter((T) => T.moods.includes(mood));
+    if (!list.length) return null;
+    if (this.cur && list.includes(this.cur.T) && !this.cur.ended) return this.cur.T; // 正在放的还能用就接着放
+    return list[Math.floor(R() * list.length)];
+  }
+  playTrack(T) {
+    const c = this.c, t = c.currentTime, FADE = 2.5;
+    if (this.cur) { const o = this.cur; o.g.gain.setTargetAtTime(0, t, FADE / 3); try { o.s.stop(t + FADE * 2); } catch { /* 已停 */ } this.cur = null; }
+    if (!T) return;
+    const s = c.createBufferSource(), g = c.createGain(); s.buffer = T.buf;
+    g.gain.setValueAtTime(0, t); g.gain.setTargetAtTime(T.norm * 0.45, t, FADE / 3); // 0.45：和合成古筝差不多响
+    s.connect(g).connect(this.musicBus); s.start(t);
+    const cur = this.cur = { T, s, g, ended: false };
+    s.onended = () => { cur.ended = true; if (this.cur === cur) this.cur = null; }; // 放完一首换下一首（同情况里随机）
+  }
+  credits() { return MUSIC.filter((T) => T.credit && this.tracks?.includes(T)).map((T) => T.credit); }
+
   setMood(id) {
     if (id === this.mood || !MOODS[id]) return;
     const fast = (id === 'fight' || id === 'boss') !== (this.mood === 'fight' || this.mood === 'boss');
@@ -407,15 +448,18 @@ export class GameAudio {
     // 标题画面、开着菜单 / 面板、联机时不放背景音乐（环境声、脚步照常）
     const off = !!(s.title || s.menu || s.coop);
     if (off !== this.musicOff) { this.musicOff = off; this.musicBus.gain.setTargetAtTime(off ? 0 : this.vol.music * 0.96, t, 0.35); }
-    if (off) this.nextT = 0; else this.music(dt);
+    // 这种情况有音乐文件就放文件（交叉淡入淡出），没有就放合成古筝
+    const want = off ? null : this.pickTrack(mood);
+    if (want !== (this.cur?.T || null)) this.playTrack(want);
+    this.nextT = 0; // 只放音乐文件，不再用合成古筝（用户要求）
     // ---- 持续环境声 ----
     const L = this.L, set = (o, v, tc = 0.6) => o.g.gain.setTargetAtTime(v, t, tc);
     const outside = !s.inside && !s.mine, B = s.biome > 0.5 ? s.sector : '';
     const windK = s.title ? 0.4 : (s.fly ? 1 : 0.35) + (B === 'snow' ? 0.5 : B === 'desert' ? 0.45 : B === 'battle' ? 0.35 : 0) + s.snow * 0.2;
     const gust = 0.6 + 0.4 * Math.sin(t * 0.23) * Math.sin(t * 0.61 + 1);
     set(L.wind, outside ? 0.05 * windK * gust : 0.008); L.wind.f.frequency.setTargetAtTime(250 + 500 * gust * windK + (s.fly ? 600 : 0), t, 0.5);
-    set(L.rain, outside ? 0.11 * s.rain * (1 - s.snow * 0.85) : 0.02 * s.rain);
-    set(L.roof, (s.inside ? 0.12 : 0.03) * s.rain * (1 - s.snow)); L.roof.f.frequency.setTargetAtTime(s.inside ? 700 : 1500, t, 0.3);
+    set(L.rain, outside ? 0.065 * s.rain * (1 - s.snow * 0.85) : 0.014 * s.rain); // 雨声压低一些（用户：雨太吵）
+    set(L.roof, (s.inside ? 0.08 : 0.018) * s.rain * (1 - s.snow)); L.roof.f.frequency.setTargetAtTime(s.inside ? 700 : 1500, t, 0.3);
     const wn = s.mine ? 0 : s.waterNear, wf = s.mine ? 0 : s.waterfallNear;
     set(L.water, 0.07 * wn * (s.winter ? 0.25 : 1), 0.3); L.water.f.frequency.setValueAtTime(700 + R() * 1300, t); // 每帧乱跳的截止 = 潺潺
     set(L.fall, 0.1 * wf * (s.winter ? 0.15 : 1), 0.3);

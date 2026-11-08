@@ -195,6 +195,16 @@ function gsRegion(x0, z0, x1, z1) {
     clearings: CLEARINGS.filter((c) => hit(c.x, c.z, c.x, c.z, Math.max(c.r, (c.plaza || 0) + 1) + 1)),
   };
 }
+// 草丛占地（约 r 半径）周围 6 个点都还是草地、没混到土路 / 石板 / 岩地
+const _ga = [0, 0, 0];
+function grassAround(x, z, r) {
+  for (let i = 0; i < 6; i++) {
+    const a = i * 1.047;
+    groundSample(x + Math.cos(a) * r, z + Math.sin(a) * r, _ga);
+    if (GS.path > 0.05 || GS.kind === 1 || GS.kind === 4) return false;
+  }
+  return true;
+}
 function groundSample(x, z, out) {
   const L = GSL !== null && x >= GSL.x0 && x <= GSL.x1 && z >= GSL.z0 && z <= GSL.z1 ? GSL : null;
   const dv = Math.hypot(x, z), dm = Math.hypot(x - MINE.x, z - MINE.y);
@@ -276,6 +286,29 @@ const _mc = [0, 0, 0];
 // 区域里有没有台地（有才需要逐像素算高度阴影）
 export const terrainHit = (x0, z0, x1, z1) => TERRAINS.some((R) => x0 < R.x1 && x1 > R.x0 && z0 < R.z1 && z1 > R.z0);
 export { edgeR as mapEdgeR };
+
+// 雨后水洼：和地面着色器里 gPud 同一套算法（pHash / pNoise 用 float32 模拟），返回 0..1
+const f32 = Math.fround, fr = (v) => f32(v - Math.floor(v));
+function pHash(x, y) {
+  let a = fr(f32(x * 0.1031)), b = fr(f32(y * 0.1031)), c = a;
+  const d = f32(f32(a * f32(b + 33.33)) + f32(b * f32(c + 33.33)) + f32(c * f32(a + 33.33)));
+  a = f32(a + d); b = f32(b + d); c = f32(c + d);
+  return fr(f32(f32(a + b) * c));
+}
+function pNoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+  const a = pHash(ix, iy), b = pHash(ix + 1, iy), c = pHash(ix, iy + 1), d = pHash(ix + 1, iy + 1);
+  return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+}
+export function puddleAt(x, z, wet) {
+  if (wet < 0.05) return 0;
+  const n = pNoise(x * 0.32, z * 0.32) * 0.65 + pNoise(x * 0.95 + 7.3, z * 0.95 + 7.3) * 0.35, th = 0.86 - 0.15 * wet;
+  const p = smooth(th, th + 0.035, n); if (p <= 0) return 0;
+  groundSample(x, z, _b);
+  const k = GS.kind, hard = k === 1 || k === 4 ? 0.8 : k === 0 || k === 2 || k === 3 ? smooth(0.4, 0.6, GS.path + 0.12) : 0; // 0.12 ≈ 草贴图亮度带来的偏移
+  return p * hard;
+}
 
 // 一个区块 → 一张像素地面贴图（每单位 8 像素）
 const RES = 8;
@@ -366,7 +399,8 @@ const GROUND_FRAG = `
     // 雨后：整体变暗；土路 / 石板的低洼处积水，越湿水洼越大
     float hard = max(wd, ws);
     float n = gNoise(wp * 0.32) * 0.65 + gNoise(wp * 0.95 + 7.3) * 0.35, th = 0.86 - 0.15 * uWet;
-    gPud = smoothstep(th, th + 0.035, n) * max(wd, ws * 0.8) * step(0.05, uWet);
+    float pn = pNoise(wp * 0.32) * 0.65 + pNoise(wp * 0.95 + 7.3) * 0.35; // 水洼用不带 sin 的哈希，CPU 端 puddleAt() 能算出同样的位置（踩水花）
+    gPud = smoothstep(th, th + 0.035, pn) * max(wd, ws * 0.8) * step(0.05, uWet);
     c *= mix(1.0, mix(0.84, 0.62, hard), uWet);
     c *= 1.0 - gPud * 0.5;
     gWetS = uWet * (0.3 + 0.7 * hard);
@@ -452,6 +486,11 @@ const GROUND_WET = `
   }`;
 const GROUND_NOISE = `
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float pHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+float pNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(pHash(i), pHash(i + vec2(1.0, 0.0)), f.x), mix(pHash(i + vec2(0.0, 1.0)), pHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
 float gNoise(vec2 p) {
   vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x), mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
@@ -593,6 +632,15 @@ const CROWN = [[0, 3.45, 0, 1.15], [0.75, 3.1, 0.3, 0.85], [-0.7, 3.15, -0.2, 0.
 
 // 草卡：3 张散开的透明四边形（12 顶点），根部随机错开、宽高各异；
 // 顶点只记根部位置，着色器里正对镜头展开，所以不会出现米字形，俯视也看得到草叶
+// 草叶配色：地面着色器里草地 = 贴图 × 底色 / GP.grass，草叶 = 底色 × 草叶贴图。把「贴图平均色 / GP.grass」乘到草叶上，
+// 换草地贴图后草丛自动跟着变色，不用再手调（用户 2026-11-08：任何光照下草叶和地面都要同色）
+function grassMatchFromTexture() {
+  const im = PNG.grass_ground?.image; if (!im?.getContext) return;
+  const D = im.getContext('2d').getImageData(0, 0, im.width, im.height).data, s = [0, 0, 0], L = (v) => (v / 255) ** 2.2;
+  for (let i = 0; i < D.length; i += 16) for (let c = 0; c < 3; c++) s[c] += L(D[i + c]);
+  const n = D.length / 16, ref = lin(GP.grass);
+  weatherU.grassMatch.value.set(s[0] / n / ref.x, s[1] / n / ref.y, s[2] / n / ref.z);
+}
 function grassCards() {
   const pos = [], col = [], nor = [], uv = [], gr = [], idx = [], r = mulberry32(23);
   for (let i = 0; i < 3; i++) {
@@ -601,7 +649,7 @@ function grassCards() {
     for (let k = 0; k < 4; k++) { pos.push(x, 0, z); nor.push(0, 1, 0); }
     gr.push(-W, 0, u, i, W, 0, u, i, W, H, u, i, -W, H, u, i);
     uv.push(0, 0, 1, 0, 1, 1, 0, 1);
-    col.push(0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 1.15, 1.15, 1.05, 1.15, 1.15, 1.05);
+    col.push(1, 1, 1, 1, 1, 1, 1.15, 1.15, 1.05, 1.15, 1.15, 1.05); // 根部不压暗：要和地面贴图同色（用户 2026-11-08）
     idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
   const g = new THREE.BufferGeometry();
@@ -743,6 +791,7 @@ export class World {
       // 桃花冠的内核要用花瓣贴图：绿叶贴图是灰度化的，乘粉色会发蓝紫
       leafyBloom: toon('#ffffff', { occ: true, vc: true, leaf: true, leafTex: PNG.peach_foliage }),
       grass: (() => {
+        grassMatchFromTexture();
         const map = PNG.grass_blades || fallbackBlades();
         map.wrapS = THREE.RepeatWrapping; map.needsUpdate = true; // 每丛随机截取一段
         const m = toon('#ffffff', { vc: true, grass: true, map, unique: true });
@@ -1020,8 +1069,10 @@ export class World {
           if (GS.path > 0.25 || GS.kind === 4 || this.insideHouse(gx2, gz2, 0.8) || (dv < WALL_R && inBlock(gx2, gz2, 0.3))) continue;
           if (terr && Math.abs(groundY(gx2 + 0.3, gz2) - groundY(gx2 - 0.3, gz2)) + Math.abs(groundY(gx2, gz2 + 0.3) - groundY(gx2, gz2 - 0.3)) > 0.5) continue; // 断崖上不长草
           const v = 0.9 + rng() * 0.25;
-          _c.setRGB(_b[0] / 255 * v * 1.08, _b[1] / 255 * v * 1.1, _b[2] / 255 * v, THREE.SRGBColorSpace);
-          grass.push({ x: gx2, z: gz2, s: 0.75 + rng() * 0.6, sy: (0.7 + rng() * 0.7) * (0.7 + lush * 0.5), rot: rng() * 6.28, c: '#' + _c.getHexString() });
+          _c.setRGB(_b[0] / 255 * v, _b[1] / 255 * v, _b[2] / 255 * v, THREE.SRGBColorSpace); // 和地面同一个底色；贴图色差由 weatherU.grassMatch 补
+          const gs = 0.75 + rng() * 0.6, gsy = (0.7 + rng() * 0.7) * (0.7 + lush * 0.5), grot = rng() * 6.28;
+          if (GS.path > 0.05 || !grassAround(gx2, gz2, 0.75 * gs)) continue; // 整丛草的范围都得是草地：不长到土路 / 田边 / 石板上（用户 2026-11-08）
+          grass.push({ x: gx2, z: gz2, s: gs, sy: gsy, rot: grot, c: '#' + _c.getHexString() });
         }
         if (rng() < 0.16 * (1 + (sec.grass - 1) * bk)) {
           const c = FLOWERS[Math.floor(rng() * 5)];

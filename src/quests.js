@@ -5,6 +5,7 @@
 import { item, itemName, CROPS } from './items.js';
 import { TYPES } from './enemies.js';
 import { near } from './life.js';
+import { xpScale } from './realm.js';
 import { btn, el } from './ui.js';
 import { screenOf } from './hpbar.js';
 
@@ -39,8 +40,8 @@ export class Quests {
     g.life.dayHooks.push(() => this.newDay());
     this.marks = new Map();
     this.layer = document.getElementById('markLayer');
-    this.track = document.getElementById('qtrack');
-    this.track.addEventListener('click', () => this.openLog());
+    this.trackEl = document.getElementById('qtrack');
+    this.trackEl.addEventListener('click', () => this.openLog());
   }
 
   // ---------- 进度 ----------
@@ -105,7 +106,7 @@ export class Quests {
     for (const go of d.goals) if (go.type === 'have') g.inv.take(go.item, go.n);
     this.active.splice(this.active.indexOf(q), 1);
     if (q.from !== 'board') this.done.add(d.id);
-    this.give(d.reward);
+    this.give(q.from === 'story' || d.reward?.xp ? d.reward : { ...d.reward, xp: Math.round(10 * xpScale(g.player.layer)) }); // 完成委托额外一点修为
     g.audio?.cue('quest');
     const next = d.next && this.defs[d.next];
     if (next) this.accept(next.id, 'story');
@@ -215,8 +216,8 @@ export class Quests {
   }
   renderTrack() {
     const list = [...this.active].sort((a, b) => (a.from === 'story' ? -1 : 0) - (b.from === 'story' ? -1 : 0)).slice(0, 3);
-    this.track.innerHTML = list.map((q) => `<div class="qt${this.complete(q) ? ' ok' : ''}"><b>${q.from === 'story' ? '◆ ' : ''}${q.def.title}</b>${q.def.goals.map((go, i) => `<span>${this.goalText(go)}${this.count(q, i)}</span>`).join('')}${this.complete(q) && q.from !== 'story' ? `<span class="hint">${q.from === 'board' ? '回委托板交付' : q.from === 'sect' ? '回宗门找执事交付' : '回去找' + (this.g.village.byId[q.def.giver]?.name || '') + '交付'}</span>` : ''}</div>`).join('');
-    this.track.hidden = !list.length;
+    this.trackEl.innerHTML = list.map((q) => `<div class="qt${this.complete(q) ? ' ok' : ''}"><b>${q.from === 'story' ? '◆ ' : ''}${q.def.title}</b>${q.def.goals.map((go, i) => `<span>${this.goalText(go)}${this.count(q, i)}</span>`).join('')}${this.complete(q) && q.from !== 'story' ? `<span class="hint">${q.from === 'board' ? '回委托板交付' : q.from === 'sect' ? '回宗门找执事交付' : '回去找' + (this.g.village.byId[q.def.giver]?.name || '') + '交付'}</span>` : ''}</div>`).join('');
+    this.trackEl.hidden = !list.length;
   }
   // 任务指向（头顶 📍、小地图、屏幕边缘箭头共用）：没做完的目的地（reach / 委托坐标、要交谈的人、要打的妖王巢穴）
   // + 做完了该回去交付的人 / 委托板。主线排前面。
@@ -239,6 +240,9 @@ export class Quests {
         if (!p && go.type === 'kill') p = g.enemies.lairs.find((l) => l.type === go.target);
         if (p) out.push({ x: p.x, z: p.z, ic: '📍', story, title, qid: q.id, goal: this.goalText(go) });
       });
+      // 委托刷出来的妖兽：每只头上一个箭头，屏幕边缘 / 小地图也指过去
+      const R = g.jobs?.run.get(q);
+      if (R) for (const e of R.mobs) if (e.alive && !e.hidden) out.push({ x: e.pos.x, z: e.pos.z, ic: '⚔', story, title, qid: q.id, goal: '妖兽', mob: true });
     }
     return out;
   }
@@ -268,8 +272,8 @@ export class Quests {
     const bd = g.world.board, boardDone = this.active.some((q) => q.from === 'board' && this.complete(q));
     if (boardDone || this.board.length) want.set('board', [boardDone ? '❓' : '❗', bd.x, 3, bd.z - 1.2]);
     this.tgt = this.targets();
-    this.tgt.forEach((t, i) => { if (t.ic === '📍') want.set('t' + i, ['📍', t.x, 3, t.z]); });
-    this.pins = [...want.values()].filter((m) => m[0] !== '📍').map(([ic, x, , z]) => ({ ic, x, z }));
+    this.tgt.forEach((t, i) => { if (t.ic === '📍') want.set('t' + i, ['📍', t.x, 3, t.z]); else if (t.mob) want.set('t' + i, ['⚔', t.x, 2.6, t.z]); });
+    this.pins = [...want.values()].filter((m) => m[0] !== '📍' && m[0] !== '⚔').map(([ic, x, , z]) => ({ ic, x, z }));
     for (const [k, m] of this.marks) if (!want.has(k)) { m.remove(); this.marks.delete(k); }
     for (const [k, [ic, x, y, z]] of want) {
       let m = this.marks.get(k);

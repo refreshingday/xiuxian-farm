@@ -12,7 +12,7 @@ import { createMirror } from './lab/mirror.js';
 import { batchShadows, showBatches } from './shadowbatch.js';
 import { waterFxU } from './water.js';
 import { createWaterFx, swimPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './lab/swim.js';
-import { World, configureVillage, configureClearings, groundY, stepOK, surfaceAt, waterNoise, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist, POND } from './world.js';
+import { World, configureVillage, configureClearings, groundY, stepOK, surfaceAt, waterNoise, VILLAGE_R, MINE, MINE_R, ARENA, regionName, dangerAt, roadDist, POND, puddleAt } from './world.js';
 import { FX } from './fx.js';
 import { Enemies, SECTOR_MOBS, BOSS_BY_NAME } from './enemies.js';
 import { sectorAt, biomeK, polar } from './worldmap.js';
@@ -25,9 +25,10 @@ import { Home } from './home.js';
 import { Gamepad, PAD } from './gamepad.js';
 import { TUNE } from './combo.js';
 import { Events } from './events.js';
-import { Realm, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
+import { Realm, foeLevel, levelInfo, xpNeed as realmXP, xpScale, killXpK, ROOT_LIFE } from './realm.js';
 import { fmtNum } from './stats.js';
 import { Village, loadVillageData } from './village.js';
+import { portraitById, preloadPortraits } from './portraits.js';
 import { Town } from './town.js';
 import { Farm } from './farm.js';
 import { Alchemy } from './alchemy.js';
@@ -203,6 +204,7 @@ g.player = P;
 const waterFx = createWaterFx(scene);
 const SW = { on: false, k: 0, ph: 0, prev: 0, ringT: 0 };
 const WATER_Y = 0.03; g.swim = SW;
+const _puddleV = new THREE.Vector3(), _puddleD = new THREE.Vector3();
 
 const xpNeed = () => realmXP(P.layer);
 g.xpNeed = xpNeed;
@@ -294,12 +296,20 @@ world.onSpawn = (cx, cz, rng) => {
   }
 };
 let spawnT = 4, golemT = 0;
+// 野外越久、杀得越多，妖怪越多（有上限）；回村里待一会儿就慢慢降下来
+const heat = { t: 0, kills: 0 }, HEAT_CAP = 8;
+const heatBonus = () => Math.min(HEAT_CAP, Math.floor(heat.t / 45) + Math.floor(heat.kills / 4));
+function heatTick(dt) {
+  if (Math.hypot(P.pos.x, P.pos.z) > VILLAGE_R + 8) heat.t += dt;
+  else { heat.t = Math.max(0, heat.t - dt * 3); heat.kills = Math.max(0, heat.kills - dt * 0.2); }
+}
 function ambientSpawns(dt) {
-  spawnT -= dt; golemT -= dt;
+  spawnT -= dt; golemT -= dt; heatTick(dt);
+  const hb = heatBonus();
   const near = enemies.list.filter((e) => e.type !== 'golem' && !e.boss && !e.raid && e.pos.distanceTo(P.pos) < 35 * Math.min(camZoom, 1.6)).length;
   if (spawnT <= 0) {
-    spawnT = (2.5 - g.nightK * 1.2) * (g.bloodMoon ? 0.6 : 1);
-    if (near < 11 + g.nightK * 7 && !P.dead) {
+    spawnT = (2.5 - g.nightK * 1.2) * (g.bloodMoon ? 0.6 : 1) / (1 + hb * 0.12);
+    if (near < 11 + g.nightK * 7 + hb && !P.dead) {
       const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * Math.min(camZoom, 1.6);
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
       if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)), dangerAt(x, z)).amb = true;
@@ -543,6 +553,9 @@ const life = new Life(g); g.life = life;
 // 青竹村 21 位村民（village.js / data/villagers.json）
 const town = new Town(g); g.town = town; // 青竹村街景（townplan.js 的 Lynch 五要素布局）
 const village = new Village(g, g.villageData); g.village = village;
+// 对话立绘：说话人是村民就用他的立绘（被夺了灵根 / 重伤也照样认得出是谁）
+gui.portraitOf = (name) => { const v = village.list.find((v) => v.name === name); return v ? portraitById(v.d.id) : null; };
+preloadPortraits();
 life.on((P) => {
   const cx = Math.floor(P.pos.x / CHUNK), cz = Math.floor(P.pos.z / CHUNK);
   for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
@@ -629,7 +642,7 @@ function volumeRows(body) {
     row.append(el('span', 'pic', icon), el('div', 'ptxt', `<b>${name}</b>`), r, pct); body.append(row);
   }
 }
-function openSound() { gui.panel('声音', (body) => volumeRows(body)); }
+function openSound() { gui.panel('声音', (body) => { volumeRows(body); const cr = audio.credits?.() || []; if (cr.length) body.append(el('div', 'pempty', '音乐：' + cr.join('；'))); }); }
 function openSettings() {
   gui.panel('设置', (body) => {
     volumeRows(body);
@@ -736,6 +749,8 @@ g.onEnemyHit = (e, amt, crit) => {
 };
 g.onEnemyGone = (e) => {
   const dead = e.hp <= 0;
+  if (dead && e.amb) heat.kills++;
+  e.warn?.remove(); e.warn = null;
   if (e.bar) {
     if (dead) { e.bar.hp = 0; e.bar.die(); fadingBars.push({ bar: e.bar, x: e.pos.x, y: barY(e), z: e.pos.z, t: 0.9 }); }
     else e.bar.remove();
@@ -750,7 +765,19 @@ function placeBar(bar, dt, x, y, z) {
   bar.place(sx, sy);
   if (!front) bar.el.style.visibility = 'hidden';
 }
+// 比自己强太多的妖怪头上挂个 ❗（高 3 级以上）；强太多更多就是 ☠
+function updateWarn() {
+  const mine = foeLevel(P.layer);
+  for (const e of enemies.list) {
+    const gap = e.lvl - mine, far = e.pos.distanceTo(P.pos) > 40;
+    if (gap < 3 || e.boss || far) { if (e.warn) { e.warn.remove(); e.warn = null; } continue; }
+    if (!e.warn) { e.warn = document.createElement('div'); e.warn.className = 'warn'; e.warn.textContent = gap >= 6 ? '☠' : '❗'; hpLayer.appendChild(e.warn); }
+    const [sx, sy, front] = screenOf(camera, e.pos.x, barY(e) + e.pos.y + groundY(e.pos.x, e.pos.z) + 0.7, e.pos.z);
+    e.warn.style.transform = `translate(${sx}px,${sy}px) translate(-50%,-100%)`; e.warn.style.visibility = front ? '' : 'hidden';
+  }
+}
 function updateHpBars(dt) {
+  updateWarn();
   for (const e of enemies.list) if (e.bar) placeBar(e.bar, dt, e.pos.x, barY(e) + e.pos.y + groundY(e.pos.x, e.pos.z), e.pos.z);
   for (let i = fadingBars.length - 1; i >= 0; i--) {
     const f = fadingBars[i]; f.t -= dt; placeBar(f.bar, dt, f.x, f.y, f.z);
@@ -1077,6 +1104,24 @@ function updatePlayer(dt) {
     SW.ringT -= dt;
     if (SW.ringT < 0) { SW.ringT = SW.on ? (moveK > 0.3 ? 0.5 : 0.8) : moveK > 0.3 ? 0.4 : 1.1; const r0 = SW.on ? 0.35 : 0.22 + clamp(wd, 0, 0.6) * 0.25; waterFx.ring(P.pos.x, WATER_Y, P.pos.z, r0, r0 + (SW.on ? 1.3 : 1.0), SW.on ? 1.3 : 1.2, SW.on ? 0.65 : 0.55); }
   }
+  // 雨后踩水洼：落脚那一下溅几滴水、起一个小圈，配"啪嗒"水声（水洼位置和地面着色器同一套算法）
+  const sg = Math.sign(Math.sin(P.c.phase));
+  if (wd <= 0.03 && st.y < 0.05 && moveK > 0.3 && sg !== SW.stepSg && SW.stepSg) {
+    const leg = P.c.legs[sg > 0 ? 0 : 1], f = leg.localToWorld(_puddleV.set(0, -0.48, 0.06));
+    const pk = puddleAt(f.x, f.z, weather.wet);
+    if (pk > 0.35) {
+      // 水圈不能超出水洼：往 8 个方向探，到水洼边为止
+      let rm = 0.6;
+      for (let i = 0; i < 8 && rm > 0.12; i++) { const a = i * 0.785, ca = Math.cos(a), sa = Math.sin(a); for (let r = 0.12; r < rm; r += 0.08) if (puddleAt(f.x + ca * r, f.z + sa * r, weather.wet) < 0.3) { rm = r; break; } }
+      const fy = (P.gy || 0) + 0.02, k = Math.min(1, pk) * (0.6 + 0.4 * moveK);
+      // 只溅几滴很低的小水珠（不高过脚踝），水圈淡、虚、不是一道硬线
+      waterFx.splash(f.x, fy, f.z, 4 + Math.round(k * 3), 0.8 + k * 0.4, 0.4, 0.02 + k * 0.006, _puddleD.set(Math.sin(P.yaw), 0, Math.cos(P.yaw)), true);
+      waterFx.ring(f.x, fy, f.z, Math.min(0.06, rm * 0.4), rm * 0.92, 0.85, 0.8, Math.random() * 6.28, 1, 1);
+      waterFx.ring(f.x, fy, f.z, 0.03, rm * 0.55, 0.6, 0.6, Math.random() * 6.28, 1, 1); // 里面再一小圈，更显眼
+      waterSound('puddle', 0.75 + k * 0.25);
+    }
+  }
+  SW.stepSg = sg;
   SW.prev = wd;
   SW.sunk = st.y < 0.3 ? SW.k * (lerp(0.78, 0.72, moveK) + Math.sin(g.time * 2.2) * 0.03) + clamp(wd / SWIM_IN, 0, 1) * 0.1 * (1 - SW.k) : 0;
   P.pos.y -= SW.sunk;

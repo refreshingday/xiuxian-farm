@@ -19,6 +19,8 @@ import { itemName } from './items.js';
 import { VILLAGE_R, groundY } from './world.js';
 import { toon, glow, mesh, at, addOutline, outlineMat, canvasTex } from './util.js';
 import { Site, siteOf } from './sectsites.js';
+import { portraitBySect, preloadSectPortraits } from './portraits.js';
+const sectKey = (name) => name.replace(/\s.*$/, ''); // 「青锋剑派 xx」→ 青锋剑派
 
 export const RANK = ['外门', '内门', '真传', '长老'];
 const PROMOTE = [null, { realm: 1, contrib: 200 }, { realm: 2, contrib: 600 }, { realm: 3, contrib: 1500 }];
@@ -69,11 +71,11 @@ export class Sects {
       const c = createChibi({ skin: '#eac3a0', hair: '#2e1e18', hairStyle: 2, robe: lk.robe || robe, robe2: lk.robe2 || shade(robe, 0.6), belt: lk.belt || shade(robe, 0.4), age: 'adult', sword: lk.sword ?? true, ...n.look });
       const [lx, lz, face = 0] = n.p; c.root.position.set(x + lx, groundY(x + lx, z + lz), z + lz); c.root.rotation.y = face; g.scene.add(c.root);
       const npc = { ...n, c, t: i * 0.37, face, act: n.act || 'idle', home: { x: x + lx, z: z + lz }, route: n.route && n.route.map(([rx, rz]) => ({ x: x + rx, z: z + rz })), ri: 0, wait: 0, said: 0 };
-      g.life.on((P) => { if (s.ruined) return false; const dd = near(P, c.root.position, 1.8); return dd !== false && { label: `💬 ${n.name} · ${n.title}`, act: () => this.npcTalk(s, npc), d: dd - 0.2 }; });
+      g.life.on((P) => { if (s.ruined) return false; const dd = near(P, c.root.position, 1.8); if (dd !== false) preloadSectPortraits(sectKey(s.name)); return dd !== false && { label: `💬 ${n.name} · ${n.title}`, act: () => this.npcTalk(s, npc), d: dd - 0.2 }; });
       return npc;
     });
     TYPES['disciple_' + d.id] = { ...TYPES.bandit, name: `${L.name.replace(/\s.*$/, '')}弟子`, c: [robe, shade(robe, 0.5), '#ffe7a8'], drops: [], stones: null, xp: 20 };
-    g.life.on((P) => { const dd = near(P, elder.root.position, 2.3); return dd !== false && { label: `${L.name} · 执事${A.elderName ? ' ' + A.elderName : ''}`, act: () => this.talk(s), d: dd - 0.4 }; });
+    g.life.on((P) => { const dd = near(P, elder.root.position, 2.3); if (dd !== false) preloadSectPortraits(sectKey(s.name)); return dd !== false && { label: `${L.name} · 执事${A.elderName ? ' ' + A.elderName : ''}`, act: () => this.talk(s), d: dd - 0.4 }; });
     // 偷师：练武场边观摩、藏经阁里翻秘籍（藏经阁在大殿左边，门朝南）
     g.life.on((P) => { const dd = this.canPeek(s) && near(P, s.yard, 4); return dd !== false && { label: `👀 偷师 · 观摩${L.name.replace(/\s.*$/, '')}弟子练功`, act: () => this.startPeek(s), d: dd }; });
     g.life.on((P) => { const dd = this.canPeek(s) && near(P, s.lib, 2); return dd !== false && { label: '📜 偷翻藏经阁的秘籍', act: () => this.sneak(s), d: dd }; });
@@ -438,7 +440,7 @@ export class Sects {
   npcTalk(s, n) {
     const g = this.g, line = n.lines[n.said++ % n.lines.length];
     n.glance = 4;
-    g.ui.dialog({ name: `${n.name} · ${n.title}`, line, hint: n.hint });
+    g.ui.dialog({ name: `${n.name} · ${n.title}`, line, hint: n.hint, portrait: portraitBySect(sectKey(s.name), n.name) || undefined });
   }
   // 弟子的日常动作：spar 对练 / drill 独自练招 / cast 施法 / sit 打坐 / work 干活（抡锤、扇火、采药）/ walk 绕圈踱步 / idle 站着
   act(dsc, dt) {

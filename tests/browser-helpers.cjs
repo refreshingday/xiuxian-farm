@@ -18,8 +18,8 @@ function serve() {
 
 async function browser() {
   const b = await chromium.launch();
-  const newCtx = async () => {
-    const ctx = await b.newContext();
+  const newCtx = async (opts = {}) => {
+    const ctx = await b.newContext(opts);
     await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@0\.160\.0\/(.*)/, (r) => {
       const rel = r.request().url().split('three@0.160.0/')[1].replace('build/three.module.js', 'build/three.module.min.js').replace('examples/jsm/', 'jsm/');
       const f = path.join(ROOT, 'vendor/three@0.160.0', rel);

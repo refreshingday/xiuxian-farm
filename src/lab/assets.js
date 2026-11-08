@@ -42,11 +42,11 @@ function rock(v, paintFn, seed = 1, o = {}) {
 // 树
 // ======================================================================
 function trunk(k, pts, r0, r1, color = '#7a5236') {
-  k.add(G.tube(pts, r0, r1, 7), grad(color, 0.6, 1.05, 0.1));
+  k.add(G.tube(pts, r0, r1, 7), grad(color, 0.6, 1.05, 0.1), { kind: 'bark' });
   // 树根外张
   for (let i = 0; i < 4; i++) {
     const a = i / 4 * TAU + 0.4;
-    k.add(G.cone(r0 * 0.7, r0 * 2.2, 5), grad(color, 0.55, 0.9), { at: [Math.cos(a) * r0 * 0.8, -0.05, Math.sin(a) * r0 * 0.8], rot: [Math.sin(a) * 1.0, 0, -Math.cos(a) * 1.0] });
+    k.add(G.cone(r0 * 0.7, r0 * 2.2, 5), grad(color, 0.55, 0.9), { at: [Math.cos(a) * r0 * 0.8, -0.05, Math.sin(a) * r0 * 0.8], rot: [Math.sin(a) * 1.0, 0, -Math.cos(a) * 1.0], kind: 'bark' });
   }
 }
 // 阔叶树 5 形：圆冠 / 高椭圆 / 伞形 / 双冠 / 小树苗
@@ -64,11 +64,11 @@ function broadTree(v, leaf, accent, seed, o = {}) {
   const T = { r: T0.r * S, t: T0.t.map(sc), branch: T0.branch && T0.branch.map(sc),
     c: T0.c.map(([x, y, z, rr]) => [(top0[0] + (x - top0[0]) * 1.3) * S, (top0[1] + (y - top0[1]) * 1.3) * S, (top0[2] + (z - top0[2]) * 1.3) * S, rr * S * 0.86]) };
   trunk(k, T.t, T.r, T.r * 0.55, o.bark);
-  if (T.branch) k.add(G.tube(T.branch, T.r * 0.7, T.r * 0.35, 6), grad(o.bark || '#7a5236', 0.6, 1));
+  if (T.branch) k.add(G.tube(T.branch, T.r * 0.7, T.r * 0.35, 6), grad(o.bark || '#7a5236', 0.6, 1), { kind: 'bark' });
   // 冠下可见的几根小枝
   for (let i = 0; i < 3; i++) {
     const a = i * 2.1 + seed, top = T.t[2];
-    k.add(G.tube([[top[0], top[1] - 0.3, top[2]], [top[0] + Math.cos(a) * 0.6, top[1] + 0.2, top[2] + Math.sin(a) * 0.6]], T.r * 0.5, T.r * 0.2, 5), grad(o.bark || '#7a5236', 0.6, 1));
+    k.add(G.tube([[top[0], top[1] - 0.3, top[2]], [top[0] + Math.cos(a) * 0.6, top[1] + 0.2, top[2] + Math.sin(a) * 0.6]], T.r * 0.5, T.r * 0.2, 5), grad(o.bark || '#7a5236', 0.6, 1), { kind: 'bark' });
   }
   (o.real ? foliageLeaves : foliage)(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt });
   if (o.fruit) {
@@ -146,7 +146,7 @@ function deadTree(v, seed, color = '#5a4638') {
   const branch = (p, a, len, depth, rr) => {
     if (depth === 0) return;
     const e = [p[0] + Math.cos(a) * len, p[1] + len * (0.5 + r() * 0.4), p[2] + Math.sin(a) * len];
-    k.add(G.tube([p, [(p[0] + e[0]) / 2, (p[1] + e[1]) / 2 + 0.05, (p[2] + e[2]) / 2], e], rr, rr * 0.5, 5), grad(color, 0.6, 1));
+    k.add(G.tube([p, [(p[0] + e[0]) / 2, (p[1] + e[1]) / 2 + 0.05, (p[2] + e[2]) / 2], e], rr, rr * 0.5, 5), grad(color, 0.6, 1), { kind: 'bark' });
     for (let i = 0; i < 2; i++) branch(e, a + (r() - 0.5) * 1.6, len * 0.62, depth - 1, rr * 0.5);
   };
   for (let i = 0; i < 3 + (v % 2); i++) branch([0, H * (0.55 + i * 0.12), 0], i * 2.2 + r(), 0.8 + r() * 0.4, 3, 0.08);
@@ -235,6 +235,7 @@ function mushroom(v, cap, seed, glow = false) {
 const WOOD = '#a8743f', DWOOD = '#7a5236';
 function plank(w, h, d, color = WOOD, seed = 1) {
   const g = G.box(w, h, d);
+  g.userData.kind = 'wood';
   return [g, (geo) => paint(geo, (p, n, out) => out.set(color).multiplyScalar((0.85 + 0.15 * n.y) * (0.92 + (vnoise(p.x * 9 + seed, p.y * 1.5 + p.z * 9, seed) - 0.5) * 0.25)))];
 }
 function fence(v, seed) {
@@ -366,8 +367,8 @@ function stump(v, seed) {
     else out.set('#7a5236').multiplyScalar(0.7 + 0.15 * Math.sin(Math.atan2(p.z, p.x) * 9) + 0.15 * (p.y > 0 ? 1 : 0));
   });
   if (v === 0 || v === 3) {
-    k.add(G.cyl(0.42, 0.5, 0.45, 12), ring);
-    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; k.add(G.cone(0.14, 0.4, 5), grad('#6a4630'), { at: [Math.cos(a) * 0.45, -0.05, Math.sin(a) * 0.45], rot: [Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2] }); }
+    k.add(G.cyl(0.42, 0.5, 0.45, 12), ring, { kind: 'bark' });
+    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; k.add(G.cone(0.14, 0.4, 5), grad('#6a4630'), { at: [Math.cos(a) * 0.45, -0.05, Math.sin(a) * 0.45], rot: [Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2], kind: 'bark' }); }
     if (v === 3) { // 插着斧头
       k.add(...plank(0.06, 0.7, 0.06, '#9a6a3a'), { at: [0.1, 0.75, 0], rot: [0, 0, 0.5] });
       k.add(G.box(0.08, 0.2, 0.28), grad('#8a8e98', 0.8, 1.3), { at: [-0.05, 0.5, 0], rot: [0, 0, 0.5] });
@@ -376,7 +377,7 @@ function stump(v, seed) {
     const L = v === 1 ? 2.2 : 1.6;
     const flip = (g) => { const f = g.clone(), ix = f.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } const nm = f.attributes.normal; for (let i = 0; i < nm.array.length; i++) nm.array[i] *= -1; return f; };
     const outer = new THREE.CylinderGeometry(0.3, 0.34, L, 10, 1, v === 2).rotateZ(Math.PI / 2);
-    k.add(outer, ring, { at: [0, 0.3, 0] });
+    k.add(outer, ring, { at: [0, 0.3, 0], kind: 'bark' });
     if (v === 2) { // 空心：外壁内侧（背面）也要画出来，否则从上往下看会穿帮
       k.add(flip(outer), grad('#4a3020'), { at: [0, 0.3, 0] });
       const inner = new THREE.CylinderGeometry(0.22, 0.25, L, 10, 1, true).rotateZ(Math.PI / 2);
@@ -384,7 +385,7 @@ function stump(v, seed) {
       k.add(flip(inner), grad('#3a2618'), { at: [0, 0.3, 0] });
     }
     for (const s of [-1, 1]) k.add(new THREE.CircleGeometry(v === 2 ? 0.02 : 0.31, 10).rotateY(s * Math.PI / 2), ring, { at: [s * L / 2, 0.3, 0] });
-    k.add(G.tube([[0.2, 0.5, 0], [0.4, 0.8, 0.1], [0.45, 1.0, 0.25]], 0.06, 0.03, 5), grad('#7a5236'));
+    k.add(G.tube([[0.2, 0.5, 0], [0.4, 0.8, 0.1], [0.45, 1.0, 0.25]], 0.06, 0.03, 5), grad('#7a5236'), { kind: 'bark' });
     for (let i = 0; i < 4; i++) k.add(G.sph(0.08 + r() * 0.05, 6, 4), grad('#5fae3e', 0.8, 1.2), { at: [(r() - 0.5) * L * 0.8, 0.58, (r() - 0.5) * 0.2], s: [1.4, 0.5, 1.1] });
   }
   return k.build();
@@ -484,7 +485,7 @@ function shell(v, seed) {
 function driftwood(v, seed) {
   const k = new Kit(), r = rnd(seed + v);
   const pts = [[[-1, 0.12, 0], [-0.3, 0.16, 0.2], [0.4, 0.12, -0.1], [1, 0.1, 0.1]], [[-0.7, 0.1, 0], [0, 0.14, 0.05], [0.6, 0.11, -0.2]], [[-0.4, 0.1, -0.3], [0.3, 0.15, 0.3]]][v % 3];
-  k.add(G.tube(pts, 0.13, 0.07, 6), grad('#c8b8a0', 0.75, 1.1, 0.15));
+  k.add(G.tube(pts, 0.13, 0.07, 6), grad('#c8b8a0', 0.75, 1.1, 0.15), { kind: 'bark' });
   if (v === 0) k.add(G.tube([[-0.3, 0.15, 0.2], [-0.4, 0.4, 0.5], [-0.35, 0.6, 0.6]], 0.06, 0.02, 5), grad('#c8b8a0'));
   return k.build();
 }
@@ -1157,7 +1158,7 @@ function logSteps(v, seed, W = 1.9, RUN = 3, RISE = LH) {
   const k = new Kit(), r = rnd(seed + v), n = 5, bark = '#6a4a32';
   for (let i = 0; i < n; i++) {
     const y = (i + 0.5) * RISE / n, z = RUN / 2 - (i + 0.5) * RUN / n, L = W * (0.85 + r() * 0.2);
-    k.add(new THREE.CylinderGeometry(0.13, 0.14, L, 8).rotateZ(Math.PI / 2), (g) => paint(g, (p, nn, out) => out.set(Math.abs(p.x) > L / 2 - 0.02 ? '#d8b078' : bark).multiplyScalar(0.7 + 0.35 * Math.max(0, nn.y + 0.3))), { at: [(r() - 0.5) * 0.15, y - 0.02, z], rot: [0, (r() - 0.5) * 0.12, 0] });
+    k.add(new THREE.CylinderGeometry(0.13, 0.14, L, 8).rotateZ(Math.PI / 2), (g) => paint(g, (p, nn, out) => out.set(Math.abs(p.x) > L / 2 - 0.02 ? '#d8b078' : bark).multiplyScalar(0.7 + 0.35 * Math.max(0, nn.y + 0.3))), { at: [(r() - 0.5) * 0.15, y - 0.02, z], rot: [0, (r() - 0.5) * 0.12, 0], kind: 'bark' });
     for (const sx of [-1, 1]) k.add(G.cyl(0.04, 0.05, 0.6, 5), grad('#5a3a26'), { at: [sx * (L / 2 - 0.1), y - 0.5, z + 0.16] });
     // 横木后面填的夯土台面（一直埋到地下），踩上去是平的
     k.add(G.box(L * 0.95, 2, RUN / n), grad('#8a6a48', 0.7, 1.0, 0.15, i), { at: [0, y + 0.06 - 1, z - 0.02] });
