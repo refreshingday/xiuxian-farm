@@ -67,6 +67,25 @@ function gradient() {
   return grad;
 }
 
+// 参考画风的着色（lab/ref）：三阶硬色阶 + 阴影偏冷、受光偏暖。toon(color, { ref: true }) 打开；村子里的东西用它
+let grad3;
+function gradient3() {
+  if (grad3) return grad3;
+  grad3 = new THREE.DataTexture(new Uint8Array([95, 175, 255]), 3, 1, THREE.RedFormat);
+  grad3.minFilter = grad3.magFilter = THREE.NearestFilter;
+  grad3.generateMipmaps = false;
+  grad3.needsUpdate = true;
+  return grad3;
+}
+function refPatch(s) {
+  s.fragmentShader = s.fragmentShader.replace('#include <opaque_fragment>', `
+    {
+      float rl = dot(outgoingLight, vec3(0.3, 0.59, 0.11)) / max(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)), 0.001);
+      outgoingLight *= mix(vec3(0.84, 0.9, 1.12), vec3(1.02, 1.0, 0.97), smoothstep(0.5, 0.95, rl));
+    }
+    #include <opaque_fragment>`);
+}
+
 // 镜头与玩家之间的物体做抖动镂空（看得到被树/墙挡住的角色）
 export const occ = { uPlayer: { value: new THREE.Vector3() }, uCam: { value: new THREE.Vector3() } };
 function occPatch(s) {
@@ -98,6 +117,8 @@ export const wind = { value: 0 };
 export const weatherU = { rain: { value: 0 }, wet: { value: 0 }, sky: { value: new THREE.Color(0xbfd4e8) },
   // 季节：叶子 / 草的色调（秋天发黄发红）、积雪和结冰（冬天）、地上的落叶（秋天）。main.js 按日期设置
   season: { value: new THREE.Vector3(1, 1, 1) }, grassT: { value: new THREE.Vector3(1, 1, 1) }, snow: { value: 0 }, ice: { value: 0 }, litter: { value: 0 },
+  // 草丛配色：地面草地贴图的平均色 / 地面参考色（线性），草叶乘上它就和地面同色（world.js 载入贴图后算）
+  grassMatch: { value: new THREE.Vector3(1, 1, 1) },
   autumn: { value: 0 } }; // 秋叶：按明暗换成红橙（深绿也能变红，不只是乘个色调）
 const SEASON_UNI = 'uniform vec3 uSeason;\nuniform float uSnow, uAutumn;\n';
 const seasonU = (s) => { s.uniforms.uSeason = weatherU.season; s.uniforms.uSnow = weatherU.snow; s.uniforms.uAutumn = weatherU.autumn; };
@@ -110,6 +131,11 @@ function leafPatch(s, mat) {
   seasonU(s);
   const season = SEASON_LEAF.replace('SNOW_K', 'smoothstep(0.1, 0.7, normalize(vLeafN).y)');
   s.vertexShader = 'varying vec3 vLeafP;\nvarying vec3 vLeafN;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLeafP = position; vLeafN = normal;');
+  // 不要贴图、也不要程序叶斑：纯色，只保留季节 / 积雪
+  if (mat.userData.leafPlain) {
+    s.fragmentShader = SEASON_UNI + 'varying vec3 vLeafN;\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>\n{${season}\n}`);
+    return;
+  }
   if (tex) {
     // 有贴图：三向投影叶团贴图（无需 UV）
     s.uniforms.tLeaf = { value: tex };
@@ -144,9 +170,15 @@ function leafPatch(s, mat) {
 // 草卡：顶点都在卡的根部，在视空间展开成正对镜头的一片（俯视也不会变成一条线）；
 // aGrass = (左右, 高度, 贴图截取宽度, 卡序号)，每丛按位置随机截取 / 镜像贴图，越高随风摆得越多
 function grassPatch(s) {
-  s.uniforms.uWind = wind; s.uniforms.uGrassT = weatherU.grassT; s.uniforms.uSnow = weatherU.snow;
-  s.fragmentShader = 'uniform vec3 uGrassT;\nuniform float uSnow;\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  s.uniforms.uWind = wind; s.uniforms.uGrassT = weatherU.grassT; s.uniforms.uSnow = weatherU.snow; s.uniforms.uWet = weatherU.wet; s.uniforms.uGrassMatch = weatherU.grassMatch;
+  s.fragmentShader = 'uniform vec3 uGrassT, uGrassMatch;\nuniform float uSnow, uWet;\n#define GRASS_ROOT vec3(2.6, 1.9, 2.0)\n#define GRASS_K vec3(0.82, 0.89, 1.25)\n' + s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  #ifdef USE_MAP
+    // 草叶贴图根部画得很暗：提亮到和地面贴图同色，草丛和地面接得上（用户 2026-11-08：根部不要暗）
+    diffuseColor.rgb *= mix(GRASS_ROOT, vec3(1.0), smoothstep(0.0, 0.75, vMapUv.y));
+  #endif
+  diffuseColor.rgb *= uGrassMatch * GRASS_K;
   diffuseColor.rgb *= uGrassT;
+  diffuseColor.rgb *= mix(1.0, 0.84, uWet); // 雨后和地面草地一样 ×0.84（地面着色器 GROUND_FRAG 同值），实测才对得上
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.95, 1.0), uSnow * 0.8);`);
   s.vertexShader = 'attribute vec4 aGrass;\nuniform float uWind;\n' + s.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
   {
@@ -185,23 +217,34 @@ function applyPatches(mat, patches, key) {
   mat.onBeforeCompile = (s) => { for (const f of patches) f(s, mat); };
   mat.customProgramCacheKey = () => key;
 }
+// 给已有材质（lab 参考画风的树、竹、石、墨线）补上「挡住角色时变透」：链在原 onBeforeCompile 后面，只补一次
+export function addOcc(mat) {
+  if (!mat || mat.userData.occ) return;
+  mat.userData.occ = true;
+  const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey ? mat.customProgramCacheKey() : '';
+  mat.onBeforeCompile = (s, r) => { prev?.call(mat, s, r); occPatch(s); };
+  mat.customProgramCacheKey = () => key + 'O';
+  mat.needsUpdate = true;
+}
 function occlude(mat, pre) {
   applyPatches(mat, pre ? [pre, occPatch] : [occPatch], 'occ' + (pre ? 'line' : ''));
 }
 
 const cache = new Map();
 export function toon(color, o = {}) {
-  const key = `${color}|${o.emissive || ''}|${o.ei || 0}|${o.occ ? 1 : 0}|${o.vc ? 1 : 0}|${o.map ? o.map.uuid : ''}|${o.leaf ? 1 : 0}|${o.grass ? 1 : 0}|${o.leafTex ? o.leafTex.uuid : ''}|${o.card ? 1 : 0}`;
+  const key = `${color}|${o.emissive || ''}|${o.ei || 0}|${o.occ ? 1 : 0}|${o.vc ? 1 : 0}|${o.map ? o.map.uuid : ''}|${o.leaf ? 1 : 0}|${o.grass ? 1 : 0}|${o.leafTex ? o.leafTex.uuid : ''}|${o.card ? 1 : 0}|${o.ref ? 1 : 0}|${o.leafPlain ? 1 : 0}`;
   if (!o.unique && cache.has(key)) return cache.get(key);
-  const m = new THREE.MeshToonMaterial({ color, gradientMap: gradient(), vertexColors: !!o.vc, map: o.map || null });
+  const m = new THREE.MeshToonMaterial({ color, gradientMap: o.ref ? gradient3() : gradient(), vertexColors: !!o.vc, map: o.map || null });
   if (o.emissive) { m.emissive.set(o.emissive); m.emissiveIntensity = o.ei ?? 1; }
   if (o.leafTex) m.userData.leafTex = o.leafTex;
+  if (o.leafPlain) m.userData.leafPlain = true;
   const patches = [];
   if (o.leaf) patches.push(leafPatch);
   if (o.grass) patches.push(grassPatch);
   if (o.card) patches.push(cardPatch);
   if (o.occ) patches.push(occPatch);
-  if (patches.length) applyPatches(m, patches, `toon${o.leaf ? 'L' : ''}${o.grass ? 'G' : ''}${o.card ? 'C' : ''}${o.occ ? 'O' : ''}`);
+  if (o.ref) patches.push(refPatch);
+  if (patches.length) applyPatches(m, patches, `toon${o.leaf ? 'L' : ''}${o.leafPlain ? 'P' : ''}${o.grass ? 'G' : ''}${o.card ? 'C' : ''}${o.occ ? 'O' : ''}${o.ref ? 'R' : ''}`);
   m.userData.baseE = m.emissive.clone();
   m.userData.baseEI = m.emissiveIntensity;
   if (!o.unique) cache.set(key, m);
@@ -212,10 +255,15 @@ export function toon(color, o = {}) {
 const lineUniform = { value: 1 };
 export const outlineK = lineUniform;
 const lineCache = new Map();
+// 描边关掉时不只是厚度归零，连这一遍都不画：封闭的模型，厚度 0 的背面壳被它自己的正面挡住，看不见，只白占绘制次数（村里约三分之一）。
+// 例外（照旧画，keep）：开口的模型（树下石圈、井沿这类没封底的圆筒）——壳正好充当了内壁，藏了就露空；会透视淡化的（occ）也不动。
+export function setOutline(on) { lineUniform.value = on ? 1 : 0; for (const m of lineCache.values()) m.visible = on || !!m.userData.keep; }
 export function outlineMat(color = '#2b1d14', thick = 0.03, o = {}) {
-  const key = `${color}|${thick}|${o.occ ? 1 : 0}`;
+  const key = `${color}|${thick}|${o.occ ? 1 : 0}|${o.open ? 1 : 0}`;
   if (lineCache.has(key)) return lineCache.get(key);
   const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+  m.userData.lineArgs = [color, thick, !!o.occ]; m.userData.keep = !!(o.occ || o.open);
+  m.visible = lineUniform.value > 0 || m.userData.keep;
   const pre = (s) => {
     s.uniforms.uThick = { value: thick };
     s.uniforms.uLineK = lineUniform;
@@ -243,13 +291,25 @@ function lineNormals(geo) {
   }
   geo.setAttribute('lineNormal', new THREE.BufferAttribute(out, 3));
 }
+// 模型是否封闭（每条边正好两个三角形共用，顶点按位置焊接）。判错只会多画一遍描边壳，不会少画东西。
+function isClosed(geo) {
+  if (geo.userData._closed !== undefined) return geo.userData._closed;
+  const p = geo.attributes.position, idx = geo.index, ids = new Map(), vid = new Int32Array(p.count);
+  for (let i = 0; i < p.count; i++) { const k = `${Math.round(p.getX(i) * 1000)},${Math.round(p.getY(i) * 1000)},${Math.round(p.getZ(i) * 1000)}`; let v = ids.get(k); if (v === undefined) ids.set(k, v = ids.size); vid[i] = v; }
+  const n = idx ? idx.count : p.count, at = idx ? (i) => vid[idx.getX(i)] : (i) => vid[i], edges = new Map();
+  const add = (a, b) => { if (a === b) return; const k = a < b ? a * 1048576 + b : b * 1048576 + a; edges.set(k, (edges.get(k) || 0) + 1); };
+  for (let i = 0; i + 2 < n; i += 3) { const a = at(i), b = at(i + 1), c = at(i + 2); add(a, b); add(b, c); add(c, a); }
+  let ok = edges.size > 0; for (const c of edges.values()) if (c !== 2) { ok = false; break; }
+  return (geo.userData._closed = ok);
+}
 export function addOutline(obj, mat, skip = () => false) {
   const list = [];
   obj.traverse((m) => { if (m.isMesh && !m.userData.isLine && !skip(m)) list.push(m); });
   for (const m of list) {
     if (!m.geometry.attributes.normal) continue;
     lineNormals(m.geometry);
-    const l = m.isInstancedMesh ? new THREE.InstancedMesh(m.geometry, mat, m.count) : new THREE.Mesh(m.geometry, mat);
+    const A = mat.userData.lineArgs, lm = A && !mat.userData.keep && !isClosed(m.geometry) ? outlineMat(A[0], A[1], { occ: A[2], open: true }) : mat;
+    const l = m.isInstancedMesh ? new THREE.InstancedMesh(m.geometry, lm, m.count) : new THREE.Mesh(m.geometry, lm);
     if (m.isInstancedMesh) { l.instanceMatrix = m.instanceMatrix; l.count = m.count; l.boundingSphere = m.boundingSphere; }
     l.userData.isLine = true; l.castShadow = false; l.receiveShadow = false;
     m.add(l);

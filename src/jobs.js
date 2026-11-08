@@ -7,8 +7,9 @@ import { createChibi, animChibi } from './chibi.js';
 import { glow, mesh, lerpAngle } from './util.js';
 import { RINGS, dangerFor, sectorAt } from './worldmap.js';
 import { SECTOR_MOBS, TYPES } from './enemies.js';
-import { MINE, regionName } from './world.js';
+import { MINE, regionName, VILLAGE_R } from './world.js';
 import { levelInfo } from './realm.js';
+import { foeHpMul, foeDmgMul } from './stats.js';
 import { near } from './life.js';
 import { itemName } from './items.js';
 
@@ -67,9 +68,19 @@ export class Jobs {
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2, d = rnd(lo, hi), x = Math.sin(a) * d, z = -Math.cos(a) * d;
       if (Math.hypot(x - MINE.x, z - MINE.y) < 45 || g.landmarks?.list.some((L) => Math.hypot(L.x - x, L.z - z) < 45)) continue;
+      if (!this.openGround(x, z)) continue;
       return { x, z };
     }
     return null;
+  }
+  // 委托地点周围 30 米不能有村镇 / 坊市 / 宗门（围墙会把刷出来的妖兽挡在里面，也进不去）
+  openGround(x, z, R = 30) {
+    const g = this.g;
+    if (Math.hypot(x, z) < VILLAGE_R + R + 12) return false;
+    for (const h of g.hubs?.list || []) if (Math.hypot(h.x - x, h.z - z) < 26 + R + 12) return false;
+    for (const s of g.sects?.list || []) if (Math.hypot(s.x - x, s.z - z) < (s.r || 40) + R + 12) return false;
+    for (const L of g.landmarks?.list || []) if ((L.kind === 'hub' || L.kind === 'sect') && Math.hypot(L.x - x, L.z - z) < 26 + R + 20) return false;
+    return true;
   }
   gen(kind, who) {
     const g = this.g, ring = this.realm(), poster = who.name, aff = [];
@@ -104,8 +115,8 @@ export class Jobs {
         J.thing = itemName(J.herb);
       }
       title = `寻踪 · ${J.thing}`;
-      desc = J.herb ? `${poster}：听说${J.place}一带（${where(s)}）长着${J.thing}，${J.cond === 'night' ? '只在夜里显形，' : J.cond === 'rain' ? '要下雨天才冒头，' : ''}得用神识（V）仔细找。`
-        : `${poster}：${J.thing}进了${J.place}（${where(s)}），到现在还没回来！用神识（V）找找吧。`;
+      desc = J.herb ? `${poster}：听说${J.place}一带（${where(s)}）长着${J.thing}，${J.cond === 'night' ? '只在夜里显形，' : J.cond === 'rain' ? '要下雨天才冒头，' : ''}得到了地方仔细找。`
+        : `${poster}：${J.thing}进了${J.place}（${where(s)}），到现在还没回来！到那一带找找吧。`;
     } else if (kind === 'omen') {
       if (!(s = this.site(90))) return null;
       at(s); J.type = pick(Object.keys(OMEN)); exp = g.day + 1;
@@ -170,7 +181,23 @@ export class Jobs {
       m.add(mesh(new THREE.IcosahedronGeometry(0.6, 1).translate(0, 0.7, 0), glow(col, 3), { cast: false }));
       R.objs.push(this.add(m, J.x, J.z)); R.beam = m;
     }
+    if (J.kind === 'guard') this.camp(R);
     if (J.aff.includes('ally')) this.allyUp(R);
+  }
+  // 守护地点布景：帐篷 / 篝火 / 石头 / 木箱，加一个站在旁边的 NPC，到了才不会光秃秃的
+  camp(R) {
+    const J = R.J, grp = new THREE.Group();
+    const tentCol = J.name === '猎户的陷阱营地' ? '#7a5a3a' : J.name === '山神小庙' ? '#a85a4a' : '#c9b88a';
+    const lam = (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(2, 2.2, 4).rotateY(Math.PI / 4).translate(0, 1.1, 0), lam(tentCol)); tent.castShadow = true;
+    tent.position.set(-3, 0, -2); grp.add(tent);
+    const fire = mesh(new THREE.ConeGeometry(0.28, 0.6, 6).translate(0, 0.3, 0), glow('#ffb347', 2.6), { cast: false }); fire.position.set(2, 0, 1); grp.add(fire);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22), lam('#8a8a82')); st.position.set(2 + Math.cos(a) * 0.55, 0.12, 1 + Math.sin(a) * 0.55); grp.add(st); }
+    for (let i = 0; i < 3; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.5), lam('#9a7a4a')); b.position.set(-1 + i * 0.8, 0.25, 2.6); b.castShadow = true; grp.add(b); }
+    R.objs.push(this.add(grp, J.x, J.z + 3));
+    const w = WHO[Math.floor(Math.random() * WHO.length)];
+    const c = createChibi({ skin: '#eac3a0', hair: w.age === 'elder' ? '#e8e8ec' : '#3a2a24', hairStyle: 1, robe: w.robe, robe2: shade(w.robe, 0.65), belt: shade(w.robe, 0.4), age: w.age });
+    R.objs.push(this.add(c.root, J.x + 3.4, J.z + 3.2)); c.root.rotation.y = -2.2; R.keeper = c;
   }
   update(dt) {
     const Q = this.g.quests;
@@ -192,7 +219,8 @@ export class Jobs {
   alive(R) { return R.mobs.filter((e) => e.alive); }
   // 委托刷出来的妖兽：词缀在这里生效
   mob(R, type, x, z, lvl, o = {}) {
-    const J = R.J, e = this.g.enemies.spawn(type, x, z, Math.max(0, lvl));
+    const J = R.J, pp = { x, z }; this.g.world.resolve(pp, 1.2);
+    const e = this.g.enemies.spawn(type, pp.x, pp.z, Math.max(0, lvl));
     if (J.aff.includes('blood') && !e.blood) { e.hp = e.maxHp *= 1.5; e.dmg *= 1.5; e.blood = true; }
     if (J.aff.includes('storm') && e.elem === '火') e.hp = e.maxHp *= 0.75; // 雷雨浇火
     e.state = o.idle ? 'idle' : 'chase'; e.jobR = R;
@@ -227,7 +255,7 @@ export class Jobs {
       else if (d > 2.4) { const sp = Math.min(7.5, 3 + d * 0.6); n.pos.x += dx / d * sp * dt; n.pos.z += dz / d * sp * dt; move = sp / 6; n.yaw = lerpAngle(n.yaw, Math.atan2(dx, dz), 1 - Math.exp(-8 * dt)); }
       g.world.resolve(n.pos, 0.35);
       let hurt = 0;
-      for (const e of g.enemies.list) if (e.alive && !e.hidden && Math.hypot(e.pos.x - n.pos.x, e.pos.z - n.pos.z) < e.r + 0.7) hurt += e.dmg * 0.5 * dt;
+      for (const e of g.enemies.list) if (e.alive && !e.hidden && Math.hypot(e.pos.x - n.pos.x, e.pos.z - n.pos.z) < e.r + 0.7) hurt += e.dmg * (e.npcK ?? 1) * 0.5 * dt;
       if (hurt) { n.hp -= hurt; n.c.flash = 0.1; if ((n.numT -= dt) <= 0) { n.numT = 0.8; g.fx.num(n.pos, `${n.name}受伤`, 'hurt'); } }
       if (n.hp <= 0) return this.fail(R, `${n.name}被害了`);
       const left = Math.hypot(J.x - n.pos.x, J.z - n.pos.z);
@@ -261,10 +289,11 @@ export class Jobs {
   guard(R, dt, P) {
     const g = this.g, J = R.J, N = R.node, d = Math.hypot(P.pos.x - J.x, P.pos.z - J.z);
     N.m.rotation.y += dt;
+    if (R.keeper) animChibi(R.keeper, dt, { move: 0, attack: -1, cast: 0, talk: false });
     if (R.stage === 'go') { if (d < 14) { R.stage = 'fight'; R.engaged = true; R.wave = 0; R.next = 1.5; g.toast(`守住${J.name}！一共三波`, 2.2); } return; }
     if (d > 35) { if ((R.away = (R.away || 0) + dt) > 8) return this.fail(R, `你离开太久，${J.name}被妖兽毁了`); } else R.away = 0;
     let hurt = 0;
-    for (const e of this.alive(R)) if (!e.hidden && Math.hypot(e.pos.x - J.x, e.pos.z - J.z) < e.r + 1.2) hurt += e.dmg * 0.6 * dt;
+    for (const e of this.alive(R)) if (!e.hidden && Math.hypot(e.pos.x - J.x, e.pos.z - J.z) < e.r + 1.2) hurt += e.dmg * (e.npcK ?? 1) * 0.6 * dt;
     if (hurt) { N.hp -= hurt; if ((N.numT -= dt) <= 0) { N.numT = 0.8; g.fx.num({ x: J.x, z: J.z }, `阵眼 ${pct(N)}`, 'hurt'); } }
     if (N.hp <= 0) return this.fail(R, `${J.name}被毁了`);
     if (!this.alive(R).length) {
@@ -282,20 +311,18 @@ export class Jobs {
     const g = this.g, J = R.J;
     if (R.stage === 'go') {
       if (Math.hypot(P.pos.x - J.x, P.pos.z - J.z) < 40) {
-        R.stage = 'search'; R.engaged = true; R.scan0 = g.realm.scanT;
+        R.stage = 'search'; R.engaged = true; R.hintT = 0;
         const types = SECTOR_MOBS[sectorAt(J.x, J.z).id];
         for (let i = 0; i < 1 + J.ring; i++) this.mob(R, pick(types), J.tx + rnd(-5, 5), J.tz + rnd(-5, 5), J.lvl, { idle: true });
         if (J.aff.includes('rival')) this.rival(R, J.x + rnd(-8, 8), J.z + rnd(-8, 8), { x: J.tx, z: J.tz });
-        g.toast(`到了。按 V 放出神识，搜寻${J.thing}`, 2.5);
+        g.toast(`到了。四处找找${J.thing}`, 2.5);
       }
       return;
     }
     if (R.stage !== 'search') return;
-    const s = g.realm.scanT, fresh = s > (R.scan0 ?? 0) + 1; R.scan0 = s;
-    if (!fresh) return;
-    const d = Math.hypot(P.pos.x - J.tx, P.pos.z - J.tz);
-    if (J.cond && !(J.cond === 'night' ? g.nightK > 0.5 : g.weather.raining)) { g.toast(`神识里什么也没有……${J.cond === 'night' ? '这东西只在夜里显形' : '这东西要下雨才冒头'}`, 2.5); return; }
-    if (d > 24) { g.toast(`神识隐约感到：在${dirOf(J.tx - P.pos.x, J.tz - P.pos.z)}边，约 ${Math.round(d / 5) * 5} 米`, 2.5); return; }
+    const d = Math.hypot(P.pos.x - J.tx, P.pos.z - J.tz), hint = (R.hintT = (R.hintT || 0) - dt) <= 0;
+    if (J.cond && !(J.cond === 'night' ? g.nightK > 0.5 : g.weather.raining)) { if (hint && d < 30) { R.hintT = 8; g.toast(`附近什么也没有……${J.cond === 'night' ? '这东西只在夜里显形' : '这东西要下雨才冒头'}`, 2.5); } return; }
+    if (d > 12) { if (hint && d < 60) { R.hintT = 8; g.toast(`线索指向${dirOf(J.tx - P.pos.x, J.tz - P.pos.z)}边，约 ${Math.round(d / 5) * 5} 米`, 2.5); } return; }
     this.reveal(R);
   }
   reveal(R) {
@@ -398,7 +425,7 @@ export class Jobs {
     fx.shockRing(x, z, 2.8, '#bfe8ff'); fx.burst({ x, z }, '#dff4ff', 26, { speed: 6, up: 5, life: 0.5, y: 0.3 });
     g.shake(0.4); g.sfx?.impact?.({ heavy: 1 });
     for (const e of [...g.enemies.list]) if (e.alive && !e.boss && Math.hypot(e.pos.x - x, e.pos.z - z) < 2.4 + e.r) g.enemies.damage(e, e.maxHp * 0.35, x, z, 4);
-    if (Math.hypot(P.pos.x - x, P.pos.z - z) < 2.4 + P.r) P.hurt(14 + lvl * 3, x, z, 8);
+    if (Math.hypot(P.pos.x - x, P.pos.z - z) < 2.4 + P.r) P.hurt((14 + lvl * 3) * foeDmgMul(lvl), x, z, 8);
   }
   // 同伴：委托人（小孩、高人除外）或随便一个村民跟着你，自己找妖兽打
   allyUp(R) {
@@ -424,8 +451,8 @@ export class Jobs {
     else if (d > stop) { const sp = Math.min(8, 2.5 + d * 0.8); v.pos.x += dx / d * sp * dt; v.pos.z += dz / d * sp * dt; move = sp / 6; }
     if (d > 0.1) v.yaw = lerpAngle(v.yaw, Math.atan2(dx, dz), 1 - Math.exp(-8 * dt));
     g.world.resolve(v.pos, v.r);
-    if (tgt && td < tgt.r + 1.4 && A.cd <= 0) { A.cd = 1.2; A.atk = 0.35; g.enemies.damage(tgt, 12 + R.J.lvl * 4, v.pos.x, v.pos.z, 5); }
-    for (const e of g.enemies.list) if (e.alive && !e.hidden && Math.hypot(e.pos.x - v.pos.x, e.pos.z - v.pos.z) < e.r + 0.8) A.hp -= e.dmg * 0.4 * dt;
+    if (tgt && td < tgt.r + 1.4 && A.cd <= 0) { A.cd = 1.2; A.atk = 0.35; g.enemies.damage(tgt, (12 + R.J.lvl * 4) * foeHpMul(R.J.lvl), v.pos.x, v.pos.z, 5); }
+    for (const e of g.enemies.list) if (e.alive && !e.hidden && Math.hypot(e.pos.x - v.pos.x, e.pos.z - v.pos.z) < e.r + 0.8) A.hp -= e.dmg * (e.npcK ?? 1) * 0.4 * dt;
     if (A.hp <= 0) { v.injured = g.day + 3; this.release(R); g.toast(`${v.name}受了重伤，被路过的猎户背回了村里（卧床 3 天）`, 3); return; }
     v.job.anim = { move, attack: A.atk > 0 ? 1 - A.atk / 0.35 : -1, cast: 0 };
   }
@@ -504,7 +531,7 @@ export class Jobs {
     } else if (J.kind === 'guard') t = R.stage === 'go' ? `前往${J.name}${far(x, z)}` : `守住${J.name}：第 ${R.wave}/3 波 · 阵眼 ${pct(R.node)}`;
     else if (J.kind === 'track') {
       if (R.stage === 'go') t = `去${J.place}一带找${J.thing}${far(x, z)}`;
-      else if (R.stage === 'search') t = `按 V 用神识搜寻${J.thing}${J.cond === 'night' ? '（夜里才显形）' : J.cond === 'rain' ? '（下雨才冒头）' : ''}`;
+      else if (R.stage === 'search') t = `到附近搜寻${J.thing}${J.cond === 'night' ? '（夜里才显形）' : J.cond === 'rain' ? '（下雨才冒头）' : ''}`;
       else { t = `${J.herb ? '采下' : '扶起'}${J.thing}${far(J.tx, J.tz)}`; x = J.tx; z = J.tz; }
     } else if (J.kind === 'omen') t = R.stage === 'go' ? `赶去${J.type}${far(x, z)}` : R.stage === 'fight' ? `打跑抢${J.type}的散修（剩 ${this.alive(R).length}）` : OMEN[J.type].verb.slice(2);
     else if (J.kind === 'duel') t = R.stage === 'go' ? `去${J.place}找${FOES[J.foe].name}${far(x, z)}` : `切磋：${this.ruleText(J)}${J.rule === 'time' ? ` · ${Math.ceil(R.clock)} 秒` : J.rule === 'nohit' ? ` · 挨打 ${R.hits}/2` : ''}`;

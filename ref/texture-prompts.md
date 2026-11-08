@@ -61,11 +61,15 @@ Seamless tileable texture, 512x512 PNG, close-up of dense peach-blossom tree can
 
 ## 9. leaf_cards.png — 绿叶簇贴图集
 
+（2026-11-01 由 Claude 经 Codex CLI 生成，模型 gpt-6.1-sol，已放入 assets/textures/；森林树 / 灌木 / 竹子的叶卡用它）
+
 ```
 Game texture atlas, 1024x1024 PNG with TRANSPARENT background (if transparency is impossible, use a solid flat pure magenta #FF00FF background with no gradient). The image is split into a 2x2 grid of four equal 512x512 cells. Each cell contains ONE isolated cluster of small rounded leaves for stylized cozy tree foliage (like Ghibli / cozy farming game trees): about 8-15 overlapping leaves fanning out from the cell center, the cluster fills roughly 85% of the cell and stays fully inside it, with clean crisp edges and no leaves touching the cell borders. Four different cluster shapes, one per cell. Hand-painted style, bright fresh greens (#4f9a34 to #b8e068), each leaf lighter at the tip with a darker center vein, soft painterly shading, no stems, no branches, no drop shadow, no outline, no text, no grid lines.
 ```
 
 ## 10. blossom_cards.png — 桃花簇贴图集
+
+（2026-11-01 由 Claude 经 Codex CLI 生成，模型 gpt-6.1-sol，已放入 assets/textures/；用于野外桃花林（`world.js` 的 `M.blossom`））
 
 ```
 Game texture atlas, 1024x1024 PNG with TRANSPARENT background (if transparency is impossible, use a solid flat pure magenta #FF00FF background with no gradient). The image is split into a 2x2 grid of four equal 512x512 cells. Each cell contains ONE isolated cluster of peach blossoms for stylized cozy tree canopies in a xianxia game: 6-10 small pink five-petal flowers packed together with a few small fresh green leaves peeking out, the cluster fills roughly 85% of the cell and stays fully inside it, crisp edges, nothing touching the cell borders. Four different cluster shapes, one per cell. Hand-painted style, soft pinks (#ffd0e0 to #ef7aa6) with tiny yellow centers, lighter petal tips, soft painterly shading, no branches, no drop shadow, no outline, no text, no grid lines.
@@ -103,4 +107,44 @@ Seamless tileable texture, 512x512 PNG, close-up of dense evergreen pine / fir n
 
 ```
 Seamless tileable texture, 512x512 PNG, top-down orthographic view of freshly tilled farm soil for a cozy xianxia (Chinese immortal cultivation) farming game. Neat parallel furrow rows running horizontally, about 8 rows across the image, raised ridges lighter on top and darker moist soil in the grooves. Rich dark brown tones (#5a3a22 to #8a5a36) with small clods and a few tiny pebbles, no plants, no grass. Hand-painted pixel-art style with soft painterly shading, matching a warm ochre dirt path texture. Even flat lighting, no cast shadows, no perspective, no text, no border. Edges must tile seamlessly on all four sides; rows must line up across the top and bottom edges.
+```
+
+---
+
+# 第六批：Claude 版 3D 素材缺的材质（2026-11-01，Claude 经 Codex CLI 生成，模型 gpt-6.1-sol）
+
+通用后缀（每条都带）：`Hand-painted pixel-art style with soft painterly shading, matching a cozy xianxia farming game texture set (like a warm brown wood plank texture and a layered cliff-rock texture). Even flat lighting, no cast shadows, no perspective, no text, no border. Edges must tile seamlessly on all four sides.` 开头统一为 `Seamless tileable texture, 512x512 PNG, `。
+
+## 14. tree_bark.png — 树皮（树干 / 树桩 / 倒木 / 盆景）
+```
+straight-on orthographic view of rough tree trunk bark for stylized trees. Vertical ridged furrows with irregular deep grooves and a few small knots, warm brown (#6a4a32 to #a07850) with darker crevices (#3a2616) and lighter ridge highlights.
+```
+## 15. stone_carved.png — 凿石砖（石灯笼 / 石碑 / 石柱 / 残墙 / 水井 / 石阶）
+```
+straight-on orthographic view of carved grey stone blocks (stone lanterns, steles, ruined pillars and walls) for a xianxia game: neat rectangular blocks with thin dark seams, weathered rounded edges, subtle chisel marks and a little pale moss in the cracks, cool grey (#8a8c90 to #c0bcb4).
+```
+## 16. sandstone.png — 砂岩（砂岩 / 赤砂岩 / 沙漠）
+```
+straight-on orthographic view of desert sandstone rock for a xianxia game: soft horizontal sediment banding, small pits and fine cracks, warm tan to orange-ochre (#c8a070 to #e0b888) with darker bands (#a07848).
+```
+## 17. thatch_straw.png — 茅草（渔屋 / 稻草人 / 晒药架）
+```
+straight-on orthographic view of golden thatched straw roofing for a xianxia fishing hut and scarecrow: dense overlapping straw bundles in slightly diagonal strands, darker gaps, golden yellow to tan (#d8b45a to #f0d888) with darker underside strands (#8a6a30).
+```
+## 18. cloth_canvas.png — 粗麻布（残旗 / 帆 / 布条，灰白可被顶点色染色）
+```
+straight-on orthographic view of coarse woven linen canvas cloth for banners, sails and cloth wraps: visible plain weave threads, slight wrinkles and fraying, neutral light cream-beige (#d8cdb0 to #efe6cc), designed to be tinted by vertex colour, no pattern, no stripes.
+```
+## 19. rusty_iron.png — 锈铁板（矿车 / 残剑 / 盾盔 / 破战车）
+```
+straight-on orthographic view of worn dark iron metal plates for a mine cart, broken swords and shields: dark steel grey (#4a4c52 to #7a7c84) with scattered orange-brown rust patches (#8a4a28), scratches, tiny rivets and edge wear.
+```
+
+## 20. plaster_wall.png — 粉墙（门派殿宇 / 院墙）
+```
+straight-on orthographic view of a traditional Chinese whitewashed lime-plaster wall for xianxia sect halls and courtyard walls: smooth off-white plaster (#e8e6e0 to #f6f4ee) with very soft uneven trowel marks, faint hairline cracks, a few small chipped spots showing grey under-layer, very subtle water stains near the bottom, no bricks, no pattern, designed to be tinted by colour.
+```
+## 21. lacquer_wood.png — 漆木（殿柱 / 额枋 / 牌坊）
+```
+straight-on orthographic view of lacquered wooden pillar and beam surface for Chinese temple architecture: vertical wood grain under a glossy lacquer coat, slightly worn lacquer on edges revealing lighter wood, a few fine cracks in the lacquer, neutral mid-tone reddish-grey (#8a6a5a to #b08a78) so it can be tinted blue or red by colour, no carvings.
 ```

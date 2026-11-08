@@ -58,6 +58,9 @@ export function mats() {
   const bloom = chain(toon('#ffffff', { vc: true, leaf: true, unique: true, leafTex: PNG.peach_foliage || PNG.foliage }), (s) => swayPatch(s, 1, 0.8), 'swayB');
   const plant = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 2.2, 0.02), 'swayP');
   plant.side = THREE.DoubleSide;
+  // 椰树叶：叶片 / 叶轴 / 描边同一种摆动，且只从树冠高度以上才开始摆，叶子和树冠不会分家
+  const palmf = chain(toon('#ffffff', { vc: true, unique: true }), (s) => swayPatch(s, 0.5, 2.5), 'swayPF');
+  palmf.side = THREE.DoubleSide;
   // 发光物只吃一部分雾：洞穴里雾几乎是黑的，全吃雾的话远处的灯 / 晶石就暗到不发光，只有走近才亮
   const lightFog = (m) => { m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', '#ifdef USE_FOG\n float fogF = smoothstep(fogNear, fogFar, vFogDepth) * 0.3;\n gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogF);\n#endif'); }; m.customProgramCacheKey = () => 'lightFog'; return m; };
   const glowM = lightFog(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) }));
@@ -81,9 +84,12 @@ export function mats() {
     s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#undef DOUBLE_SIDED\n#include <normal_fragment_begin>\n#define DOUBLE_SIDED');
   }, 'card');
   card.side = THREE.DoubleSide; card.alphaTest = 0.5;
+  // 木头：灰度化的木纹 / 树皮贴图 × 顶点色（颜色仍由素材决定）
+  const wood = toon('#ffffff', { vc: true, unique: true, map: PNG.wood_grain || null });
+  const bark = toon('#ffffff', { vc: true, unique: true, map: PNG.tree_bark || null });
   MATS = {
-    solid, leaf, bloom, plant, glow: glowM, gem, ice, foli, sway, pine, card,
-    line: { solid: lineMat('#2b1d14', 0.03), sway: lineMat('#2b1d14', 0.03, [1, 0.8]), pine: lineMat('#14281c', 0.04, [1, 0.8]), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), ice: lineMat('#1a2a44', 0.025), gem: lineMat('#1a1428', 0.02) },
+    solid, leaf, bloom, plant, palmf, glow: glowM, gem, ice, foli, sway, pine, card, wood, bark,
+    line: { solid: lineMat('#2b1d14', 0.03), wood: lineMat('#2b1d14', 0.03), bark: lineMat('#2b1d14', 0.03), sway: lineMat('#2b1d14', 0.03, [1, 0.8]), pine: lineMat('#14281c', 0.04, [1, 0.8]), leaf: lineMat('#1d2e14', 0.045, [1, 0.8]), bloom: lineMat('#3a1a1a', 0.045, [1, 0.8]), plant: lineMat('#1d2e14', 0.018, [2.2, 0.02]), palmf: lineMat('#1d2e14', 0.018, [0.5, 2.5]), ice: lineMat('#1a2a44', 0.025), gem: lineMat('#1a1428', 0.02) },
   };
   return MATS;
 }
@@ -123,7 +129,7 @@ export function paint(geo, fn) {
 // 常用上色：底色 + 高度渐变 (lo..hi 的亮度倍率) + 斑驳噪声
 export function grad(color, lo = 0.7, hi = 1.15, noise = 0.08, seed = 1) {
   const base = new THREE.Color(color);
-  return (geo) => {
+  const f = (geo) => {
     geo.computeBoundingBox();
     const { min, max } = geo.boundingBox;
     return paint(geo, (p, n, out) => {
@@ -131,13 +137,54 @@ export function grad(color, lo = 0.7, hi = 1.15, noise = 0.08, seed = 1) {
       out.copy(base).multiplyScalar(v);
     });
   };
+  f.base = typeof color === 'string' ? color.toLowerCase() : null;
+  return f;
 }
 
 // ---------- 素材构建器 ----------
+// ---------- 木纹 UV：wood（木板纹，图上横纹）/ bark（树皮，图上竖纹）----------
+// 圆的（圆柱 / 圆锥 / 管子）用自带 UV 按真实周长、长度缩放，周长取整张数 → 没有接缝；
+// 方的按三角面朝向投影，纹理顺着这块料的长边走。每块料随机错开，不会块块一样。
+export const WOODY = new Set(['#a8743f', '#7a5236', '#9a6a3a', '#b88048']);
+let woodN = 0;
+function woodUV(g, type, par, ud, kind, groups) {
+  const k = kind === 'bark' ? 1.1 : 0.75, p = g.attributes.position, uv = g.attributes.uv, n = p.count;
+  const out = new Float32Array(n * 2), r = mulberry32(++woodN * 7919);
+  const ou = r(), ov = r();
+  const set = (i, around, along) => {
+    if (kind === 'bark') { out[i * 2] = around + ou; out[i * 2 + 1] = along + ov; }
+    else { out[i * 2] = along + ou; out[i * 2 + 1] = around + ov; }
+  };
+  const round = (C) => Math.max(1, Math.round(C * k));
+  if (type === 'TubeGeometry' && ud.len) {
+    const A = round(Math.PI * 2 * ud.r);
+    for (let i = 0; i < n; i++) set(i, uv.getY(i) * A, uv.getX(i) * ud.len * k);
+  } else if ((type === 'CylinderGeometry' || type === 'ConeGeometry') && par) {
+    const A = round(Math.PI * (par.radiusTop + par.radiusBottom)), H = par.height;
+    // 端面（年轮那面）几乎不铺贴图：只取贴图里一小块，保留素材自己画的年轮
+    const side = groups[0] ? groups[0].count : n;
+    for (let i = 0; i < n; i++) i < side ? set(i, uv.getX(i) * A, uv.getY(i) * H * k) : set(i, uv.getX(i) * 0.05, uv.getY(i) * 0.05);
+  } else {
+    g.computeBoundingBox();
+    const s = new THREE.Vector3().subVectors(g.boundingBox.max, g.boundingBox.min).toArray();
+    const L = s.indexOf(Math.max(...s)), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    for (let i = 0; i < n; i += 3) {
+      a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2);
+      const fn = b.sub(a).cross(c.sub(a)).toArray().map(Math.abs), N = fn.indexOf(Math.max(...fn));
+      let along = L, across = [0, 1, 2].find((x) => x !== N && x !== L);
+      if (N === L) { along = (L + 1) % 3; across = (L + 2) % 3; }
+      for (let j = i; j < i + 3; j++) { a.fromBufferAttribute(p, j); const v = a.toArray(); set(j, v[across] * k, v[along] * k); }
+    }
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(out, 2));
+}
+
 export class Kit {
   constructor() { this.parts = {}; }
-  // kind: solid | leaf | plant | glow | ice；color 可以是颜色、上色函数或 null(已有顶点色)
+  // kind: solid | leaf | plant | glow | ice | wood | bark；color 可以是颜色、上色函数或 null(已有顶点色)
+  // 木头颜色（WOODY）的实心件自动归到 wood，带木纹贴图
   add(geo, color, o = {}) {
+    const type = geo.type, par = geo.parameters, ud = geo.userData, groups = geo.groups;
     let g = prep(geo.clone());
     if (o.flat) g = faceted(g);
     const m = new THREE.Matrix4();
@@ -148,8 +195,9 @@ export class Kit {
       // 默认：本体内上亮下暗
       grad(color, o.lo ?? 0.78, o.hi ?? 1.08, o.noise ?? 0.05, o.seed ?? 1)(g);
     }
+    const kind = o.kind || ud.kind || (WOODY.has(color?.base ?? color) ? 'wood' : 'solid');
+    if (kind === 'wood' || kind === 'bark') woodUV(g, type, par, ud, kind, groups);
     g.applyMatrix4(m);
-    const kind = o.kind || 'solid';
     (this.parts[kind] ||= []).push(g);
     return this;
   }
@@ -217,6 +265,7 @@ export const G = {
         p.setXYZ(k, c.x + (p.getX(k) - c.x) * r, c.y + (p.getY(k) - c.y) * r, c.z + (p.getZ(k) - c.z) * r);
       }
     }
+    g.userData.len = curve.getLength(); g.userData.r = (r0 + r1) / 2;
     return g;
   },
   // 叶片：一片带中脊折角的菱形

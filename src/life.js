@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { DAY_START, DAY_END, SEC_PER_HOUR, dateOf, rollWeather } from './calendar.js';
 import { item, itemName } from './items.js';
 import { glow } from './util.js';
+import { fmtNum } from './stats.js';
 
 // 离点 p 不到 r 米就返回距离，否则 false
 export const near = (P, p, r) => { const d = Math.hypot(P.pos.x - p.x, P.pos.z - p.z); return d < r && d; };
@@ -15,6 +16,7 @@ export class Life {
     this.interactors = [];  // (P) => { label, act?, d } | null —— 每帧挑最近的那个显示提示
     this.dayHooks = [];     // (date) => void，新的一天开始时调用（农田、村民、任务……）
     this.loot = null;       // 死亡掉落的包袱
+    this.grave = null;      // 上次殒身之处 {x, z}：地图标记 + 屏幕边缘红箭头；走到跟前或天亮就消失
     this.ending = false;
     this.tox = {};          // 丹毒：今天吃过几颗同种丹药
     this.home = g.world.houses.find((h) => h.player);
@@ -35,6 +37,10 @@ export class Life {
   tick(dt, fast) {
     const g = this.g, dh = dt / SEC_PER_HOUR * (fast ? 40 : 1);
     g.hours += dh;
+    if (g.hours >= DAY_END - 1 && g.hours < DAY_END && this.warnedDay !== g.day) { // 睡觉前一小时提醒
+      this.warnedDay = g.day;
+      g.toast(this.atHome ? '快到子时了，该睡觉了（还有一小时）' : '快到子时了，一小时后会累倒——赶紧回家或找个安全的地方歇息', 4);
+    }
     if (g.hours >= DAY_END && !this.ending) this.passOut();
     return dh;
   }
@@ -55,6 +61,7 @@ export class Life {
     this.ending = true;
     const g = this.g, P = g.player, inv = g.inv, fade = document.getElementById('fade');
     g.paused = true; fade.classList.add('on');
+    if (kind === 'sleep') g.audio?.cue('sleep');
     setTimeout(() => {
       let note = '';
       if (kind === 'sleep') {
@@ -83,10 +90,17 @@ export class Life {
   }
   newDay() {
     const g = this.g;
+    // 在道友的房间里过夜：只回满状态，自己存档里的日子、农田、委托、村子都不往前走
+    if (g.coop?.visiting) {
+      g.hours = DAY_START; this.tox = {};
+      for (const e of [...g.enemies.list]) if (!e.boss) g.enemies.remove(e);
+      const d = dateOf(g.day);
+      return [...this.dayHooks.filter((f) => f.visit).map((f) => f(d)), '（在道友的世界里过夜，自己的日子不往前走）'].filter(Boolean);
+    }
     g.day++; g.hours = DAY_START; g.world.day = g.day;
     g.weatherToday = rollWeather(g.day); g.weather.setDay(g.weatherToday === 'rain');
     g.inv.newDay(); this.tox = {};
-    this.clearLoot();
+    this.clearLoot(); this.grave = null;
     for (const e of [...g.enemies.list]) if (!e.boss) g.enemies.remove(e);
     const d = dateOf(g.day);
     return this.dayHooks.map((f) => f(d)).filter(Boolean); // 各系统的早报（灵田、委托……）
@@ -122,7 +136,12 @@ export class Life {
     this.clearLoot();
   }
   clearLoot() { if (this.loot) { this.g.scene.remove(this.loot.m); this.loot = null; } }
-  update(dt) { if (this.loot) { this.loot.m.rotation.y += dt * 1.5; this.loot.m.children[0].position.y = 0.3 + Math.sin(this.g.time * 3) * 0.08; } }
+  markGrave(x, z) { this.grave = { x, z }; }
+  update(dt) {
+    const P = this.g.player;
+    if (this.grave && !P.dead && near(P, this.grave, 3)) { this.grave = null; this.g.toast('回到了殒身之处', 1.5); }
+    if (this.loot) { this.loot.m.rotation.y += dt * 1.5; this.loot.m.children[0].position.y = 0.3 + Math.sin(this.g.time * 3) * 0.08; }
+  }
 
   // ---------- 吃东西 / 服丹 ----------
   // 同一种丹药一天吃多了效果递减（丹毒，GDD 第 8 节）；睡一觉排掉
@@ -132,11 +151,11 @@ export class Life {
     if (it.use) return it.use(g);                 // 特殊物品（破境丹等）自己处理
     if (!(it.heal || it.qiHeal || it.xp)) return false;
     if (P.pillCd > 0) return false;
-    inv.take(id); P.pillCd = 0.8;
+    inv.take(id); P.pillCd = 0.8; g.audio?.cue('use');
     g.emit?.('pill', id);
     const M = P.mods || {}, tk = it.base || id;
     const k = it.cat === 'pill' ? 0.7 ** (((this.tox[tk] = (this.tox[tk] || 0) + 1) - 1) * (1 - (M.tox || 0))) * (1 + (M.pillPow || 0)) : 1;
-    if (it.heal) { const v = Math.round(it.heal * k); P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + v, 'heal'); }
+    if (it.heal) { const v = Math.round(it.heal * k * (P.hpK || 1)); /* 回血跟气血倍率一起涨 */ P.hp = Math.min(P.maxHp, P.hp + v); g.fx.num(P.pos, '+' + fmtNum(v), 'heal'); }
     if (it.qiHeal) P.qi = Math.min(P.maxQi, P.qi + it.qiHeal * k * P.maxQi / 100);
     if (it.xp) g.addXP(it.xp * k * g.xpScale(), P.pos); // 培元丹随境界水涨船高，免得筑基以后没用
     if (k < 1 && it.cat === 'pill' && this.tox[tk] > 1) g.fx.num({ x: P.pos.x + 0.6, z: P.pos.z }, '丹毒 ' + Math.round(k * 100) + '%', 'hurt');
@@ -144,6 +163,6 @@ export class Life {
     return true;
   }
 
-  save() { return { tox: this.tox, loot: this.loot && { x: this.loot.x, z: this.loot.z, items: this.loot.items, money: this.loot.money } }; }
-  load(s) { this.tox = s.tox || {}; this.clearLoot(); if (s.loot) this.dropLoot(s.loot.x, s.loot.z, s.loot.items, s.loot.money); }
+  save() { return { tox: this.tox, grave: this.grave, loot: this.loot && { x: this.loot.x, z: this.loot.z, items: this.loot.items, money: this.loot.money } }; }
+  load(s) { this.tox = s.tox || {}; this.grave = s.grave || null; this.clearLoot(); if (s.loot) this.dropLoot(s.loot.x, s.loot.z, s.loot.items, s.loot.money); }
 }

@@ -97,7 +97,7 @@ const POSE2 = {
 export function animCombo(c, dt, m, t) {
   const [R, L] = c.arms;
   R.sh.position.z = 0; L.sh.position.z = 0;
-  if (!m || t > m.cancel + 0.06) return false;
+  if (!m || t > m.dur) return false; // 姿势撑满整招（原来 cancel+0.06 就收，收招段会提前变回待机）
   const base = { move: 0, attack: -1, combo: 0, cast: 0, spin: 0, work: 0 };
   const h0 = m.hits[0]?.t ?? m.lunge?.[1] ?? 0.2;
   if (POSE2[m.pose]) {

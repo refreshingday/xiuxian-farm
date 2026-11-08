@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fmtNum } from './stats.js';
 
 // 血条：DOM 绘制，不依赖场景，可直接搬进主游戏
 // 层次（从下到上）：底槽 → 残影（受击后停顿再追落，连招期间累积成一整块）→ 实血 → 白闪 → 刻度
@@ -94,8 +95,8 @@ export class HealthBar {
     this.el.classList.toggle('low', low);
     const show = this.chip >= 1 && this.trail - this.fill > 0.003;
     $.chip.style.opacity = show ? 1 : 0;
-    if (show) { $.chip.textContent = '-' + Math.round(this.chip); $.chip.style.left = (this.fill * 100) + '%'; }
-    if ($.num) $.num.textContent = `${Math.ceil(this.hp)} / ${Math.round(this.max)}`;
+    if (show) { $.chip.textContent = '-' + fmtNum(this.chip); $.chip.style.left = (this.fill * 100) + '%'; }
+    if ($.num) $.num.textContent = `${fmtNum(Math.ceil(this.hp))} / ${fmtNum(this.max)}`;
     this.sx = Math.sin(this.shakeT * 70) * this.shakeA;
     this.sy = Math.cos(this.shakeT * 53) * this.shakeA * 0.35;
   }

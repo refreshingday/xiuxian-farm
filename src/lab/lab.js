@@ -7,11 +7,13 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, PNG, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
 import { createChibi, animChibi } from '../chibi.js';
+import { createMirror } from './mirror.js';
 import { TouchControls } from '../touch.js';
+import { createWaterFx, swimPose, fallPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './swim.js';
 import { U, instance } from './kit.js';
 import { ASSETS, getAsset } from './assets.js';
 import { CODEX, CODEX_TEXTURES, CODEX_ERRORS, loadCodex, getCodexAsset } from './codex/index.js';
-import { REF, getRefAsset } from './ref/index.js';
+import { REF, getRefAsset, REFU } from './ref/index.js';
 import { BIOMES, R } from './biomes.js';
 
 // ======================================================================
@@ -69,7 +71,7 @@ composer.addPass(grade);
 function resize() {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setPixelRatio(pixelRatio);
-  renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(pixelRatio); composer.setSize(innerWidth, innerHeight);
+  renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(pixelRatio); composer.setSize(innerWidth, innerHeight); mirror.resize(innerWidth, innerHeight, pixelRatio);
 }
 addEventListener('resize', resize);
 
@@ -99,16 +101,22 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.Shad
 }));
 sky.renderOrder = -1;
 scene.add(sky);
+// 雨天水面 / 湿地实验：共享 uniform（水面着色器里的假云倒影、角色倒影贴图、雨点涟漪、闪电打亮）
+const mirror = createMirror(renderer, camera);
+const MIR = { tRef: { value: mirror.rt.texture }, texM: { value: mirror.texM }, on: { value: 0 }, flash: { value: 0 }, rain: { value: 0 }, skyB: { value: new THREE.Color() }, lit: { value: new THREE.Color(1, 1, 1) } };
+const WET_U = { value: 0 };
+mirror.resize(innerWidth, innerHeight, Math.min(devicePixelRatio, 2));
 
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, ink: true, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, v: 2, bloomK: {}, bloomT: {},
+  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, mirror: true, rain: false, v: 3, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
   if ((saved.v || 1) < 2) delete saved.outline; // v2：描边默认关闭，旧存档里的描边开关作废
-  Object.assign(S, saved, { v: 2 });
+  if ((saved.v || 1) < 3) delete saved.ink; // v3：参考画风的墨线也默认关闭
+  Object.assign(S, saved, { v: 3 });
 } catch { /* 无痕模式等 */ }
 const save = () => { try { localStorage.setItem('xxlab', JSON.stringify(S)); } catch { /* ignore */ } };
 
@@ -156,6 +164,14 @@ function buildIsland(b) {
   top.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   top.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   top.setIndex(idx); top.computeVertexNormals();
+  // 法线改用 ±2 格的中心差分（比逐三角形的法线平滑）：断崖边的岩壁 / 草地过渡不再出现一格一格的锯齿
+  { const nm = top.attributes.normal.array, K = 2;
+    for (let j = 0; j <= HN; j++) for (let i = 0; i <= HN; i++) {
+      const i0 = Math.max(0, i - K), i1 = Math.min(HN, i + K), j0 = Math.max(0, j - K), j1 = Math.min(HN, j + K), k = j * W1 + i;
+      const gx = (H[j * W1 + i1] - H[j * W1 + i0]) / ((i1 - i0) * cs), gz = (H[j1 * W1 + i] - H[j0 * W1 + i]) / ((j1 - j0) * cs), l = Math.hypot(gx, 1, gz);
+      nm[k * 3] = -gx / l; nm[k * 3 + 1] = 1 / l; nm[k * 3 + 2] = -gz / l;
+    }
+    top.attributes.normal.needsUpdate = true; }
   // 地面颜色贴图（线性过滤，平滑）：每单位约 10 像素；烘进环境光遮蔽（坡脚、崖底变暗）和高处提亮
   const N = 512, AO_R = 0.8, dirs = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [Math.cos(k / 8 * Math.PI * 2) * AO_R, Math.sin(k / 8 * Math.PI * 2) * AO_R]);
   const tex = canvasTex(N, N, (ctx) => {
@@ -175,9 +191,9 @@ function buildIsland(b) {
   const gm = toon('#ffffff', { map: tex, unique: true });
   const rockC = new THREE.Color(b.terrace?.rock || ROCK[b.id] || '#8a8478');
   gm.onBeforeCompile = (sh) => {
-    sh.uniforms.tCliff = { value: PNG.cliff_rock || _white }; sh.uniforms.uRock = { value: rockC };
+    sh.uniforms.tCliff = { value: PNG.cliff_rock || _white }; sh.uniforms.uRock = { value: rockC }; sh.uniforms.uWet = WET_U; sh.uniforms.uSkyT = skyU.top;
     sh.vertexShader = 'varying vec3 vGW;\nvarying vec3 vGN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = (modelMatrix * vec4(transformed, 1.0)).xyz; vGN = normalize(mat3(modelMatrix) * objectNormal);');
-    sh.fragmentShader = 'uniform sampler2D tCliff;\nuniform vec3 uRock;\nvarying vec3 vGW;\nvarying vec3 vGN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+    sh.fragmentShader = 'uniform sampler2D tCliff;\nuniform vec3 uRock;\nuniform float uWet;\nuniform vec3 uSkyT;\nvarying vec3 vGW;\nvarying vec3 vGN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
   {
     vec3 gn = normalize(vGN);
     float steep = 1.0 - smoothstep(0.42, 0.74, gn.y);
@@ -189,6 +205,13 @@ function buildIsland(b) {
       diffuseColor.rgb = mix(diffuseColor.rgb, uRock * tx * 1.15 * strata, steep);
     }
     diffuseColor.rgb *= 1.0 - 0.28 * smoothstep(0.08, 0.3, steep) * (1.0 - smoothstep(0.45, 0.8, steep));
+    // 下雨天的湿地：整体压暗、饱和度略升，掠射角加一层天空反光（地面是湿的，像刷了一层釉）
+    float wk = uWet * (1.0 - steep);
+    if (wk > 0.001) {
+      diffuseColor.rgb *= 1.0 - 0.34 * wk;
+      float fr = pow(1.0 - clamp(dot(normalize(cameraPosition - vGW), gn), 0.0, 1.0), 3.0);
+      diffuseColor.rgb += uSkyT * (0.06 + 0.5 * fr) * wk;
+    }
   }`);
   };
   gm.customProgramCacheKey = () => 'labGround';
@@ -236,10 +259,11 @@ function buildWater(b, hAt) {
   flowLine = b.terrace?.stream || null;
   makeWater(W, hAt, { x: 0, z: 0, r: R - 0.6 });
   // 台地上的高处水潭：同一种水，只是单独一层水面，用遮罩裁掉崖外部分
+  deepPools = (b.terrace?.pools || []).filter((p) => p.deep);
   for (const p of b.terrace?.pools || []) makeWater({ ...W, level: p.level }, hAt, p, true);
   for (const f of b.terrace?.falls || []) waterfall(f, W);
 }
-let flowLine = null;
+let flowLine = null, deepPools = [];
 function flowAt(x, z) {
   if (!flowLine) return [0, 0];
   let best = 9, fx = 0, fz = 0;
@@ -257,8 +281,10 @@ function makeWater(W, hAt, area, masked = false) {
   const N = masked ? 64 : 192, data = new Uint8Array(N * N * 4), x0 = area.x - area.r, z0 = area.z - area.r, sz = area.r * 2;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = x0 + (i + 0.5) / N * sz, z = z0 + (j + 0.5) / N * sz, dep = W.level - hAt(x, z);
-    data[(j * N + i) * 4] = clamp(dep / 0.9, 0, 1) * 255;
-    data[(j * N + i) * 4 + 1] = dep < (masked ? 0.85 : 1.0) ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
+    // 同高度的深潭已经自己画了水面：这里挖掉，避免两层水叠在一起闪（z-fight）
+    const inDeep = masked && !area.deep && deepPools.some((q) => Math.abs(q.level - W.level) < 0.01 && Math.hypot(x - q.x, z - q.z) < q.r);
+    data[(j * N + i) * 4] = clamp(dep / (area.deep ? 1.5 : 0.9), 0, 1) * 255;
+    data[(j * N + i) * 4 + 1] = dep < (masked ? (area.deep ? 2.2 : 0.85) : 2.2) && !inDeep ? 255 : 0; // 遮罩：太深 = 已经是崖下，不画
     // B/A：溪流流向 × 强度（离溪流中线 1.6 米内），水面沿着它滚动条纹
     const [fx, fz] = flowAt(x, z);
     data[(j * N + i) * 4 + 2] = (fx * 0.5 + 0.5) * 255; data[(j * N + i) * 4 + 3] = (fz * 0.5 + 0.5) * 255;
@@ -267,17 +293,18 @@ function makeWater(W, hAt, area, masked = false) {
   const mode = { water: 0, ice: 1, lava: 2 }[W.mode];
   const mat = new THREE.ShaderMaterial({
     transparent: mode !== 2, fog: true,
-    uniforms: fogU({
+    uniforms: Object.assign(fogU({
       tDepth: { value: dt }, uTime: U.time, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: sz }, uMask: { value: masked ? 1 : 0 }, uMode: { value: mode },
       cShallow: { value: new THREE.Color(W.shallow) }, cDeep: { value: new THREE.Color(W.deep) }, cFoam: { value: new THREE.Color(W.foam) },
-      uSky: { value: new THREE.Color() }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
-    }),
+      uSky: { value: new THREE.Color() }, uMirEn: { value: W.mirror ? 1 : 0 }, uChar: { value: masked ? 0 : 1 }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
+    }), { tRef: MIR.tRef, texM: MIR.texM, uOn: MIR.on, uFlash: MIR.flash, uRain: MIR.rain, uSkyB: MIR.skyB, uLit: MIR.lit }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
+    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky, uSkyB, uLit; uniform vec2 uFlow;
+      uniform sampler2D tRef; uniform mat4 texM; uniform float uMirEn, uOn, uFlash, uRain, uChar;
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -287,6 +314,33 @@ function makeWater(W, hAt, area, masked = false) {
         for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(h(i + o), h(i + o + 7.3)) - f; float d = dot(r, r);
           if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
         return vec2(sqrt(d1), sqrt(d2)); }
+      // 雨点涟漪：两层格子，每格一个随机相位的扩散圆环；返回 (法线偏移xy, 环亮度)
+      vec3 ripples(vec2 p) {
+        vec3 r = vec3(0.0);
+        for (int L = 0; L < 2; L++) {
+          vec2 q = p * (L == 0 ? 1.3 : 2.2) + float(L) * 17.3, id = floor(q), f = fract(q) - 0.5;
+          float t = fract(uTime * (0.55 + h(id + 1.7) * 0.5) + h(id + float(L) * 3.1));
+          vec2 d = f - (vec2(h(id + 4.1), h(id + 9.2)) - 0.5) * 0.3; float dist = length(d), rad = t * 0.3;
+          float env = exp(-pow((dist - rad) / 0.05, 2.0)) * (1.0 - t) * (1.0 - t);
+          float ph = sin((dist - rad) * 60.0);
+          r.xy += d / max(dist, 0.001) * env * ph; r.z += env * (0.5 + 0.5 * ph);
+        }
+        return r;
+      }
+      float waveH(vec2 x) { return vn(x + uTime * vec2(0.5, 0.3)) * 0.6 + vn(x * 2.1 - uTime * vec2(0.7, 0.4) + 7.0) * 0.4; }
+      float cloudN(vec2 p) { float a = 0.0, w = 0.5; for (int i = 0; i < 4; i++) { a += w * vn(p); p = p * 2.03 + 5.7; w *= 0.5; } return a; }
+      // 假云倒影：把反射方向投到一层云上，用天空球的上下两色上色；云有明暗，闪电时被打亮
+      vec3 skyRefl(vec3 r) {
+        r.y = max(r.y, 0.1);
+        vec2 p = r.xz / (r.y + 0.18) * 0.9 + vec2(uTime * 0.025, uTime * 0.012);
+        float cl = cloudN(p), cl2 = cloudN(p + vec2(0.07, 0.05));
+        float m = smoothstep(0.42, 0.66, cl), shade = clamp(0.55 + (cl - cl2) * 5.0, 0.0, 1.0);
+        vec3 sk = mix(uSkyB, uSky, smoothstep(0.0, 0.6, r.y));
+        float lum = clamp(dot(uSkyB + uSky, vec3(0.33)) * 1.3, 0.04, 1.0);
+        vec3 cc = mix(vec3(0.62, 0.68, 0.8), vec3(1.0), shade) * lum;
+        sk *= 0.9;
+        return mix(sk, cc, m * 0.95) + vec3(0.55, 0.6, 0.85) * uFlash * (0.3 + 0.7 * m);
+      }
       void main() {
         vec2 uv = (vXZ - uOrigin) / uSize;
         vec4 dm = texture2D(tDepth, uv);
@@ -306,7 +360,7 @@ function makeWater(W, hAt, area, masked = false) {
           // 2) 卡通焦散线（风之杖式）：扰动后的 Voronoi 边，两层叠加
           vec2 v1 = cell(q * 0.75 * uCaus - drift), v2 = cell(q * 1.3 * uCaus + drift.yx * 0.7 + 3.1);
           float caus = max(smoothstep(0.09, 0.0, v1.y - v1.x), smoothstep(0.06, 0.0, v2.y - v2.x) * 0.6);
-          c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * mix(0.42, 0.22, smoothstep(0.2, 0.9, d)));
+          c = mix(c, mix(cFoam, vec3(1.0), 0.3), caus * 0.5 * mix(0.42, 0.22, smoothstep(0.2, 0.9, d))); // 水面的白线（焦散）半透明：原来的 50%
           // 波光点点
           c += step(0.975, vn(q * 3.0 + vec2(uTime * 0.9, -uTime * 0.7))) * 0.4;
           // 3) 溪流：沿流向滚动的白色水纹
@@ -325,7 +379,30 @@ function makeWater(W, hAt, area, masked = false) {
           float rings = smoothstep(0.1, 0.0, abs(wave - 0.5)) * (1.0 - smoothstep(0.08, 0.38, d));
           c = mix(c, cFoam, max(foam, rings * 0.7));
           c += cShallow * uGlow * (1.0 - d);
+          // 积水倒影：只有水面这一层会反射（地面不反射）；岸边一圈渐隐，避免和泡沫打架
+          float mk = uMirEn * uOn;
+          if (mk > 0.5) {
+            vec3 rp = ripples(p) * uRain;
+            // 波纹法线：静水是慢慢晃的小波；溪流里沿流向拉长、顺流快速滚动，倒影被拉成一条条流动的条纹
+            vec2 wp = p * 1.5 - drift * 1.5, wfd = fd, wfp = vec2(-fd.y, fd.x);
+            float fk = smoothstep(0.05, 0.4, fs), e = 0.12, w0 = waveH(wp);
+            vec2 wg = vec2(waveH(wp + vec2(e, 0.0)) - w0, waveH(wp + vec2(0.0, e)) - w0) / e;
+            if (fk > 0.0) { // 溪流：另算一组沿流向拉长的波，只混合法线（不混坐标，否则交界处会出一条长线）
+              vec2 sp = vec2(dot(p, wfd) * 0.45 - uTime * fs * 3.2, dot(p, wfp) * 2.4); float s0 = waveH(sp);
+              vec2 sg = vec2(waveH(sp + vec2(e, 0.0)) - s0, waveH(sp + vec2(0.0, e)) - s0) / e;
+              wg = mix(wg, wfd * sg.x + wfp * sg.y, fk);
+            }
+            float amp = 0.16 + 0.3 * fk;
+            vec3 N = normalize(vec3(-(wg.x * amp + rp.x * 0.35), 1.0, -(wg.y * amp + rp.y * 0.35)));
+            vec3 V = normalize(cameraPosition - vW), R = reflect(-V, N);
+            float fr = 0.5 + 0.5 * pow(1.0 - max(dot(N, V), 0.0), 3.0), inner = smoothstep(0.03, 0.2, d);
+            c = mix(c, skyRefl(R), fr * 0.9 * inner * (1.0 - 0.45 * fk));
+            vec4 rc = texture2D(tRef, (texM * vec4(vW, 1.0)).xy / (texM * vec4(vW, 1.0)).w + clamp(N.xz * 0.12, -0.05, 0.05));
+            c = mix(c, rc.rgb, rc.a * inner * uChar * (0.55 + 0.4 * fr));
+            c += rp.z * 0.18 * inner;
+          }
           a = uClear > 0.5 ? mix(0.55, 0.86, smoothstep(0.0, 0.8, d)) : mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
+          a = mix(a, max(a, 0.95), uMirEn * uOn * smoothstep(0.03, 0.2, d));
         } else if (uMode < 1.5) {
           vec2 v = cell(p * 0.6);
           c = mix(cShallow, cDeep, smoothstep(0.1, 0.9, d) * 0.6);
@@ -344,6 +421,7 @@ function makeWater(W, hAt, area, masked = false) {
           c = mix(c, vec3(0.1, 0.04, 0.04), smoothstep(0.05, 0.0, d) * 0.8);
           a = 1.0;
         }
+        if (uMode < 1.5) c *= uLit; // 水面本身不发光：跟着环境光（白天 / 黄昏 / 夜里）变亮变暗
         gl_FragColor = vec4(c, a);
         #include <fog_fragment>
       }`,
@@ -365,13 +443,13 @@ function waterfall(f, W) {
   g.computeVertexNormals();
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true,
-    uniforms: fogU({ uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }),
+    uniforms: Object.assign(fogU({ uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }), { uLit: MIR.lit }),
     vertexShader: `varying vec2 vUv;
       #include <fog_pars_vertex>
       void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform float uTime; uniform vec3 cA, cB; varying vec2 vUv;
+    fragmentShader: `uniform float uTime; uniform vec3 cA, cB, uLit; varying vec2 vUv;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -382,7 +460,7 @@ function waterfall(f, W) {
         vec3 c = mix(cA * 1.1, cB, smoothstep(0.45, 0.75, s));
         c = mix(c, cB, smoothstep(0.85, 1.0, vUv.y) * 0.7 + smoothstep(0.2, 0.0, vUv.y) * 0.8);
         float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
-        gl_FragColor = vec4(c * 1.15, (0.78 + 0.2 * s) * edge);
+        gl_FragColor = vec4(c * 1.15 * uLit, (0.78 + 0.2 * s) * edge);
         #include <fog_fragment>
       }`,
   });
@@ -392,11 +470,11 @@ function waterfall(f, W) {
   root.add(m);
   // 落水白沫：一圈向外扩散的波纹
   const foam = new THREE.Mesh(new THREE.CircleGeometry(f.w * 1.1, 24).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms: { uTime: U.time },
+    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uLit: MIR.lit },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float uTime; varying vec2 vUv;
+    fragmentShader: `uniform float uTime; uniform vec3 uLit; varying vec2 vUv;
       void main() { float r = length(vUv - 0.5) * 2.0; float w = fract(r * 2.5 - uTime * 1.2);
-        float a = smoothstep(1.0, 0.55, r) * (0.35 + 0.65 * step(0.6, w)) * 0.85; gl_FragColor = vec4(vec3(0.95, 0.98, 1.0) * 1.3, a); }`,
+        float a = smoothstep(1.0, 0.55, r) * (0.35 + 0.65 * step(0.6, w)) * 0.85; gl_FragColor = vec4(vec3(0.95, 0.98, 1.0) * 1.3 * uLit, a); }`,
   }));
   foam.position.set(f.x + fx * 0.75, f.bottom + 0.02, f.z + fz * 0.75); foam.renderOrder = 2;
   root.add(foam);
@@ -405,13 +483,13 @@ function waterfall(f, W) {
   for (let i = 0; i < n; i++) { pp.set([f.x + fx * 0.75, f.bottom, f.z + fz * 0.75], i * 3); for (let c = 0; c < 4; c++) rnd[i * 4 + c] = Math.random(); }
   const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); mg.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 4));
   const mist = new THREE.Points(mg, new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uW: { value: f.w } },
-    vertexShader: `attribute vec4 aRnd; uniform float uTime, uW; varying float vA;
+    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uW: { value: f.w }, uLit: MIR.lit },
+    vertexShader: `attribute vec4 aRnd; uniform float uTime, uW; uniform vec3 uLit; varying float vA, vL;
       void main() { float t = fract(aRnd.x + uTime * (0.35 + aRnd.y * 0.3));
         vec3 p = position + vec3((aRnd.z - 0.5) * uW * 1.3, t * 1.4, (aRnd.w - 0.3) * 1.2 + t * 0.3);
         vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
-        gl_PointSize = min((6.0 + t * 22.0) * (30.0 / -mv.z), 60.0); vA = (1.0 - t) * smoothstep(0.0, 0.15, t) * 0.5; }`,
-    fragmentShader: 'varying float vA; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(1.0, 1.0, 1.0, smoothstep(0.5, 0.1, d) * vA); }',
+        gl_PointSize = min((6.0 + t * 22.0) * (30.0 / -mv.z), 60.0); vA = (1.0 - t) * smoothstep(0.0, 0.15, t) * 0.5; vL = (uLit.r + uLit.g + uLit.b) / 3.0; }`,
+    fragmentShader: 'varying float vA, vL; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vec3(vL), smoothstep(0.5, 0.1, d) * vA); }',
   }));
   mist.frustumCulled = false; root.add(mist); particleSys.push(mist);
 }
@@ -733,6 +811,7 @@ function clear() {
   root = new THREE.Group(); scene.add(root);
   emitters = []; bobbers = []; fish = null; particleSys = []; waterMats = []; groundTex = null;
   labels = []; $('#labels').innerHTML = '';
+  waterFx.clear(); resetSwim();
 }
 function build() {
   clear();
@@ -743,7 +822,9 @@ function build() {
     placeAll(b, hAt);
     if (b.fish) fishSchool(b, hAt);
     span = R;
-    for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
+    if (b.water) waterFx.setColor(b.water.foam);
+    const pl = S.rain && !b.particles.some((p) => p.type === 'rain') ? [...b.particles, { type: 'rain', n: 1000, color: '#c8d8f0', size: 6 }] : b.particles;
+    for (const p of pl) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
     const ids = S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : b.catalog;
     span = buildCatalog(ids, S.mode);
@@ -753,7 +834,8 @@ function build() {
   // 参照角色
   if (!chibi) {
     chibi = createChibi({ skin: '#f8d8bc', hair: '#4a2e22', hairStyle: 2, robe: '#f2f4f6', robe2: '#4f7fb0', belt: '#3a5a78', pants: '#3a4250', sword: true });
-    chibi.root.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+    chibi.root.traverse((m) => { if (m.isMesh) m.castShadow = true; m.layers.enable(1); });
+    scene.traverse((o) => { if (o.isLight) o.layers.enable(1); });
   }
   // 角色站在离中心最近的陆地上
   const lvl = S.mode === 'scene' && b.water ? b.water.level + 0.1 : -99;
@@ -822,6 +904,8 @@ function applyLight() {
   $('#bloomTV').textContent = `${bloom.threshold.toFixed(2)}${bt == null ? '（默认）' : `（默认 ${tDef}）`}`;
   grade.uniforms.uWarm.value = L.warm ?? 1;
   for (const m of waterMats) m.uniforms.uSky.value.copy(skyU.top.value);
+  MIR.skyB.value.copy(skyU.bottom.value);
+  MIR.lit.value.setRGB(1, 1, 1).lerp(_b.set(L.dark ? '#2a3050' : '#2c3a66'), nightK * 0.85).lerp(_b.set('#ffb890'), dusk * 0.35);
   $('#timeV').textContent = `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.floor((t % 1) * 60)).padStart(2, '0')}`;
 }
 
@@ -841,8 +925,10 @@ function updateLights(time) {
 // ---------- 开关 ----------
 function applyToggles() {
   document.body.classList.toggle('noWalk', S.mode !== 'scene' || !S.chibi);
-  root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认开）
+  root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认关）
   sun.castShadow = S.shadows;
+  REFU.grad.value = S.refgrad ? 1 : 0;
+  { const fx = S.mode === 'scene' && (BIOMES[S.biome].light.fx === 'storm' || S.rain); MIR.rain.value = fx ? 1 : 0; WET_U.value = fx ? 1 : 0; }
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
   if (chibi) chibi.root.visible = S.chibi && S.mode === 'scene';
@@ -853,7 +939,7 @@ function applyToggles() {
 // ======================================================================
 // UI
 // ======================================================================
-// 「描边」按钮：看参考画风素材时管它的墨线（默认开），否则管原版描边（默认关）
+// 「描边」按钮：看参考画风素材时管它的墨线，否则管原版描边（都默认关）
 const lineKey = () => (S.mode === 'ref' || S.mode === 'refcmp' || (S.mode === 'scene' && S.src === 'ref') ? 'ink' : 'outline');
 function ui() {
   document.querySelectorAll('#biomes button').forEach((b, i) => b.classList.toggle('on', i === S.biome));
@@ -874,7 +960,7 @@ function setupUI() {
   });
   document.querySelectorAll('#modes button').forEach((el) => el.onclick = () => { S.mode = el.dataset.m; save(); rebuild(true); });
   document.querySelectorAll('[data-src]').forEach((el) => el.onclick = () => { S.src = el.dataset.src; save(); rebuild(false); });
-  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { const k = el.dataset.t === 'outline' ? lineKey() : el.dataset.t; S[k] = !S[k]; save(); applyToggles(); ui(); });
+  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { const k = el.dataset.t === 'outline' ? lineKey() : el.dataset.t; S[k] = !S[k]; save(); if (k === 'rain') build(); else { applyToggles(); ui(); } });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
   $('#bloomS').oninput = (e) => { S.bloomK[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
@@ -931,39 +1017,183 @@ const keys = new Set();
 addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT') keys.add(e.code); });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
-const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3();
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _d = new THREE.Vector3(), _wv = new THREE.Vector3();
 let walkYaw = 0, moveK = 0;
-function walk(dt) {
+// ---------- 下水：能走进水里，水深了就游 ----------
+const waterFx = createWaterFx(scene);
+const fall = { on: false, vy: 0, top: 0, k: 0, sq: 0, sqT: 9 };
+const sfx = (k, v) => { if (S.sound) waterSound(k, v); };
+// 这一点的水面高度（没有水 = -99）。台地上的高处水潭单独一层水面；岩浆不算水
+function waterLvl(b, x, z, h) {
+  const W = b.water; if (!W || W.mode !== 'water') return -99;
+  for (const p of b.terrace?.pools || []) if (h < p.level && p.level - h < (p.deep ? 2.2 : 0.85) && Math.hypot(x - p.x, z - p.z) < p.r) return p.level;
+  return h < W.level ? W.level : -99;
+}
+let swimming = false, swimK = 0, strokePh = 0, wasDepth = 0, stepSign = 0, ringT = 0, foamT = 0, kickT = 0, dripT = 0, dripMax = 1, wet = 0, wetLow = 0;
+function resetSwim() { swimming = false; swimK = 0; wasDepth = 0; dripT = 0; wet = wetLow = 0; if (chibi) { swimPose(chibi, 0, 0, 0, 0); applyWet(); } }
+// 湿衣服：颜色变深，慢慢晾干（下半身涉水只湿裙摆和裤子）
+const WET_ALL = [1, 2, 3, 4, 5, 7], WET_LOW = [2, 5];
+function applyWet() {
+  chibi.mats.forEach((m, i) => {
+    if (!WET_ALL.includes(i)) return;
+    m.userData.dry ??= m.color.clone();
+    const w = WET_LOW.includes(i) ? Math.max(wet, wetLow) : wet;
+    m.color.copy(m.userData.dry).multiplyScalar(1 - 0.32 * w);
+  });
+}
+const footW = (i) => chibi.legs[i].localToWorld(_wv.set(0, -0.48, 0.06));
+// 调试用（控制台 / 自动截图）：labDebug.chibi、labDebug.depthAt(x, z)
+window.labDebug = { get ponds() { const T = BIOMES[S.biome].terrace, d = window.labDebug.depthAt; return T && (T.ponds || []).map((q) => ({ x: +q.x.toFixed(1), z: +q.z.toFixed(1), r: +q.r.toFixed(1), depth: +d(q.x, q.z).toFixed(2) })); }, get fall() { return fall; }, get chibi() { return chibi; }, get swimming() { return swimming; }, camera, controls, hAt: (x, z) => hAtCur(x, z), depthAt: (x, z) => { const h = hAtCur(x, z), wl = waterLvl(BIOMES[S.biome], x, z, h); return wl > -90 ? wl - h : 0; } };
+function walk(dt, t) {
   if (!chibi || !chibi.root.visible) return;
   let ix = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
   let iy = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   if (touch.on && (touch.stick.x || touch.stick.y)) { ix = touch.stick.x; iy = touch.stick.y; }
   const mag = Math.min(1, Math.hypot(ix, iy));
   moveK = lerp(moveK, mag, 1 - Math.exp(-10 * dt));
-  const P = chibi.root.position;
+  const P = chibi.root.position, b = BIOMES[S.biome], W = b.water;
+  const ice = W && W.mode === 'ice';
+  // 有效地面：水里按"游泳时身体的高度"算坡度，否则从深水游到岸边会被当成断崖
+  const eff = (x, z) => {
+    const h = hAtCur(x, z); if (ice) return Math.max(h, W.level);
+    const wl = waterLvl(b, x, z, h); return wl > -90 ? Math.max(h, wl - SWIM_IN) : h;
+  };
+  let h = hAtCur(P.x, P.z), wl = waterLvl(b, P.x, P.z, h), depth = wl > -90 ? wl - h : 0;
+  const slow = swimming ? 0.62 : lerp(1, WADE_SLOW, clamp(depth / SWIM_IN, 0, 1));
   if (mag > 0.01) {
     // 相对镜头方向：前 = 镜头看向的水平方向
     _f.subVectors(controls.target, camera.position).setY(0).normalize();
     _r.set(-_f.z, 0, _f.x);
     _d.copy(_r).multiplyScalar(ix).addScaledVector(_f, iy).normalize();
-    const sp = 5 * mag * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
-    const b = BIOMES[S.biome], deep = b.water ? b.water.level - 0.3 : -99;
-    // 不走出小岛、不走进深水
-    // 断崖：坡度太陡（>~50°）走不上去也跳不下去，台阶坡道可以走
-    const slope = Math.abs(hAtCur(nx + _d.x * 0.25, nz + _d.z * 0.25) - hAtCur(P.x, P.z)) / (sp + 0.25);
-    const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r); // 梯子处可以爬崖
-    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > deep && (slope < 1.2 || onLadder)) {
+    const surge = swimming ? 0.8 + 0.4 * Math.max(0, Math.sin(strokePh * 2)) : 1; // 每划一下往前冲一点
+    const sp = 5 * mag * slow * surge * dt, nx = P.x + _d.x * sp, nz = P.z + _d.z * sp;
+    // 不走出小岛；岩浆只能踩到边上；断崖（坡度 >~50°）走不上去也跳不下去，梯子处可以爬
+    const lavaEdge = W && W.mode === 'lava' ? W.level - 0.3 : -99;
+    const slope = Math.abs(eff(nx + _d.x * 0.25, nz + _d.z * 0.25) - eff(P.x, P.z)) / (sp + 0.25);
+    const downFall = (b.terrace?.falls || []).some((f) => Math.hypot(nx - f.x, nz - f.z) < 1.5); // 瀑布口：可以顺着水流跳下去（只许往下，不许爬上去）
+    const onLadder = (b.terrace?.ladders || []).some((l) => Math.hypot(nx - l.x, nz - l.z) < l.r);
+    if (Math.hypot(nx, nz) < R - 1.2 && hAtCur(nx, nz) > lavaEdge && (slope < 1.2 || onLadder || (downFall && eff(nx + _d.x * 0.25, nz + _d.z * 0.25) < eff(P.x, P.z)))) {
+      if (slope >= 1.2 && !onLadder && !fall.on && !swimming) { fall.on = true; fall.vy = 0.6; fall.top = P.y; } // 从瀑布口 / 断崖边踏空：进入自由落体
       const dx = nx - P.x, dz = nz - P.z;
       P.x = nx; P.z = nz;
       camera.position.x += dx; camera.position.z += dz;
       controls.target.x += dx; controls.target.z += dz;
     }
     walkYaw = Math.atan2(_d.x, _d.z);
+    h = hAtCur(P.x, P.z); wl = waterLvl(b, P.x, P.z, h); depth = wl > -90 ? wl - h : 0;
   }
-  const y = hAtCur(P.x, P.z), dy = y - P.y;
-  P.y = y; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
+  // 涉水 ↔ 游泳（有回差）
+  const wasSwim = swimming;
+  if (!swimming && depth > SWIM_IN) swimming = true; else if (swimming && depth < SWIM_OUT) swimming = false;
+  swimK = lerp(swimK, swimming ? 1 : 0, 1 - Math.exp(-7 * dt));
+  if (swimming) strokePh += dt * (1.5 + 4.2 * moveK);
+  let y = ice ? Math.max(h, W.level) : h;
+  if (swimming) y = Math.max(h - 0.6, wl - 0.55 - lerp(0.45, 0.12, moveK) + Math.sin(t * 2.2) * 0.035); // 踩水时身子直、低一点；游起来身子平（浅水里脚陷进湖底也看不见）
+  const dy0 = P.y;
+  // 高度平滑追：从岸上走进溪里不再一下子掉下去，上岸也不是瞬移（平地小起伏几乎无延迟）
+  if (fall.on) { // 自由落体：重力加速，落到地面 / 水面才结束
+    fall.vy += 19 * dt; P.y -= fall.vy * dt;
+    if (P.y <= y + 0.02 || y > P.y) {
+      const hgt = fall.top - y; fall.on = false; P.y = y;
+      if (hgt > 0.5) {
+        const imp = clamp(hgt / 4, 0.25, 1); fall.sq = imp; fall.sqT = 0;
+        if (depth > 0.03 || swimming) { waterFx.splash(P.x, wl, P.z, 10 + Math.round(imp * 24), 2.4 + imp * 2, 1.0 + imp * 0.6, 0.05, null); waterFx.ring(P.x, wl, P.z, 0.25, 1.8 + imp, 1.3); waterFx.ring(P.x, wl, P.z, 0.15, 1.1, 1.0, 0.7); sfx('plunge', 0.6 + imp * 0.5); }
+        else sfx('land', 0.5 + imp * 0.6);
+      }
+    }
+  } else P.y = Math.abs(y - P.y) < 0.05 ? y : lerp(P.y, y, 1 - Math.exp(-(depth > 0.02 || swimK > 0.02 ? 10 : 16) * dt));
+  const dy = P.y - dy0; camera.position.y += dy * 0.5; controls.target.y += dy * 0.5;
   chibi.root.rotation.y += Math.atan2(Math.sin(walkYaw - chibi.root.rotation.y), Math.cos(walkYaw - chibi.root.rotation.y)) * (1 - Math.exp(-12 * dt));
-  animChibi(chibi, dt, { move: moveK, attack: -1, cast: 0, work: 0 });
+  const prevStroke = strokePh - dt * (1.5 + 4.2 * moveK);
+  animChibi(chibi, dt, { move: moveK * (1 - swimK) * lerp(1, 0.8, clamp(depth / SWIM_IN, 0, 1)), attack: -1, cast: 0, work: 0 });
+  swimPose(chibi, swimK, moveK, strokePh, t);
+  fall.k = lerp(fall.k, fall.on ? 1 : 0, 1 - Math.exp(-14 * dt)); fall.sqT += dt;
+  fallPose(chibi, fall.k, fall.sq * Math.exp(-9 * fall.sqT) * Math.cos(fall.sqT * 14), t); // 落地：压扁后阻尼弹回
+  chibi.root.updateMatrixWorld(true);
+
+  // ---------- 特效 ----------
+  const fwd = _f.set(Math.sin(chibi.root.rotation.y), 0, Math.cos(chibi.root.rotation.y)), side = _r.set(fwd.z, 0, -fwd.x);
+  const inWater = depth > 0.03;
+  if (inWater) {
+    // 刚踩进水：一小簇水花；从涉水变成游泳：大水花 + 两圈大波纹 + 一圈白沫
+    if (wasDepth <= 0.03 && moveK > 0.2) { waterFx.splash(P.x + fwd.x * 0.2, wl, P.z + fwd.z * 0.2, 10, 2.2, 0.9, 0.04, fwd); waterFx.ring(P.x, wl, P.z, 0.15, 1.0, 0.9); sfx('enter', 0.6); }
+    if (swimming && !wasSwim) {
+      waterFx.splash(P.x, wl, P.z, 26, 3.4, 1.4, 0.05, fwd);
+      waterFx.ring(P.x, wl, P.z, 0.3, 1.8, 1.3); waterFx.ring(P.x, wl, P.z, 0.2, 1.1, 1.0, 0.7);
+      for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; waterFx.foam(P.x + Math.cos(a) * 0.4, wl, P.z + Math.sin(a) * 0.4, Math.cos(a) * 1.2, Math.sin(a) * 1.2, 0.13, 0.9); }
+      sfx('plunge', 0.8);
+    }
+    if (!swimming && wasSwim) { waterFx.splash(P.x, wl, P.z, 10, 2, 0.7, 0.04); sfx('exit', 0.5); }
+    // 身边的波纹圈：走 / 游时密，停着时疏
+    ringT -= dt;
+    if (ringT < 0) {
+      ringT = swimming ? (moveK > 0.3 ? 0.5 : 0.8) : moveK > 0.3 ? 0.4 : 1.1;
+      const o = swimming ? 0.35 * moveK : 0, r0 = swimming ? 0.35 : 0.22 + clamp(depth, 0, 0.6) * 0.25;
+      waterFx.ring(P.x + fwd.x * o, wl, P.z + fwd.z * o, r0, r0 + (swimming ? 1.3 : 1.0), swimming ? 1.3 : 1.2, swimming ? 0.65 : 0.55);
+    }
+    if (!swimming) {
+      // 涉水脚步：落脚那一下溅水、起小圈（水越深溅得越多）
+      const sg = Math.sign(Math.sin(chibi.phase));
+      if (moveK > 0.3 && sg !== stepSign && stepSign !== 0) {
+        const f = footW(sg > 0 ? 0 : 1), dk = clamp(depth / 0.6, 0, 1);
+        waterFx.splash(f.x, wl, f.z, 3 + Math.round(dk * 7), 1.4 + dk * 1.6, 0.55, 0.03 + dk * 0.012, fwd);
+        waterFx.ring(f.x, wl, f.z, 0.08, 0.55 + dk * 0.5, 0.8, 0.75);
+        sfx('step', 0.35 + dk * 0.5);
+      }
+      stepSign = sg;
+      // 腿前面推开的水：小白沫
+      foamT -= dt;
+      if (moveK > 0.3 && depth > 0.12 && foamT < 0) {
+        foamT = 0.07;
+        const s = Math.random() - 0.5;
+        waterFx.foam(P.x + fwd.x * 0.25 + side.x * s * 0.4, wl, P.z + fwd.z * 0.25 + side.z * s * 0.4, side.x * s * 1.6 + fwd.x * 0.3, side.z * s * 1.6 + fwd.z * 0.3, 0.07 + depth * 0.06, 0.7);
+      }
+    } else {
+      stepSign = 0;
+      // 尾迹：头前推起白沫，身后左右两道往外散（V 字），脚后打水
+      foamT -= dt;
+      if (moveK > 0.25 && foamT < 0) {
+        foamT = 0.045;
+        waterFx.foam(P.x + fwd.x * 0.75, wl, P.z + fwd.z * 0.75, fwd.x * 0.6 + side.x * (Math.random() - 0.5), fwd.z * 0.6 + side.z * (Math.random() - 0.5), 0.12, 0.6);
+        for (const sd of [-1, 1]) waterFx.foam(P.x + side.x * sd * 0.32 - fwd.x * 0.1, wl, P.z + side.z * sd * 0.32 - fwd.z * 0.1, side.x * sd * 1.1 * moveK - fwd.x * 0.3, side.z * sd * 1.1 * moveK - fwd.z * 0.3, 0.1, 1.4);
+      }
+      kickT -= dt;
+      if (moveK > 0.25 && kickT < 0) {
+        kickT = 0.11;
+        const f = footW(Math.random() < 0.5 ? 0 : 1);
+        waterFx.drop(f.x, wl, f.z, (Math.random() - 0.5) * 0.6 - fwd.x * 0.6, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 0.6 - fwd.z * 0.6, 0.032, wl);
+        waterFx.foam(f.x, wl, f.z, -fwd.x * 0.4, -fwd.z * 0.4, 0.09, 0.8);
+      }
+      // 划水：手入水那一下（转到正前方）溅水花
+      if (moveK > 0.25) for (let i = 0; i < 2; i++) {
+        const a0 = (prevStroke + i * Math.PI) % (Math.PI * 2), a1 = (strokePh + i * Math.PI) % (Math.PI * 2);
+        if (a0 < Math.PI && a1 >= Math.PI) {
+          const hw = chibi.arms[i].hand.getWorldPosition(_wv);
+          waterFx.splash(hw.x, wl, hw.z, 7, 2.2, 0.6, 0.04, fwd);
+          waterFx.ring(hw.x, wl, hw.z, 0.1, 0.7, 0.8, 0.8);
+          sfx('stroke', 0.6);
+        }
+      }
+    }
+    // 衣服湿了
+    if (swimming) wet = 1; else wetLow = Math.max(wetLow, clamp(depth / 0.5, 0, 1));
+    if (depth > 0.25 || swimming) { dripMax = swimming ? 2.6 : 1.4; dripT = dripMax; }
+  } else {
+    stepSign = 0;
+    if (wasDepth > 0.03 && moveK > 0.2) { waterFx.splash(P.x, wl > -90 ? wl : P.y, P.z, 5, 1.4, 0.5, 0.03); }
+    // 出水后身上往下滴水
+    if (dripT > 0) {
+      dripT -= dt;
+      if (Math.random() < dt * 28 * (dripT / dripMax)) {
+        const a = Math.random() * Math.PI * 2, r = 0.15 + Math.random() * 0.2, hy = 0.2 + Math.random() * (wet > 0.5 ? 1.0 : 0.35);
+        const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;
+        waterFx.drop(x, P.y + hy, z, 0, -0.2, 0, 0.022, hAtCur(x, z), false, 1.5);
+      }
+    }
+    if (wet > 0 || wetLow > 0) { wet = Math.max(0, wet - dt / 12); wetLow = Math.max(0, wetLow - dt / 8); }
+  }
+  wasDepth = depth;
+  applyWet();
 }
 
 // ======================================================================
@@ -989,13 +1219,13 @@ function storm(dt) {
     scene.add(bolt); boltT = 0.35; flash = 1;
   }
   if (bolt) { boltT -= dt; boltMat.opacity = Math.max(0, boltT / 0.35) * (0.6 + Math.random() * 0.4); if (boltT <= 0) { scene.remove(bolt); bolt.geometry.dispose(); bolt = null; } }
-  flash = Math.max(0, flash - dt * 4);
+  flash = Math.max(0, flash - dt * 4); MIR.flash.value = flash;
   hemi.intensity = lerp(BIOMES[S.biome].light.hemiI, 0.55, nightK) + flash * 2.5;
 }
 
 status('加载贴图…', 25);
 await loadCodex();
-await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 }, pine_needles: { norm: 0.88 }, ...CODEX_TEXTURES });
+await loadTextures({ foliage: { norm: 0.88 }, peach_foliage: { norm: 0.88 }, cliff_rock: { norm: 0.9 }, pine_needles: { norm: 0.88 }, tree_bark: { norm: 0.9 }, wood_grain: { norm: 0.92 }, ...CODEX_TEXTURES });
 status('生成地形与素材…', 55);
 await nextFrame();
 setupUI();
@@ -1015,10 +1245,13 @@ renderer.setAnimationLoop(() => {
     if (p.material.uniforms.uPR) p.material.uniforms.uPR.value = pixelRatio * innerHeight / 900;
     if (p.userData.night) p.material.uniforms.uAlpha.value = nightK;
   }
-  walk(dt);
+  walk(dt, t);
+  waterFx.update(dt);
   storm(dt);
   updateFish(t);
   updateLights(t);
+  { const W = BIOMES[S.biome].water, on = S.mirror && S.mode === 'scene' && W && W.mirror && chibi && chibi.root.visible;
+    MIR.on.value = on ? 1 : 0; if (on) mirror.render(scene, W.level); }
   composer.render();
   updateStats(dt);
   renderer.info.reset();

@@ -165,7 +165,7 @@ export class Places {
     g.fx.circle(x, z, 2.6, 1.3, () => {
       g.cfx?.pillar(x, z, 1.2, 12, '#ff8a3a', 0.4); g.cfx?.flash(x, z, '#ff8a3a', 40, 0.3, 2);
       g.fx.shockRing(x, z, 3, '#ff8a3a', 0.4); g.fx.burst({ x, z }, '#ffb03a', 24, { speed: 6, up: 6, life: 0.6, y: 0.3 }); g.shake(0.5);
-      if (Math.hypot(P.pos.x - x, P.pos.z - z) < 2.6 + P.r) P.hurt(P.maxHp * 0.25, x, z, 8);
+      if (Math.hypot(P.pos.x - x, P.pos.z - z) < 2.6 + P.r) P.hurt(P.maxHp * 0.25, x, z, 8, true);
       if (Math.random() < 0.55) {
         const m = mesh(new THREE.OctahedronGeometry(0.35, 0), glow('#ffb03a', 2.6), { cast: false }); m.position.set(x, 0.4, z); g.scene.add(m);
         this.frags.push({ x, z, m });

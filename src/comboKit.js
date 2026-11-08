@@ -120,3 +120,17 @@ for (const k of KITS) {
     if (m.sweep) m.sweep = { ...m.sweep, dmg: m.sweep.dmg * 2 };
   }
 }
+
+// 属性点（stats.js）：拳完全不耗灵力，伤害全靠「力量」；剑、符的收招（end）伤害靠「精神」——打中时带 h.spi，
+// 技能本来就带 h.skill，也算精神（main.js hitEnemy）。普通连招靠力量。
+for (const m of Object.values(FIST_MOVES)) m.qi = 0;
+for (const s of KITS.find((k) => k.id === 'fist').skills) s.qi = 0;
+for (const k of KITS) {
+  if (k.id === 'fist') continue;
+  for (const id of new Set(Object.values(k.tree))) {
+    const m = k.moves[id];
+    if (!m.end) continue;
+    m.hits = m.hits.map((h) => ({ ...h, spi: true }));
+    if (m.sweep) m.sweep = { ...m.sweep, spi: true };
+  }
+}
