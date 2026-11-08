@@ -14,10 +14,10 @@ test('每个小境界 40 点（各固定 3、自由 28），大境界 108 点（
   assert.equal(totalPts(26), 20 * 40 + 5 * 108);
 });
 
-test('四项平均：小境界 +31%，大境界一倍多', () => {
+test('四项平均：小境界 ×1.1，大境界 ×1.5', () => {
   for (let L = 2; L <= 26; L++) {
     const up = curve(L) / curve(L - 1), big = [10, 14, 18, 22, 26].includes(L);
-    if (big) assert.ok(up > 2 && up < 2.2, `L${L} ×${up}`); else assert.ok(up > 1.29 && up < 1.33, `L${L} ×${up}`);
+    assert.ok(Math.abs(up - (big ? 1.5 : 1.1)) < 1e-9, `L${L} ×${up}`);
   }
   // 四项平均分配的人，力量倍率就是 curve
   for (const L of [5, 13, 26]) { const a = evenSpread(emptyAlloc(), L); assert.ok(Math.abs(derive(L, a).str / curve(L) - 1) < 0.03, `L${L}`); }

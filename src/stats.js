@@ -1,6 +1,6 @@
 // 属性点（力量 / 体质 / 敏捷 / 精神）。纯数据，不碰 three，node 里能直接测。
 // 每升一个小境界 40 点：四项各固定 3 点，玩家自由分配 28 点；每突破一个大境界 108 点：各固定 9 点，自由 72 点。
-// 力量 / 体质 / 精神：每 1 点让对应的东西 ×PT_K（乘法叠加）——四项平均分配就是每个小境界 +31%、大境界一倍多，主修的更多。
+// 力量 / 体质 / 精神：境界决定大头——每个小境界 ×1.1、突破大境界 ×1.5（四项平均分配的人），加点决定偏向哪项。
 // 敏捷、精神的灵力部分：越加越少（1 − e^(−点数/S)），有上限，免得后期速度、灵力翻几千倍。
 // 存档只记「自由点加到了哪里」，总点数永远按层数现算 —— 旧存档读进来就是一笔没分配的点，和新玩家一路加上来完全一样；
 // 旧版页面把这个字段弄丢了（或者旧的 atk/hp/def 分配）也只是点数变回未分配，不会多发、少发。
@@ -12,8 +12,8 @@ export const STATS = {
   spi: { name: '精神', icon: '🔮', color: '#9ab8ff', desc: '剑、符的收招和 Q/E/R 技能伤害；灵力上限、回灵（越加越少）' },
 };
 export const SMALL = 40, BIG = 108, SMALL_AUTO = 3, BIG_AUTO = 9; // AUTO：每项固定给的点
-export const SHARE = 0.25; // 成长曲线按「四项平均分配」校准：谁都至少每层 +31%
-export const PT_K = 1.31 ** (1 / (SMALL * SHARE)); // 一点 ×1.027
+export const SHARE = 0.25; // 成长曲线按「四项平均分配」校准
+export const SMALL_UP = 1.1, BIG_UP = 1.5; // 每个小境界 ×1.1，跨大境界 ×1.5
 export const CAP = 0.35; // 单项（固定 + 自由）最多占总点数的 35%
 export const AGI_S = 80, DASH_S = 40, SPI_S = 120; // 敏捷 / 闪避 / 灵力的「越加越少」速度（闪避收得快：筑基左右就接近 0.5 秒一次）
 export const AGI_MAX = { speed: 0.4, dash: 0.8, crit: 0.2 }, SPI_QI_MAX = 1, SPI_REGEN_MAX = 1;
@@ -59,7 +59,7 @@ export function evenSpread(a, L) {
 
 const soft = (n, s) => 1 - Math.exp(-n / s);
 // 力量 / 体质 / 精神 = 境界曲线 × (这项占总点数的比例 ÷ 25%)^SHAPE：
-//   境界决定大头（每层 +31%、大境界一倍多），加点决定偏向——占 35%（上限）约 ×1.5，只有固定点（7.5%）约 ×0.24。
+//   境界决定大头（小境界 ×1.1、大境界 ×1.5），加点决定偏向——占 35%（上限）约 ×1.5，只有固定点（7.5%）约 ×0.24。
 //   以前是每点直接乘法叠加，偏科到后期会差几十倍（筑基主修力量就是平均的 3 倍多，妖兽一两下就死），所以改成看比例。
 export const SHAPE = 1.2;
 const shareMul = (L, n) => { const T = totalPts(L); return T ? (n / T / SHARE) ** SHAPE : 1; };
@@ -74,16 +74,16 @@ export function derive(L, a) {
 }
 
 // 四项平均分配的人第 L 层的倍率（L 可以是小数，按两层之间插值；超过渡劫按小境界往后外推）——妖兽按这条线涨
+const lnCurve = (n) => { let s = 0; for (let i = 2; i <= n; i++) s += Math.log(i <= MAX_L && isMajor(i) ? BIG_UP : SMALL_UP); return s; };
 export function curve(L) {
   L = Math.max(1, L);
-  const e = (n) => (n <= MAX_L ? totalPts(n) : totalPts(MAX_L) + (n - MAX_L) * SMALL) * SHARE;
   const a = Math.floor(L), f = L - a;
-  return PT_K ** (e(a) + (e(a + 1) - e(a)) * f);
+  return Math.exp(lnCurve(a) + (lnCurve(a + 1) - lnCurve(a)) * f);
 }
 // 妖兽等级 → 对应的玩家层数（realm.foeLevel 的反函数）：炼气 (L−1)×0.5，筑基起 4.3 + (L−10)×1.45
 export const layerForFoe = (lvl) => (lvl <= 4 ? 1 + lvl / 0.5 : lvl <= 4.3 ? 9 + (lvl - 4) / 0.3 : 10 + (lvl - 4.3) / 1.45);
 // 妖兽气血按同级玩家的攻击倍率涨；伤害按 气血 × 防御 涨（体质两样一起涨，伤害要涨平方才守住同样的威胁）
-// 出了炼气圈（等级 3.5 → 4.3 之间渐变），妖兽比刚到这一层的玩家再强一层（+31%）——筑基后不能一两下就砍死
+// 出了炼气圈（等级 3.5 → 4.3 之间渐变），妖兽比刚到这一层的玩家再强一层（×1.1，下一层是大境界就 ×1.5）——筑基后不能一两下就砍死
 export const FOE_AHEAD = 1;
 export const foeLayer = (lvl) => layerForFoe(Math.max(0, lvl)) + FOE_AHEAD * Math.min(1, Math.max(0, (lvl - 3.5) / 0.8));
 export const foeHpMul = (lvl) => curve(foeLayer(lvl));
