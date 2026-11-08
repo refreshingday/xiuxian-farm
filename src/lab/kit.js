@@ -153,6 +153,7 @@ export class Kit {
     }
     g.applyMatrix4(m);
     const kind = o.kind || 'solid';
+    if (o.mat) (this.mats ||= {})[kind] = o.mat;
     (this.parts[kind] ||= []).push(g);
     return this;
   }
@@ -161,11 +162,11 @@ export class Kit {
     for (const [kind, list] of Object.entries(this.parts)) {
       const geo = mergeGeometries(list);
       geo.computeBoundingSphere();
-      const mesh = new THREE.Mesh(geo, M[kind]);
+      const mesh = new THREE.Mesh(geo, this.mats?.[kind] || M[kind]);
       mesh.castShadow = kind !== 'glow' && kind !== 'plant';
       mesh.receiveShadow = kind !== 'glow' && kind !== 'gem';
       if (kind === 'plant') mesh.castShadow = !!o.plantShadow;
-      if (kind === 'leaf' || kind === 'bloom' || kind === 'foli' || kind === 'pine' || kind === 'card') mesh.castShadow = true;
+      if (kind === 'leaf' || kind === 'bloom' || kind === 'foli' || kind === 'pine' || kind === 'card' || this.mats?.[kind]) mesh.castShadow = true;
       mesh.userData.kind = kind;
       if (M.line[kind] && o.outline !== false) addOutline(mesh, M.line[kind]);
       grp.add(mesh);
@@ -389,7 +390,21 @@ export function foliage(k, parts, color, accent, seed, o = {}) {
   const sy = o.sy ?? 1, cy = o.cy ?? parts.reduce((a, p) => a + p[1], 0) / parts.length;
   const g = leafCards(parts, seed, o);
   if (sy !== 1) g.translate(0, -cy, 0).scale(1, sy, 1).translate(0, cy, 0);
-  k.add(g, crownPaint(color, accent, seed, o.accentAmt), { kind: 'card', at: o.at });
+  k.add(g, crownPaint(color, accent, seed, o.accentAmt), { kind: o.kind || 'card', mat: o.mat, at: o.at });
+}
+// 用生成的彩色透明叶簇贴图（如 apple_leaf_a.png）做叶卡材质：和 card 同一套摆动 / 镂空 / 不翻法线，只换贴图
+const _cardMats = new Map();
+export function cardMatFor(tex) {
+  if (!tex) return null;
+  if (_cardMats.has(tex)) return _cardMats.get(tex);
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.needsUpdate = true;
+  const m = chain(toon('#ffffff', { vc: true, unique: true, map: tex }), (s) => {
+    swayPatch(s, 1, 0.8);
+    s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#undef DOUBLE_SIDED\n#include <normal_fragment_begin>\n#define DOUBLE_SIDED');
+  }, 'cardTex');
+  m.side = THREE.DoubleSide; m.alphaTest = 0.5;
+  _cardMats.set(tex, m);
+  return m;
 }
 // 实叶版树冠：一片片叶子几何（只放在「全部素材」里对比，场景不用）
 export function foliageLeaves(k, parts, color, accent, seed, o = {}) {

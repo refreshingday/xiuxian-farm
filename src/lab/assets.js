@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage as foliageBase, foliageLeaves } from './kit.js';
-import { vnoise, smooth, clamp } from '../util.js';
+import { Kit, G, lumpy, faceted, paint, grad, crownPaint, snowCap, mossCap, mulberry32, foliage as foliageBase, foliageLeaves, cardMatFor } from './kit.js';
+import { vnoise, smooth, clamp, PNG } from '../util.js';
 import { LH } from './biomes.js';
 
 // 素材库：每个素材 = { name, n(变体数), make(v) → Group }，变体之间形状不同而不只是换色。
@@ -70,7 +70,7 @@ function broadTree(v, leaf, accent, seed, o = {}) {
     const a = i * 2.1 + seed, top = T.t[2];
     k.add(G.tube([[top[0], top[1] - 0.3, top[2]], [top[0] + Math.cos(a) * 0.6, top[1] + 0.2, top[2] + Math.sin(a) * 0.6]], T.r * 0.5, T.r * 0.2, 5), grad(o.bark || '#7a5236', 0.6, 1));
   }
-  (o.real ? foliageLeaves : foliage)(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt });
+  (o.real ? foliageLeaves : foliage)(k, T.c, leaf, accent, seed, { accentAmt: o.accentAmt, mat: o.cardMat || undefined, kind: o.cardMat ? o.cardKind : undefined });
   if (o.fruit) {
     const r = rnd(seed);
     for (let i = 0; i < 9; i++) {
@@ -1499,6 +1499,18 @@ export const ASSETS = {
   ropeBridge:{ name: '绳吊桥', n: 2, make: (v) => ropeBridge(v) },
   fishHut:   { name: '渔屋', n: 2, make: (v) => fishHut(v) },
 };
+
+// 苹果树（3D）：阔叶树的树干 + 叶卡树冠，叶卡换成生成的彩色透明叶簇贴图 assets/textures/apple_leaf_{a,b,c}.png（OpenAI，透明底）
+// 顶点色只给明暗（白底 crownPaint：上亮下暗、外亮内暗），颜色全来自贴图；另挂几颗立体苹果
+const APPLE = [
+  { shape: 0, tex: 'apple_leaf_a', fruit: '#e0392a' },
+  { shape: 2, tex: 'apple_leaf_b', fruit: '#e86a2e' },
+  { shape: 1, tex: 'apple_leaf_c', fruit: '#f2a03a' },
+];
+ASSETS.appleTree = { name: '苹果树（贴图叶卡）', n: 3, make: (v) => {
+  const A = APPLE[v];
+  return broadTree(A.shape, '#dcdcdc', null, 901 + v, { cardMat: cardMatFor(PNG[A.tex]), cardKind: 'apple' + v, fruit: grad(A.fruit, 0.8, 1.3), bark: '#6e4a32' });
+} };
 
 // 缓存：同一素材变体只建一次
 const built = new Map();
