@@ -25,7 +25,7 @@ function grassy(base, dark, light, x, z, seed) {
 // ---------- 多级台地（7 级）----------
 // F(x,z) 是连续的"台地级数场"（0..6），量化成平台 + 陡坎；台阶路径上改回连续坡度并自动摆石阶；
 // 溪流沿折线往下流，每级平台一段水面，每道坎一挂瀑布（梯级瀑布）
-export const LH = 1.3, LEVELS = 7;
+export const LH = 2.0, LEVELS = 7; // 每级台地的高差（原 1.3，崖更高更有层次感）
 const CLIFF = 0.17; // 每级末尾多少比例用来做坎（坎宽 ≈ CLIFF / |∇F| 米）
 const quant = (F) => { const f = clamp(F, 0, LEVELS - 1), k = Math.floor(f); return k >= LEVELS - 1 ? k : k + smooth(1 - CLIFF, 1, f - k); };
 const polyDist = (x, z, pts) => { let d = 1e9; for (let i = 1; i < pts.length; i++) d = Math.min(d, seg(x, z, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1])); return d; };
@@ -212,7 +212,7 @@ export const BIOMES = [
       const c = grassy([118, 188, 66], [88, 158, 50], [170, 208, 80], x, z, 1);
       return mix(c, [210, 180, 110], smooth(2.4, 1.2, t.path) * 0.5);
     },
-    water: { level: -0.12, mode: 'water', shallow: '#6ad0d8', deep: '#2a7ab8', foam: '#f0fbff' },
+    water: { level: -0.12, mirror: true, mode: 'water', shallow: '#6ad0d8', deep: '#2a7ab8', foam: '#f0fbff' },
     light: { sun: '#fff0d8', sunI: 2.8, sky: '#d8ecff', ground: '#9a8a50', hemiI: 1.1, fog: '#cfe6f0', top: '#7ab8ec', bottom: '#d8eef4', exposure: 1.12, bloom: 0.45 },
     particles: [{ type: 'petals', n: 120, color: '#ffc0d8', size: 5 }, { type: 'fireflies', n: 40, color: '#e8ff9a', size: 6, night: true }],
     scatter: [
@@ -260,7 +260,7 @@ export const BIOMES = [
       const c = grassy([96, 168, 64], [70, 138, 52], [140, 190, 74], x, z, 2);
       return mix(c, [120, 140, 70], vnoise(x * 0.8, z * 0.8, 9) * 0.3 * n);
     },
-    water: { level: -0.15, mode: 'water', shallow: '#7ad8c8', deep: '#2a8aa0', foam: '#f0fffa', flow: [0, 1] },
+    water: { level: -0.15, mirror: true, mode: 'water', shallow: '#7ad8c8', deep: '#2a8aa0', foam: '#f0fffa', flow: [0, 1] },
     light: { sun: '#fff4e0', sunI: 2.4, sky: '#d0e8e0', ground: '#6a7a40', hemiI: 1.15, fog: '#c8e0d8', top: '#88c0d8', bottom: '#d8ece4', exposure: 1.1, bloom: 0.5 },
     particles: [{ type: 'leaves', n: 80, color: '#8ac04a', size: 5 }, { type: 'motes', n: 60, color: '#fff8c0', size: 3 }],
     scatter: [
@@ -302,7 +302,7 @@ export const BIOMES = [
       if (t.k === 'sandgrass') return mix(g, [230, 210, 150], 0.45 + n * 0.3);
       return g;
     },
-    water: { level: -0.1, mode: 'water', shallow: '#5ae0e0', deep: '#1a78c0', foam: '#ffffff', waves: true },
+    water: { level: -0.1, mirror: true, mode: 'water', shallow: '#5ae0e0', deep: '#1a78c0', foam: '#ffffff', waves: true },
     light: { sun: '#fff4e0', sunI: 3.0, sky: '#d8f0ff', ground: '#c8b070', hemiI: 1.15, fog: '#c8eaf8', top: '#5aa8f0', bottom: '#d0f0fa', exposure: 1.14, bloom: 0.5 },
     particles: [{ type: 'motes', n: 50, color: '#ffffff', size: 3 }],
     scatter: [
@@ -345,7 +345,7 @@ export const BIOMES = [
       else if (lf < 0.06 + dens * 0.12) c = mix(c, [240, 184, 64], 0.8);
       return c;
     },
-    water: { level: -0.1, mode: 'water', shallow: '#7ac8c0', deep: '#2a6a8a', foam: '#fff8e8' },
+    water: { level: -0.1, mirror: true, mode: 'water', shallow: '#7ac8c0', deep: '#2a6a8a', foam: '#fff8e8' },
     light: { sun: '#ffd49a', sunI: 2.6, sky: '#f0dcc0', ground: '#8a6a40', hemiI: 1.0, fog: '#ecd8b8', top: '#e8b88a', bottom: '#f4e4cc', exposure: 1.1, bloom: 0.5, warm: 1.4 },
     particles: [{ type: 'leaves', n: 160, color: '#f08a3a', size: 6 }, { type: 'leaves', n: 60, color: '#ffc84a', size: 5 }],
     scatter: [
@@ -418,7 +418,7 @@ export const BIOMES = [
       if (vnoise(x * 2.4, z * 2.4, 11) > 0.8) c = mix(c, [90, 80, 140], 0.6);
       return c;
     },
-    water: { level: -0.12, mode: 'water', shallow: '#3ab8d8', deep: '#0a2a58', foam: '#8af0ff', glow: 0.6 },
+    water: { level: -0.12, mirror: true, mode: 'water', shallow: '#3ab8d8', deep: '#0a2a58', foam: '#8af0ff', glow: 0.6 },
     light: { sun: '#8a9ad0', sunI: 0.7, sky: '#9a9ad0', ground: '#4a3a5a', hemiI: 1.5, fog: '#0c0a14', top: '#08060c', bottom: '#14101c', exposure: 1.2, bloom: 0.6, fogNear: 30, fogFar: 70, dark: true, warm: 0.5 },
     particles: [{ type: 'motes', n: 160, color: '#9ad8ff', size: 4, glow: true }],
     scatter: [
@@ -454,7 +454,7 @@ export const BIOMES = [
       const c = grassy([110, 196, 96], [80, 164, 80], [176, 224, 120], x, z, 8);
       return mix(c, [120, 200, 170], vnoise(x * 0.3, z * 0.3, 2) * 0.3);
     },
-    water: { level: -0.12, mode: 'water', shallow: '#8ae8e0', deep: '#3a9ac0', foam: '#ffffff', glow: 0.15 },
+    water: { level: -0.12, mirror: true, mode: 'water', shallow: '#8ae8e0', deep: '#3a9ac0', foam: '#ffffff', glow: 0.15 },
     light: { sun: '#fff4e8', sunI: 2.6, sky: '#e0f0ff', ground: '#88a070', hemiI: 1.2, fog: '#e8f0f4', top: '#a8c8f0', bottom: '#f0f4f8', exposure: 1.12, bloom: 0.7, fogNear: 45, fogFar: 110 },
     particles: [{ type: 'motes', n: 120, color: '#c8fff0', size: 5, glow: true }, { type: 'petals', n: 60, color: '#ffd0e8', size: 5 }],
     scatter: [
@@ -522,7 +522,7 @@ export const BIOMES = [
       if (t.k === 'moss') return mix([100, 134, 54], [78, 110, 44], n);
       return mix(mix([88, 118, 62], [66, 94, 50], smooth(0.4, 0.7, n2(x, z, 24, 0.3))), [110, 100, 70], vnoise(x * 0.7, z * 0.7, 5) * 0.3);
     },
-    water: { level: -0.1, mode: 'water', shallow: '#7a8a4a', deep: '#2a3a28', foam: '#c8d0a0' },
+    water: { level: -0.1, mirror: true, mode: 'water', shallow: '#7a8a4a', deep: '#2a3a28', foam: '#c8d0a0' },
     light: { sun: '#e8f0c8', sunI: 1.9, sky: '#b8c8a0', ground: '#4a5030', hemiI: 1.05, fog: '#a8b890', top: '#7a9a80', bottom: '#c0ccaa', exposure: 1.05, bloom: 0.6, fogNear: 26, fogFar: 72, warm: 0.6 },
     particles: [{ type: 'motes', n: 110, color: '#c8ff6a', size: 5, glow: true }, { type: 'fireflies', n: 60, color: '#e8ff9a', size: 6, night: true }],
     scatter: [
@@ -561,7 +561,7 @@ export const BIOMES = [
       }
       return sand;
     },
-    water: { level: -0.1, mode: 'water', shallow: '#5ad0c0', deep: '#1a7a90', foam: '#ffffff' },
+    water: { level: -0.1, mirror: true, mode: 'water', shallow: '#5ad0c0', deep: '#1a7a90', foam: '#ffffff' },
     light: { sun: '#fff0d0', sunI: 3.0, sky: '#f0e0c0', ground: '#c8a070', hemiI: 1.1, fog: '#f0dcb8', top: '#6aa8e8', bottom: '#f4e4c8', exposure: 1.08, bloom: 0.45, warm: 1.2, fogNear: 50, fogFar: 120 },
     particles: [{ type: 'ash', n: 160, color: '#e8d0a0', size: 3 }],
     scatter: [
@@ -603,7 +603,7 @@ export const BIOMES = [
       if (vnoise(x * 1.5, z * 1.5, 44) > 0.78) c = mix(c, [44, 38, 38], 0.7); // 焦痕
       return c;
     },
-    water: { level: -0.12, mode: 'water', shallow: '#6a6a5a', deep: '#2a2a2a', foam: '#7a7a6a' },
+    water: { level: -0.12, mirror: true, mode: 'water', shallow: '#6a6a5a', deep: '#2a2a2a', foam: '#7a7a6a' },
     light: { sun: '#c8c8d8', sunI: 1.5, sky: '#9aa0b0', ground: '#4a4440', hemiI: 1.15, fog: '#8a8a94', top: '#5a6070', bottom: '#a0a4ac', exposure: 1.05, bloom: 0.65, fogNear: 40, fogFar: 100, warm: 0.3 },
     particles: [{ type: 'motes', n: 90, color: '#8ab0ff', size: 6, glow: true }, { type: 'ash', n: 110, color: '#3a3434', size: 3 }],
     scatter: [
@@ -641,7 +641,7 @@ export const BIOMES = [
       if (f > dens) { const pick = Math.floor(vnoise(x * 2.3, z * 2.3, 54) * 4); return [[255, 170, 200], [255, 250, 245], [255, 220, 90], [190, 160, 250]][pick]; }
       return c;
     },
-    water: { level: -0.12, mode: 'water', shallow: '#8ae8e0', deep: '#3a9ac0', foam: '#ffffff' },
+    water: { level: -0.12, mirror: true, mode: 'water', shallow: '#8ae8e0', deep: '#3a9ac0', foam: '#ffffff' },
     light: { sun: '#fff4e0', sunI: 2.8, sky: '#e8f4ff', ground: '#a0b070', hemiI: 1.2, fog: '#f0f0ec', top: '#a8d0f8', bottom: '#f4f4f0', exposure: 1.12, bloom: 0.55 },
     particles: [{ type: 'petals', n: 160, color: '#ffb8d8', size: 5 }, { type: 'petals', n: 70, color: '#ffffff', size: 4 }, { type: 'motes', n: 40, color: '#fff4b0', size: 4 }],
     scatter: [
@@ -681,7 +681,7 @@ export const BIOMES = [
       if (t.k === 'scorch') return mix([40, 36, 44], [70, 50, 90], vnoise(x * 5, z * 5, 66) > 0.7 ? 1 : 0);
       return mix([96, 92, 106], [70, 66, 80], smooth(0.4, 0.7, n2(x, z, 67, 0.35)));
     },
-    water: { level: -0.1, mode: 'water', shallow: '#5a6a8a', deep: '#22283e', foam: '#6a7a9a' }, // 雨水坑：泡沫色接近水色，不出白圈
+    water: { level: -0.1, mirror: true, mode: 'water', shallow: '#5a6a8a', deep: '#22283e', foam: '#6a7a9a' }, // 雨水坑：泡沫色接近水色，不出白圈
     light: { sun: '#a8b0ff', sunI: 0.9, sky: '#7a7aa8', ground: '#2a2834', hemiI: 1.25, fog: '#3a3a52', top: '#14142a', bottom: '#46466a', exposure: 1.15, bloom: 0.8, fogNear: 28, fogFar: 76, warm: 0, fx: 'storm' },
     particles: [{ type: 'rain', n: 1000, color: '#b8c4ff', size: 6 }, { type: 'motes', n: 60, color: '#8ad0ff', size: 5, glow: true }],
     scatter: [

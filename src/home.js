@@ -8,8 +8,8 @@ import { near } from './life.js';
 import { btn, el } from './ui.js';
 import { toon, glow, mesh, at, addOutline, outlineMat } from './util.js';
 
-const PEN = { x0: -25.5, z0: 0, x1: -21, z1: 6.5 }, MAX = { chick: 4, calf: 2 };
-const LOT = { x: 23.5, z: 13 };
+import { PEN, LOT } from './townplan.js';
+const MAX = { chick: 4, calf: 2 };
 const UPG = [
   { id: 'room2', name: '静室', desc: '打坐修为 +20%', cost: 3000, mats: { iron: 10 } },
   { id: 'room3', name: '聚灵室', desc: '打坐修为再 +20%', cost: 9000, stones: 20, mats: { iron: 20 }, need: 'room2' },
@@ -156,7 +156,7 @@ export class Home {
     if (id === 'lot') {
       g.world.buildHouse(LOT.x, LOT.z, 6, 5, { name: '陆家', id: 'lot', roof: '#5a6a7a', wall: '#b88250' });
       const v = g.village.add({ id: 'luyuan', name: '陆远', role: '散修', age: 'adult', home: 'lot', shop: 'wanderer2', hours: [10, 22],
-        look: { skin: '#eac3a0', hairStyle: 1, robe: '#4a6a8a' }, root: { e: '风', grade: 1 }, realm: [2, 1], sense: 90,
+        look: { skin: '#eac3a0', hairStyle: 1, robe: '#4a6a8a' }, root: { e: '风', grade: 1 }, realm: [2, 1],
         pers: '洒脱、见多识广', bio: '云游四方的散修，被你盖的房子留了下来。卖些符箓和杂货。',
         loves: ['wine', 'meteor_iron'], likes: ['tea', 'yaodan', 'cat:boss'], dislikes: ['radish'],
         sched: [[6, 'home'], [10, 'plaza'], [22, 'home']],

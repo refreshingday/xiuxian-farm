@@ -54,7 +54,7 @@ const sampleLine = (pts, F, top, d = 0.1) => {
 //   trail 土坡：只有坡，不摆东西
 // dig(x,z)：往下挖（米），池塘 / 溪床用；bb 不写就由 shapes 算
 export function makeTerrain(o) {
-  const T = { levels: o.levels ?? LEVELS, LH: o.LH ?? 1.6, cliff: o.cliff ?? 0.16, rock: o.rock || '#9a948a', shapes: o.shapes, dig: o.dig || null, steps: [] };
+  const T = { levels: o.levels ?? LEVELS, LH: o.LH ?? 2.2, cliff: o.cliff ?? 0.16, rock: o.rock || '#9a948a', shapes: o.shapes, dig: o.dig || null, steps: [] };
   T.paths = (o.paths || []).map((p) => (Array.isArray(p) ? { pts: p } : p)).map((p) => ({ kind: 'stairs', w: 1.6, ...p }));
   for (const p of T.paths) { const m = p.w + 1; p.bb = [Math.min(...p.pts.map((q) => q[0])) - m, Math.min(...p.pts.map((q) => q[1])) - m, Math.max(...p.pts.map((q) => q[0])) + m, Math.max(...p.pts.map((q) => q[1])) + m]; }
   T.F = (x, z) => { let f = 0; for (const s of T.shapes) { const b = s.bb; if (x < b[0] || x > b[2] || z < b[1] || z > b[3]) continue; const v = s.f(x, z); if (v > f) f = v; } return f; };

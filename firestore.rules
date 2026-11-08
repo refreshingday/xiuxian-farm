@@ -1,0 +1,21 @@
+rules_version = '2';
+// 灵田问道 · 云存档的安全规则（Firebase 控制台 → Firestore → 规则，整段贴进去发布；或 firebase deploy --only firestore:rules）
+// 每个玩家一份：saves/{uid}。只有本人能读写——游客（匿名登录）也有自己的 uid，登录 Google 后 uid 不变。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /saves/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['v', 'sid', 'rev', 'at', 'text', 'game', 'data', 'prev', 'updated'])
+        && request.resource.data.v is int
+        && request.resource.data.rev is int
+        && request.resource.data.sid is string
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 400000;
+    }
+    // 其他一律不许
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

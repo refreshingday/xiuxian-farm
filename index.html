@@ -13,6 +13,8 @@
   .hidden { display: none !important; }
   /* 血条（hpbar.js，与试炼场同款） */
   #hpLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .warn { position: absolute; left: 0; top: 0; font-size: 22px; line-height: 1; color: #ff4d4d; text-shadow: 0 0 4px #000, 0 0 8px #f00; animation: warnp .8s ease-in-out infinite alternate; pointer-events: none; }
+  @keyframes warnp { from { opacity: .55 } to { opacity: 1 } }
   .hb { position: absolute; left: 0; top: 0; width: 66px; transform-origin: 50% 100%; will-change: transform, opacity; pointer-events: none; }
   .hb-frame { position: relative; height: 8px; background: rgba(8, 12, 14, .78); border: 1px solid rgba(255, 231, 168, .6); border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.7); overflow: hidden; }
   .hb-trail, .hb-fill, .hb-flash { position: absolute; inset: 0; transform-origin: 0 50%; }
@@ -40,8 +42,6 @@
   .bar span { position: absolute; inset: 0; font-size: 11px; line-height: 16px; text-align: center; text-shadow: 0 1px 2px #000; }
   .hp > div { background: linear-gradient(90deg, #b8302a, var(--hp)); }
   .qi > div { background: linear-gradient(90deg, #2a78b8, var(--qi)); }
-  .bar.sense { height: 10px; margin-top: 5px; } .bar.sense span { line-height: 10px; font-size: 9px; }
-  .sense > div { background: linear-gradient(90deg, #6a4ab8, #c8a8ff); }
   #tribBar { display: none; position: fixed; left: 50%; top: 64px; transform: translateX(-50%); font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; color: #e8d8ff; text-shadow: 0 0 12px #8a5aff, 0 2px 6px #000; pointer-events: none; z-index: 3; }
   body.trib #tribBar { display: block; }
   .xp { height: 5px; margin-top: 5px; } .xp > div { background: var(--xp); }
@@ -51,9 +51,17 @@
   #money { position: fixed; right: 16px; top: 92px; font-size: 14px; padding: 6px 12px; }
   #menuBtns { position: fixed; right: 16px; top: 132px; display: flex; gap: 6px; }
   #menuBtns button { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  /* 属性按钮：还有属性点没加时，右上角红色感叹号 + 金色呼吸光 */
+  #menuBtns #statBtn { position: relative; }
+  #statBtn .ptsDot { display: none; position: absolute; top: -8px; right: -7px; min-width: 18px; height: 18px; border-radius: 9px; background: #e8402a; color: #fff; font: bold 13px/18px sans-serif; font-style: normal; text-align: center; box-shadow: 0 0 0 2px #2a1408, 0 0 10px rgba(255,80,40,.8); animation: ptsBounce 1.2s ease-in-out infinite; pointer-events: none; }
+  #statBtn.pts { border-color: #ffd36a; color: #ffe7a8; animation: ptsGlow 1.6s ease-in-out infinite; }
+  #statBtn.pts .ptsDot { display: block; }
+  @keyframes ptsGlow { 50% { box-shadow: 0 0 14px rgba(255,200,90,.8), inset 0 0 8px rgba(255,200,90,.35); } }
+  @keyframes ptsBounce { 50% { transform: translateY(-3px) scale(1.12); } }
   /* 快捷栏（1–8），战斗时淡出 */
   #hotbar { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); display: flex; gap: 4px; transition: opacity .3s; }
-  #hotbar.fight { opacity: .2; pointer-events: none; }
+  #hotbar.fight .hs:not(.heal) { opacity: .25; pointer-events: none; }
+  #hotbar.fight .hs.heal { box-shadow: 0 0 10px rgba(125,255,176,.8); border-color: #7dffb0; }
   .hs { position: relative; width: 44px; height: 44px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: none; }
   .hs.sel { border-color: #ffe7a8; box-shadow: inset 0 0 0 2px rgba(255, 231, 168, .8), 0 0 8px rgba(255, 231, 168, .5); }
   .hs kbd { position: absolute; left: 2px; top: 1px; font-size: 9px; padding: 0 2px; line-height: 12px; }
@@ -75,8 +83,8 @@
   .pmoney { font-size: 14px; margin-bottom: 6px; }
   .ptabs { display: flex; gap: 6px; margin: 6px 0; }
   .pempty { opacity: .6; padding: 12px 4px; font-size: 13px; line-height: 1.6; }
-  #panel button, #dialog button, #title button { font: inherit; font-size: 13px; color: var(--ink); background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 5px; padding: 6px 11px; cursor: pointer; touch-action: manipulation; }
-  #panel button:hover, #dialog button:hover, #title button:hover { background: rgba(214,182,112,.25); }
+  #panel button, #dialog button, #title button, #cloudAsk button { font: inherit; font-size: 13px; color: var(--ink); background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 5px; padding: 6px 11px; cursor: pointer; touch-action: manipulation; }
+  #panel button:hover, #dialog button:hover, #title button:hover, #cloudAsk button:hover { background: rgba(214,182,112,.25); }
   button.on { background: rgba(214,182,112,.45) !important; } button.off { opacity: .45; }
   button.wide { display: block; width: 100%; margin-top: 8px; padding: 10px !important; font-size: 16px !important; }
   /* 炼丹控火 */
@@ -98,12 +106,20 @@
   /* 小地图 + 任务指针（minimap.js） */
   #miniWrap { position: fixed; right: 16px; top: 172px; width: 220px; height: 220px; z-index: 2; }
   #mini { display: block; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; background: rgba(14, 22, 24, .6); box-shadow: 0 3px 12px rgba(0, 0, 0, .55); }
-  #miniZ { position: absolute; right: -3px; bottom: -3px; width: 26px; height: 26px; padding: 0; font: inherit; font-size: 14px; line-height: 1; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+  #miniB { position: absolute; right: -3px; bottom: -3px; display: flex; gap: 4px; }
+  #miniB button { width: 26px; height: 26px; padding: 0; font: inherit; font-size: 14px; line-height: 1; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+  #miniB button[hidden] { display: none; }
   #qptr { position: fixed; left: 0; top: 0; z-index: 3; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(14, 22, 24, .72); border: 2px solid #ffd23a; color: #ffd23a; pointer-events: none; animation: qptr 1.2s ease-in-out infinite; }
   #qptr[hidden] { display: none; }
   #qptr i { font-style: normal; font-size: 20px; line-height: 1; }
   #qptr b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; font-size: 12px; font-weight: normal; white-space: nowrap; color: #fff; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
   #qptr.ret { border-color: #7dffb0; color: #7dffb0; }
+  #dptr { position: fixed; left: 0; top: 0; z-index: 3; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(30, 6, 6, .78); border: 2px solid #ff4a4a; color: #ff4a4a; pointer-events: none; }
+  #dptr[hidden], #dmark[hidden] { display: none; }
+  #dptr i { font-style: normal; font-size: 18px; line-height: 1; }
+  #dptr b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 3px; font-size: 12px; font-weight: normal; white-space: nowrap; color: #ffb0a8; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+  #dmark { position: fixed; left: 0; top: 0; z-index: 2; pointer-events: none; font-size: 26px; color: #ff6a5a; text-shadow: 0 0 8px #000; text-align: center; line-height: 1; }
+  #dmark span { display: block; font-size: 11px; color: #ffb0a8; margin-top: 2px; }
   @keyframes qptr { 50% { box-shadow: 0 0 14px currentColor; } }
   /* 连招节奏条（设置里开）：绿 = 快，黄 = 慢，灰 = 断 */
   #rhythm { position: fixed; left: 50%; bottom: 176px; transform: translateX(-50%); width: 220px; height: 8px; border-radius: 4px; background: rgba(138,143,150,.5); overflow: hidden; pointer-events: none; transition: opacity .2s; }
@@ -127,16 +143,54 @@
   #sk0 { width: 96px; } #skWeap span { font-family: "STKaiti", "KaiTi", serif; font-size: 16px; color: #ffe7a8; }
   kbd { font-family: inherit; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 0 5px; }
   #prompt { position: fixed; left: 50%; bottom: 152px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 6px 14px; border-radius: 16px; font-size: 14px; }
-  #dialog { position: fixed; z-index: 15; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(680px, 92vw); background: rgba(24, 20, 16, 0.86); border: 1px solid rgba(255, 220, 160, .3); border-radius: 12px; padding: 14px 18px; }
-  .dname { font-family: "STKaiti", "KaiTi", serif; font-size: 22px; color: #ffe7a8; letter-spacing: 2px; }
-  .dsub { font-size: 12px; opacity: .7; margin: 2px 0 8px; }
-  .dline { font-size: 16px; line-height: 1.6; }
-  .dinfo { font-size: 13px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.2); color: #bfe6ff; }
+  /* 对话框：左边立绘（站出框外），右边名牌 + 台词；旁白模式没有立绘、居中。手机竖屏 / 横屏另见下面的 @media */
+  #dialog { --pw: 200px; --ph: 290px; position: fixed; z-index: 15; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(780px, 94vw); min-height: 132px;
+    background: linear-gradient(180deg, rgba(30, 26, 22, .93), rgba(16, 14, 12, .95)); border: 1px solid rgba(232, 196, 120, .55); border-radius: 10px;
+    box-shadow: inset 0 0 0 3px rgba(0,0,0,.35), inset 0 0 0 4px rgba(232,196,120,.22), 0 10px 30px rgba(0,0,0,.45); padding: 22px 26px 16px; }
+  #dialog::before, #dialog::after { content: ''; position: absolute; width: 14px; height: 14px; border: 2px solid rgba(232,196,120,.75); pointer-events: none; }
+  #dialog::before { right: 7px; top: 7px; border-left: 0; border-bottom: 0; }
+  #dialog::after { left: 7px; bottom: 7px; border-right: 0; border-top: 0; }
+  #dialog.hasPortrait { padding-left: calc(var(--pw) + 14px); }
+  .dportrait { display: none; position: absolute; left: 4px; bottom: 0; width: var(--pw); height: var(--ph); object-fit: contain; object-position: 50% 100%; pointer-events: none; z-index: -1;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,.55)); -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 8px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 8px), transparent); }
+  #dialog.hasPortrait .dportrait { display: block; }
+  .dportrait.in { animation: dpin .28s ease-out; }
+  @keyframes dpin { from { transform: translateY(14px); opacity: 0; } }
+  .dplate { position: absolute; top: 0; transform: translateY(-58%); padding: 4px 18px 5px; background: linear-gradient(180deg, #7a2a22, #4e1814); border: 1px solid rgba(255, 214, 140, .7); border-radius: 4px;
+    box-shadow: 0 3px 8px rgba(0,0,0,.5), inset 0 0 0 2px rgba(0,0,0,.2); }
+  .dplate:has(.dname:empty) { display: none; }
+  .dname { font-family: "STKaiti", "KaiTi", serif; font-size: 21px; color: #ffe7a8; letter-spacing: 3px; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+  .dsub { font-size: 12px; color: rgba(244, 239, 226, .62); margin: 4px 0 8px; }
+  .dsub:empty { margin: 0; }
+  .dline { font-size: 17px; line-height: 1.7; color: #f6f0e0; }
+  #dialog.narrate .dline { font-family: "STKaiti", "KaiTi", serif; font-size: 18px; text-align: center; color: #efe6cf; padding: 4px 12px; }
+  .dinfo { font-size: 13px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(232,196,120,.3); color: #bfe6ff; }
   .dhint { font-size: 12px; margin-top: 4px; color: #ffcf9a; }
   .dinfo:empty, .dhint:empty { display: none; }
   .dchoices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .dchoices button { font-size: 15px !important; padding: 7px 16px !important; }
-  .dmore { position: absolute; right: 16px; bottom: 8px; color: #ffe7a8; animation: dmore 1s ease-in-out infinite alternate; }
+  .dchoices:empty { display: none; }
+  #dialog .dchoices button { font-size: 15px; padding: 7px 16px; background: rgba(232,196,120,.08); border-color: rgba(232,196,120,.5); }
+  #dialog .dchoices button:hover { background: rgba(232,196,120,.26); }
+  #dialog .dchoices button.off { opacity: .5; }
+  .dmore { position: absolute; right: 18px; bottom: 8px; color: #ffe7a8; animation: dmore 1s ease-in-out infinite alternate; }
+  /* 窄屏（手机竖屏）：立绘站在框的左上方（不占文字宽度），名牌挪到立绘右边；选项两列铺满方便手指点 */
+  @media (max-width: 600px) {
+    #dialog { --pw: 118px; --ph: 172px; width: calc(100vw - 16px); padding: 22px 14px 14px; min-height: 110px; }
+    #dialog.hasPortrait { padding-left: 14px; padding-top: 26px; }
+    #dialog.hasPortrait .dportrait { bottom: calc(100% - var(--subB, 54px) - 5px); left: 2px; }
+    #dialog.hasPortrait .dplate { left: calc(var(--pw) + 2px); }
+    #dialog.hasPortrait .dsub { margin: 2px 0 8px calc(var(--pw) + 4px); min-height: 18px; }
+    .dname { font-size: 18px; letter-spacing: 2px; } .dplate { padding: 3px 12px 4px; }
+    .dline { font-size: 15px; line-height: 1.6; }
+    #dialog .dchoices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    #dialog .dchoices button { font-size: 14px; padding: 10px 8px; }
+  }
+  /* 矮屏（手机横屏）：框放矮，立绘不能挡住上半屏 */
+  @media (max-height: 500px) {
+    #dialog { --pw: 120px; --ph: 172px; width: min(720px, calc(100vw - 24px)); padding-top: 18px; padding-bottom: 10px; min-height: 100px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+    .dline { font-size: 15px; line-height: 1.55; }
+    .dchoices { margin-top: 8px; } #dialog .dchoices button { padding: 8px 12px; }
+  }
   @keyframes dmore { to { transform: translateY(3px); opacity: .5; } }
   body.talking #skills, body.talking #hotbar, body.talking #hotName, body.talking #prompt { visibility: hidden; }
   /* 操作说明默认收起；展开时放在左下作弊面板（left 8, ≤170 宽）右边，不叠在一起 */
@@ -155,7 +209,9 @@
   #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(255, 30, 20, .7); opacity: 0; }
   #hurt.on { animation: hurt .45s ease-out; }
   @keyframes hurt { from { opacity: 1; } to { opacity: 0; } }
-  #dead { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(40, 0, 0, .55); font-family: "STKaiti", "KaiTi", serif; font-size: 34px; letter-spacing: 6px; }
+  #dead { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(40, 0, 0, .55); font-family: "STKaiti", "KaiTi", serif; font-size: 34px; letter-spacing: 6px; flex-direction: column; text-align: center; }
+  #dead .why { margin-top: 18px; font-family: sans-serif; font-size: 17px; letter-spacing: 1px; line-height: 1.8; color: #f3d9d4; }
+  #dead .why b { color: #ffe7a8; } #dead .why b.d { color: #ff6a5a; font-size: 20px; }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0d1224; font-family: "STKaiti", "KaiTi", serif; font-size: 26px; letter-spacing: 4px; }
   #dmg { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
   .dn { position: absolute; left: 0; top: 0; font-weight: 700; font-size: 18px; color: #fff; text-shadow: 0 1px 0 #000, 0 0 6px rgba(0,0,0,.8); white-space: nowrap; }
@@ -180,7 +236,7 @@
   body.mobile .hs { width: 38px; height: 38px; } body.mobile .hs kbd { display: none; } body.mobile .hs .hi { font-size: 19px; }
   body.mobile #hotName { display: none; }
   body.mobile #miniWrap { width: 88px; height: 88px; left: calc(10px + env(safe-area-inset-left)); right: auto; top: 160px; }
-  body.mobile #miniZ { width: 22px; height: 22px; font-size: 12px; }
+  body.mobile #miniB button { width: 22px; height: 22px; font-size: 12px; }
   body.mobile #qtrack { top: 256px; left: calc(10px + env(safe-area-inset-left)); width: 210px; font-size: 11px; } body.mobile .qt b { font-size: 13px; }
   body.mobile .hb.big { top: 54px; }
   body.mobile #stickZone { display: block; position: fixed; left: 0; bottom: 0; width: 45vw; height: 65vh; z-index: 3; touch-action: none; }
@@ -198,13 +254,11 @@
   body.mobile #skills [data-slot="2"] { right: 78px; bottom: 160px; }
   body.mobile #skills [data-slot="3"] { right: 21px; bottom: 171px; }
   body.mobile #skWeap { right: 0; bottom: 236px; }
-  body.mobile #skScan { right: 58px; bottom: 236px; }
   body.mobile #skFly { right: 116px; bottom: 236px; }
   #skFly.on { border-color: #9ef0ff; box-shadow: inset 0 0 0 2px #9ef0ff; }
   body.mobile #prompt { bottom: 24px; padding: 10px 18px; font-size: 15px; z-index: 4; touch-action: none; }
   body.mobile #prompt::before { content: '👆 '; }
   body.mobile #comboName { bottom: 76px; font-size: 22px; }
-  body.mobile #dialog { bottom: 16px; }
   @media (max-height: 500px) {
     body.mobile #menuBtns { top: calc(54px + env(safe-area-inset-top)); left: 50%; right: auto; transform: translateX(-50%); }
     body.mobile #skills { width: 290px; height: 230px; }
@@ -213,13 +267,29 @@
     body.mobile #skFly { right: 232px; bottom: 146px; }
   }
   @media (max-width: 700px) {
-    body.mobile #prompt { bottom: 316px; right: calc(14px + env(safe-area-inset-right)); left: auto; transform: none; }
-    body.mobile #comboName { bottom: 360px; }
-    body.mobile .hb.big { top: 200px; }
-    body.mobile #hotbar { top: 150px; left: calc(10px + env(safe-area-inset-left)); transform: none; }
-    body.mobile #qtrack { top: 196px; }
-    body.mobile #miniWrap { left: auto; right: calc(56px + env(safe-area-inset-right)); top: 236px; width: 92px; height: 92px; }
-    body.mobile #menuBtns { flex-direction: column; top: 102px; }
+    /* 竖屏手机（重排）：第一行 = 左边细状态条 + 右边一排图标；第二行 = 热键栏 | 大小地图；地图下面挂地名/时间/钱；任务在左，中间留给人物 */
+    body.mobile #status { transform: none; width: min(46vw, 180px); padding: 5px 8px 6px; display: flex; flex-wrap: wrap; align-items: baseline; top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); }
+    body.mobile #status .name { font-size: 15px; letter-spacing: 1px; margin-right: 6px; } body.mobile #status .name .tag { display: none; }
+    body.mobile #status .realm { order: 1; margin: 0; font-size: 10px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body.mobile #status .bar { order: 2; flex: 0 0 100%; height: 11px; margin-top: 4px; } body.mobile #status .bar span { font-size: 9px; line-height: 11px; }
+    body.mobile #status .bar.qi { height: 8px; margin-top: 3px; } body.mobile #status .bar.qi span { font-size: 8px; line-height: 8px; }
+    body.mobile #status .bar.xp { height: 3px; margin-top: 3px; }
+    body.mobile #menuBtns { flex-direction: row; gap: 3px; top: calc(6px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); left: auto; transform: none; }
+    body.mobile #menuBtns button, body.mobile #mobTime { font-size: 15px; padding: 0; width: 30px; height: 30px; line-height: 28px; text-align: center; }
+    body.mobile #hotbar { top: calc(70px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); transform: none; gap: 2px; }
+    body.mobile .hs { width: 27px; height: 27px; } body.mobile .hs .hi { font-size: 15px; } body.mobile .hs .hn { font-size: 9px; right: 2px; }
+    body.mobile #qtrack { top: calc(106px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); width: min(44vw, 170px); font-size: 10px; } body.mobile .qt b { font-size: 12px; }
+    body.mobile #miniWrap { --ms: clamp(110px, calc(100vw - 252px), 150px); left: auto; right: calc(6px + env(safe-area-inset-right)); top: calc(42px + env(safe-area-inset-top)); width: var(--ms); height: var(--ms); }
+    body.mobile #miniB button { width: 22px; height: 22px; font-size: 12px; }
+    body.mobile #clock { transform: none; min-width: 0; padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; text-shadow: 0 1px 3px #000, 0 0 6px #000; top: calc(42px + clamp(110px, calc(100vw - 252px), 150px) + 6px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); }
+    body.mobile #timeText { font-size: 10px; opacity: .9; } body.mobile #regionText { font-size: 14px; margin-top: 0; }
+    body.mobile #money { padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; text-shadow: 0 1px 3px #000, 0 0 6px #000; font-size: 11px; top: calc(42px + clamp(110px, calc(100vw - 252px), 150px) + 42px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); }
+    body.mobile .hb.big { top: calc(272px + env(safe-area-inset-top)); width: min(62vw, 260px); }
+    body.mobile #skills { transform: scale(.8); transform-origin: 100% 100%; right: calc(8px + env(safe-area-inset-right)); bottom: 10px; }
+    body.mobile #prompt { bottom: 250px; right: calc(10px + env(safe-area-inset-right)); left: auto; transform: none; font-size: 13px; padding: 7px 12px; }
+    body.mobile #comboName { bottom: 290px; font-size: 18px; }
+    body.mobile #ver { font-size: 10px !important; padding: 2px 5px !important; right: auto !important; left: 50% !important; transform: translateX(-50%); bottom: 2px !important; opacity: .8; }
+    body.mobile #stick { left: calc(80px + env(safe-area-inset-left)); top: calc(100% - 96px); width: 100px; height: 100px; margin: -50px 0 0 -50px; }
   }
 </style>
 <script type="importmap">
@@ -237,25 +307,29 @@
   <div class="name">叶清玄<span class="tag" id="rootTag">金灵根 · 凡品</span></div>
   <div class="bar hp"><div id="hpFill"></div><span id="hpText"></span></div>
   <div class="bar qi"><div id="qiFill"></div><span id="qiText"></span></div>
-  <div class="bar sense"><div id="senseFill"></div><span id="senseText"></span></div>
   <div class="realm" id="realm"></div>
   <div class="bar xp"><div id="xpFill"></div></div>
 </div>
 
 <div id="clock" class="panel"><div id="timeText"></div><div id="regionText"></div></div>
 <div id="money" class="panel"></div>
-<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
+<div id="menuBtns"><div id="mobTime" class="panel" title="按住加速时间">⏩</div><button id="bagBtn">🎒<span> 背包</span></button><button id="questBtn">📜<span> 任务</span></button><button id="mapBtn">🗺<span> 地图</span></button><button id="statBtn">📊<span> 属性</span><i class="ptsDot">!</i></button><button id="mpBtn">👥<span> 联机</span></button><button id="soundBtn">🔊<span> 声音</span></button><button id="menuBtn">☰<span> 菜单</span></button></div>
 <div id="qtrack" hidden></div><div id="markLayer"></div>
-<div id="miniWrap"><canvas id="mini"></canvas><button id="miniZ" title="小地图范围（N）">⊕</button></div>
+<div id="miniWrap"><canvas id="mini"></canvas><div id="miniB"><button id="miniC" title="回到自己" hidden>◎</button><button id="miniIn" title="放大（滚轮）">＋</button><button id="miniOut" title="缩小（滚轮）">－</button></div></div>
 <div id="qptr" hidden><i>➤</i><b></b></div>
+<div id="dptr" hidden><i>➤</i><b></b></div><div id="dmark" hidden>☠<span>殒身处</span></div>
 <div id="hotbar"></div><div id="hotName"></div>
 <div id="hpLayer"></div>
 
 <div id="prompt" class="hidden"></div>
 <div id="dialog" class="hidden">
-  <div class="dname"></div><div class="dsub"></div>
-  <div class="dline"></div><div class="dinfo"></div><div class="dhint"></div>
-  <div class="dchoices"></div><div class="dmore">▼</div>
+  <img class="dportrait" alt="" draggable="false">
+  <div class="dbody">
+    <div class="dplate"><span class="dname"></span></div><div class="dsub"></div>
+    <div class="dline"></div><div class="dinfo"></div><div class="dhint"></div>
+    <div class="dchoices"></div>
+  </div>
+  <div class="dmore">▼</div>
 </div>
 <div id="panelBack" class="hidden"><div id="panel"><div id="phead"><span id="ptitle"></span><button id="pclose">✕</button></div><div id="pbody"></div></div></div>
 
@@ -267,7 +341,6 @@
   <div class="slot" data-slot="3"><kbd>C</kbd><span class="nm"></span><small class="qc"></small><i class="cd"></i></div>
   <div class="slot" id="skDash"><kbd>空格</kbd><span>身法</span><i class="cd"></i></div>
   <div class="slot" id="skWeap"><kbd>X 换武</kbd><span id="weapName">剑</span></div>
-  <div class="slot" id="skScan"><kbd>V</kbd><span>神识</span></div>
   <div class="slot hidden" id="skFly"><kbd>G</kbd><span>御剑</span></div>
 </div>
 
@@ -281,8 +354,8 @@
   <b>空格 / Shift</b> 身法闪避（无敌，冷却 2.5 秒）<br>
   <b>1–8</b> 快捷栏（灵草 / 丹药直接吃）<br>
   <b>F</b> 交谈 / 种田 / 采集 / 睡觉 / 炼丹<br>
-  <b>Tab</b> 背包　<b>L</b> 任务　<b>M</b> 地图　<b>K</b> 灵根　<b>Esc</b> 菜单<br>
-  <b>V</b> 神识扫描　<b>G</b> 御剑飞行（筑基后）<br>
+  <b>Tab</b> 背包　<b>L</b> 任务　<b>M</b> 地图　<b>K</b> 灵根　<b>I</b> 属性　<b>Esc</b> 菜单　<b>Enter</b> 传音（联机时）<br>
+  <b>G</b> 御剑飞行（筑基后）<br>
   <b>滚轮</b> 缩放　<b>按住右键拖</b> 转镜头　<b>按住 T</b> 加速时间　<b>H</b> 隐藏说明<br>
   东北方的大路通往 <b>玄晶矿洞</b>，深处有妖王。
 </div>
@@ -297,6 +370,7 @@
 <div id="title"><h1>灵田问道</h1><div class="sub">SPIRIT FIELDS</div><div id="titleBtns"></div></div>
 <div id="loading">灵气汇聚中…</div>
 
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module" src="src/main.js"></script>
 <script type="module" src="src/version.js"></script>
 </body>

@@ -4,7 +4,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { makeFists } from './hero_fist.js';
-import { attackList, attackPose } from './hero_attack.js';
+import { sharpenHair } from './hero_hair.js';
+import { attackList, attackPose, attackStance } from './hero_attack.js';
+import { shoulderFix, SHOULDER, trimSleeves, SLEEVE } from './hero_shoulder.js';
+let sleeveTrim = null;
 import { parseOBJ } from './hero_obj.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -138,7 +141,7 @@ const ANIMS = {
   },
   walk: {
     name: '行走', fn(t) {
-      const p = rest(), w = t * 6.5, s = S(w), c = C(w);
+      const p = rest(), w = t * 9, s = S(w), c = C(w);
       p.y = -0.03 * Math.abs(s); // 双脚张开最低，腿并拢最高
       p.rot.spine = [0.05, 0.1 * s, 0.03 * c]; p.rot.chest = [0, -0.1 * s, 0]; p.rot.head = [-0.05, 0.06 * s, 0];
       p.rot.pony = [0.15 + 0.25 * C(w * 2), 0, 0.15 * s];
@@ -151,7 +154,7 @@ const ANIMS = {
   },
   run: {
     name: '奔跑', fn(t) {
-      const p = rest(), w = t * 10.5, s = S(w), c = C(w);
+      const p = rest(), w = t * 13.5, s = S(w), c = C(w);
       p.y = Math.abs(S(w)) * 0.05;
       p.rot.spine = [0.22, 0.2 * s, 0]; p.rot.chest = [0.1, -0.2 * s, 0]; p.rot.head = [-0.2, 0.1 * s, 0];
       p.rot.pony = [0.7 + 0.2 * C(w * 2), 0, 0.2 * s];
@@ -355,7 +358,7 @@ try {
   const loader = new FBXLoader(), base = 'assets/models/chibi_wuxia/anim/';
   const first = await loader.loadAsync(base + MX_CLIPS[0][1]);
   first.traverse(o => { if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }); o.frustumCulled = false; } });
-  first.traverse(o => { if (o.isSkinnedMesh) makeFists(o); });
+  first.traverse(o => { if (o.isSkinnedMesh) { makeFists(o); window.__hairMoved = sharpenHair(o, tex.image); sleeveTrim = trimSleeves(o); } });
   first.scale.setScalar(1.6 / 0.9995); // FBX 里身高约 1.0，统一成 1.6
   mxModel = first; mxRoot.add(first); mxMixer = new THREE.AnimationMixer(first);
   mxClips[MX_CLIPS[0][1]] = first.animations[0];
@@ -387,7 +390,7 @@ const mxHelper = mxModel ? (() => {
 
 // 用 Mixamo 骨架跑上面的程序动画：把我的 13 根骨的旋转（世界对齐坐标系）换算成 Mixamo 骨骼的局部旋转，
 // 蒙皮用 Mixamo 自带权重，袖子 / 衣摆比自动绑的好。没有马尾骨，马尾不摆。
-const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lP3: 'LeftFoot', lN3: 'RightFoot', lN1: 'RightUpLeg', lN2: 'RightLeg' };
+const MXMAP = { root: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head', aP1: 'LeftArm', aP2: 'LeftForeArm', aN1: 'RightArm', aN2: 'RightForeArm', lP1: 'LeftUpLeg', lP2: 'LeftLeg', lP3: 'LeftFoot', lN3: 'RightFoot', lN1: 'RightUpLeg', lN2: 'RightLeg', sP: 'LeftShoulder', sN: 'RightShoulder' };
 const mxDrive = [];
 let hipsRest = null;
 if (mxModel) {
@@ -399,20 +402,71 @@ if (mxModel) {
     mxDrive.push({ mine, b, rest: b.quaternion.clone(), wp, wpInv: wp.clone().invert() });
   }
   const hips = find('Hips'), w0 = hips.getWorldPosition(new THREE.Vector3());
-  hipsRest = { b: hips, pos: hips.position.clone(), perM: hips.parent.worldToLocal(w0.clone().setY(w0.y + 1)).sub(hips.position) };
+  hipsRest = { b: hips, pos: hips.position.clone(), perM: hips.parent.worldToLocal(w0.clone().setY(w0.y + 1)).sub(hips.position), perZ: hips.parent.worldToLocal(w0.clone().setZ(w0.z + 1)).sub(hips.position) };
 }
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
+const _sq = {}; // 驱动用的临时姿态（锁骨修正不能改到 state.q，它还要拿来做平滑过渡）
 function driveMixamo() {
+  for (const n in state.q) (_sq[n] ||= new THREE.Quaternion()).copy(state.q[n]);
+  if (SHOULDER.on !== false) shoulderFix(_sq); else { _sq.sP?.identity(); _sq.sN?.identity(); }
   for (const d of mxDrive) {
-    const q = state.q[d.mine]; if (!q) continue;
+    const q = _sq[d.mine]; if (!q) continue;
     d.b.quaternion.copy(d.wpInv).multiply(q).multiply(d.wp).multiply(d.rest);
   }
-  hipsRest.b.position.copy(hipsRest.pos).addScaledVector(hipsRest.perM, state.y);
+  hipsRest.b.position.copy(hipsRest.pos).addScaledVector(hipsRest.perM, state.y).addScaledVector(hipsRest.perZ, state.z);
+}
+
+// ---- 出招下盘：两节腿的 IK。胯往下沉、脚钉在地上（前后错开、左右外开），解出大腿和膝盖角 ----
+// 腿长从骨架实测（Mixamo 优先），角度减去静止姿态的解，保证 drop=0 时就是原来的站姿
+const legDim = (() => {
+  const find = k => mxModel?.getObjectByName('mixamorig' + k) || mxModel?.getObjectByName('mixamorig:' + k);
+  const hipB = find('LeftUpLeg') || bones.lP1, kneeB = find('LeftLeg') || bones.lP2, ankB = find('LeftFoot') || bones.lP3;
+  if (!hipB || !kneeB || !ankB) return null;
+  (mxModel || hero).updateMatrixWorld(true);
+  const P = o => o.getWorldPosition(new THREE.Vector3());
+  const a = P(hipB), b = P(kneeB), c = P(ankB);
+  return { L1: a.distanceTo(b), L2: b.distanceTo(c), H: a.y - c.y };
+})();
+function solveLeg(Dy, fz) { // 返回 [大腿前摆角, 膝盖弯曲角]
+  const { L1, L2 } = legDim, D = Math.min(L1 + L2 - 1e-4, Math.hypot(Dy, fz));
+  const knee = Math.PI - Math.acos(Math.min(1, (L1 * L1 + L2 * L2 - D * D) / (2 * L1 * L2)));
+  const thigh = Math.atan2(fz, Dy) + Math.acos(Math.min(1, (L1 * L1 + D * D - L2 * L2) / (2 * L1 * D)));
+  return [thigh, knee];
+}
+function setRot(rot) {
+  for (const n in rot) { _tq.setFromEuler(_e.set(...rot[n], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq); }
+}
+function stanceLegs(p, st) {
+  if (!legDim) return;
+  const L = legDim.L1 + legDim.L2, drop = st.drop * L, shift = st.shift * L, pitch = p.rot.root?.[0] ?? 0;
+  const [t0, k0] = solveLeg(legDim.H, 0), rot = {};
+  for (const s of ['P', 'N']) {
+    const front = s === st.lead, fz = (front ? st.f : st.b) * L - shift, out = st.w * (front ? 0.8 : 1);
+    const lift = front ? st.lift * L : 0; // 迈步的那只脚离地
+    const [th, kn] = solveLeg((legDim.H - drop - lift) / Math.cos(out), fz);
+    const up = th - t0 + pitch, knee = kn - k0; // 胯整体前倾 pitch 时，大腿要多摆回来，脚掌照样贴地
+    rot['l' + s + '1'] = [-up, 0, (s === 'P' ? -1 : 1) * out];
+    rot['l' + s + '2'] = [knee, 0, 0];
+    rot['l' + s + '3'] = [up - knee - pitch - (lift > 0 ? lift / L * 2 : 0), 0, 0]; // 抬脚时脚尖略朝下
+  }
+  setRot(rot);
+  state.y = -drop; state.z = shift;
+  // 转腰从胯开始：身体扭转的 30% 给胯（脚跟着碾转），腰 / 胸各分剩下的
+  const by = (p.rot.spine?.[1] ?? 0) / 0.4, r0 = p.rot.root || [0, 0, 0];
+  // 上身前压：分给腰和胸。Q 版头大，压太多脸就看不见了：减半，并且和胯的前倾加起来不超过 0.3
+  const lean = Math.min(st.lean * 0.5, 0.3 - pitch);
+  const set = (n, e) => { _tq.setFromEuler(_e.set(e[0], e[1], e[2], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq); };
+  set('root', [r0[0], r0[1] + by * 0.3, r0[2]]);
+  set('spine', [(p.rot.spine?.[0] ?? 0) + lean * 0.45, by * 0.3, 0]);
+  set('chest', [(p.rot.chest?.[0] ?? 0) + lean * 0.55, by * 0.4, 0]);
+  // 稳头：头往回抬，抵掉大部分前倾，眼睛一直看着前方的目标
+  set('head', [-(pitch + lean) * 0.6, -by * 0.15, 0]);
+  bones.root.position.y = 0.42 + state.y; bones.root.position.z = state.z;
 }
 
 // ---------- 播放 ----------
 let cur = 'idle', speed = 1, clock = 0;
-const state = { y: 0, q: {} }; // q：每根骨的当前旋转（四元数，相对「世界对齐」的静止姿态）
+const state = { y: 0, z: 0, q: {} }; // q：每根骨的当前旋转（四元数，相对「世界对齐」的静止姿态）
 const names = Object.keys(ANIMS);
 const loadedMx = () => MX_CLIPS.filter(c => mxClips[c[1]]);
 const allNames = () => [...names, ...(mxMixer ? loadedMx().map(c => 'mx:' + c[1]) : [])];
@@ -421,6 +475,7 @@ const _tq = new THREE.Quaternion(), _id = new THREE.Quaternion();
 // 姿态 = { y, rot: {骨: 欧拉}, q: {骨: 四元数} }。k<1 平滑过渡，k=1 直接到位（攻击要和招式时间严格对齐，不能有延迟）
 function apply(target, k) {
   state.y = k >= 1 ? target.y : lerp(state.y, target.y, k);
+  state.z = k >= 1 ? 0 : lerp(state.z, 0, k);
   const keys = new Set([...Object.keys(bones), ...Object.keys(target.rot), ...Object.keys(target.q || {}), ...Object.keys(state.q)]);
   for (const n of keys) {
     const tq = target.q?.[n] || (target.rot[n] ? _tq.setFromEuler(_e.set(target.rot[n][0], target.rot[n][1], target.rot[n][2], 'XYZ')) : _id);
@@ -428,7 +483,7 @@ function apply(target, k) {
     if (k >= 1) cu.copy(tq); else cu.slerp(tq, k);
     bones[n]?.quaternion.copy(cu);
   }
-  bones.root.position.y = 0.42 + state.y;
+  bones.root.position.y = 0.42 + state.y; bones.root.position.z = state.z;
   if (mxDrive.length) driveMixamo();
 }
 let frozen = false; // 只给截图调试用（__hero.seek），点任何按钮都会解冻
@@ -485,6 +540,8 @@ function toggle(label, key, fn) {
 toggle('自动旋转', 'spin');
 toggle('显示骨骼', 'skel', v => { skelHelper.visible = v && !mxRoot.visible; if (mxHelper) mxHelper.visible = v && mxRoot.visible; });
 toggle('线框', 'wire', v => { mesh.material.wireframe = v; });
+opts.sh = true; toggle('方肩·袖', 'sh', v => { SHOULDER.on = v; }); optsEl.lastChild.classList.add('on'); // 锁骨修正开关，对比用
+opts.sl = true; toggle('短袖垂', 'sl', v => sleeveTrim?.set(v)); optsEl.lastChild.classList.add('on');
 const sp = document.createElement('button'); sp.textContent = '速度 ×1';
 sp.onclick = () => { speed = speed >= 2 ? 0.25 : speed * 2; sp.textContent = '速度 ×' + speed; };
 optsEl.append(sp);
@@ -492,7 +549,7 @@ addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault();
 setAnim('idle');
 const q = new URLSearchParams(location.search).get('anim'); if (q && (ANIMS[q] || q.startsWith('mx:') || atkMap[q])) setAnim(q);
 
-window.__hero = { bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
+window.__hero = { SHOULDER, SLEEVE, sleeve: () => sleeveTrim, ATKS: () => ATKS, bones, mesh, setAnim, ANIMS, cam, ctl, seek: (a, t) => { setAnim(a); clock = t; atk.t = t; frozen = true; } };
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 let last = performance.now();
 renderer.setAnimationLoop(now => {
@@ -505,10 +562,11 @@ renderer.setAnimationLoop(now => {
     if (atk.t > m.dur + 0.6) atk.t = 0; // 出完招停 0.6 秒再重放
     const p = atk.t <= m.dur ? attackPose(m, atk.t, dt * speed) : null;
     apply(p || ANIMS.idle.fn(clock), p ? 1 : 1 - Math.exp(-14 * dt));
-    if (p && p.legs) { // 腿：和普通姿势一样走 legs()，保证脚掌跟着摆平
+    const st = p && attackStance(m, atk.t);
+    if (st) { stanceLegs(p, st); if (mxDrive.length) driveMixamo(); }
+    else if (p && p.legs) { // 空中招：腿照游戏的收腿姿势
       const q = { rot: {} }; legs(q, { upN: p.legs.upN, upP: p.legs.upP, kneeN: Math.max(0, p.legs.upN) * 0.5, kneeP: Math.max(0, p.legs.upP) * 0.5 });
-      for (const n in q.rot) { _tq.setFromEuler(_e.set(...q.rot[n], 'XYZ')); (state.q[n] ||= new THREE.Quaternion()).copy(_tq); bones[n]?.quaternion.copy(_tq); }
-      if (mxDrive.length) driveMixamo();
+      setRot(q.rot); if (mxDrive.length) driveMixamo();
     }
     document.getElementById('tlfill').style.width = Math.min(1, atk.t / m.dur) * 100 + '%';
     tlTxt.textContent = `${atkMap[cur].kit}·${m.name}  ${atk.t.toFixed(2)} / ${m.dur.toFixed(2)}s   出手 ${m.hits.map(h => h.t.toFixed(2)).join(' ')}s   可衔接 ${m.cancel.toFixed(2)}s`;

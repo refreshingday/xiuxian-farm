@@ -6,6 +6,7 @@ import { createChibi, animChibi } from './chibi.js';
 import { lerpAngle } from './util.js';
 import { item, itemName, CROPS, SHOPS } from './items.js';
 import { realmText } from './npc.js';
+import { NavGrid } from './nav.js';
 
 export const HEART = 100;
 const MAX_AFF = 1000, FLOOR = -200, SHOW_FLOOR = -100;
@@ -51,16 +52,16 @@ class Villager {
   // 地点 → 具体坐标（同一地点的人错开一点）
   spot(place) {
     const w = this.g.world, k = this.slot, off = (r) => ({ x: Math.cos(k * 2.1) * r, z: Math.sin(k * 2.1) * r * 0.6 });
-    if (place === 'home') { const o = off(1.1); return { x: this.house.inside.x + o.x, z: this.house.inside.z - 0.6 + o.z, house: this.house }; }
+    if (place === 'home') { const o = off(1.1); return { ...this.house.local(o.x, o.z), house: this.house }; } // 本地坐标：房子朝哪都对
     if (place === 'work') {
       if (this.d.id === 'smith' || this.d.id === 'hu') { const a = w.anvil; return { x: a.x + (this.d.id === 'hu' ? 1.2 : 0), z: a.z + 0.4 }; }
       if (this.d.shop === 'tea') return { ...w.stall };
-      return { x: this.house.inside.x, z: this.house.inside.z - 0.3, house: this.house };
+      return { ...this.house.local(0, 0.3), house: this.house };
     }
     if (place === 'stall') { const o = off(1.6); return { x: w.stall.x + o.x, z: w.stall.z + 0.4 + Math.abs(o.z) }; }
     if (place === 'plaza') { const a = k * 1.3 + this.d.id.length; return { x: Math.cos(a) * 4.5, z: Math.sin(a) * 4.5 }; }
     if (place === 'away') return { x: 26, z: -23, away: true };
-    if (place === 'spouse') { const h = this.g.life.home; return { x: h.inside.x + 1.2, z: h.inside.z - 0.8, house: h }; }
+    if (place === 'spouse') { const h = this.g.life.home; return { ...h.local(1.2, -0.2), house: h }; }
     if (place[0] === 'wander') return { x: place[1], z: place[2], wander: place[3] };
     return { x: place[0], z: place[1] };
   }
@@ -97,7 +98,7 @@ class Villager {
         const T = this.target;
         for (let i = 0; i < 8; i++) {
           const a = Math.random() * 6.28, r = Math.random() * T.wander, x = T.x + Math.cos(a) * r, z = T.z + Math.sin(a) * r;
-          if (!w.insideHouse(x, z, 1) && !w.farmTileAt(x, z)) { this.path = [{ x, z }]; break; }
+          if (!w.insideHouse(x, z, 1) && !w.farmTileAt(x, z) && this.v.nav.lineCost(this.pos, { x, z }) < Infinity) { this.path = [{ x, z }]; break; }
         }
         this.wait = 2 + Math.random() * 5;
       }
@@ -111,14 +112,17 @@ class Villager {
   goTo(t) {
     const w = this.g.world, here = w.insideHouse(this.pos.x, this.pos.z), path = [];
     if (this.away) { this.away = false; this.pos.set(26, 0, -23); }
-    if (here && here !== t.house) path.push({ ...here.door });
+    let from = { x: this.pos.x, z: this.pos.z };
+    if (here && here !== t.house) { path.push({ ...here.door }); from = here.door; }
+    const to = t.house && here !== t.house ? t.house.door : { x: t.x, z: t.z };
+    if (here !== t.house || !t.house) path.push(...this.v.nav.find(from, to));
     if (t.house && here !== t.house) path.push({ ...t.house.door });
-    path.push({ x: t.x, z: t.z });
+    path.push(t.house ? { x: t.x, z: t.z } : this.v.nav.near(t)); // 目标点落在摆设里（摊子、柴垛）就站到旁边
     this.path = path; this.target = t; this.wait = 0; this.stuckT = 0;
   }
   arrive() {
     if (this.target?.away) this.away = true;
-    else if (this.target && !this.target.wander) this.yaw = this.target.house ? 0 : Math.atan2(-this.pos.x, -this.pos.z);
+    else if (this.target && !this.target.wander) this.yaw = this.target.house ? this.target.house.yaw : Math.atan2(-this.pos.x, -this.pos.z);
   }
 
   // 送礼口味
@@ -139,11 +143,10 @@ class Villager {
     const h = this.hearts;
     return '♥'.repeat(h) + '♡'.repeat(Math.max(0, 10 - h));
   }
-  // 灵根要神识够才看得清（GDD：村民灵根，神识够高才能看到）
-  rootText(sense) {
+  rootText() {
     const d = this.d;
     if (!d.root) return '灵根：已被夺去，成了凡人';
-    if (sense < d.sense) return d.hidden ? '灵根：深不可测' : `灵根：看不清（神识 ${d.sense}）`;
+    if (d.hidden) return '灵根：深不可测';
     return `灵根：${d.root.e}·${GRADE[d.root.grade]} ｜ 修为：${realmText(d.realm[0], d.realm[1])}`;
   }
 }
@@ -151,6 +154,7 @@ class Villager {
 export class Village {
   constructor(g, data) {
     this.g = g; this.data = data;
+    this.nav = new NavGrid(g.world); // 村里的格子寻路：村民沿街走、绕开房子
     const per = {};
     this.list = data.villagers.map((d) => { per[d.home] = (per[d.home] || 0) + 1; return new Villager(this, d, per[d.home] - 1); });
     this.byId = Object.fromEntries(this.list.map((v) => [v.d.id, v]));
@@ -189,7 +193,7 @@ export class Village {
     choices.push({ label: '离开' });
     g.ui.dialog({
       name: v.name, sub: `${v.d.role} · ${v.d.pers}　${v.heartText()}`,
-      line: line || g.social?.spouseLine(v) || v.line(), info: v.rootText(g.sense?.() ?? 20), hint: g.social?.spouse === v.d.id ? '你的道侣' : v.d.bio, choices,
+      line: line || g.social?.spouseLine(v) || v.line(), info: v.rootText(), hint: g.social?.spouse === v.d.id ? '你的道侣' : v.d.bio, choices,
     });
   }
   giftMenu(v) {

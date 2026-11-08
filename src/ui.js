@@ -1,9 +1,13 @@
 // 界面：对话框（分页 + 选项）、弹出面板（背包 / 商店 / 菜单 / 任务 …）、快捷栏。
 // 对话或面板打开时游戏暂停（GDD：只在菜单和对话时暂停）
 import { item, CAT_NAME } from './items.js';
+import { portraitByName } from './portraits.js';
 
 const $ = (id) => document.getElementById(id);
 export const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+// 界面声音（main.js 接到 sound.js）：('talk', 名字, 台词) / ('page') / ('open') / ('close')
+export const uiSound = { fn: null };
+const snd = (...a) => uiSound.fn?.(...a);
 export function btn(label, fn, cls = '') {
   const b = el('button', cls, label);
   b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
@@ -14,13 +18,15 @@ export class UI {
   constructor() {
     this.dialogOpen = false; this.panelOpen = null; this.d = null; this.page = 0;
     $('dialog').addEventListener('pointerdown', (e) => { if (!e.target.closest('button')) this.advance(); });
+    addEventListener('resize', () => this.dialogOpen && this.fitPortrait());
     $('pclose').addEventListener('click', () => this.closePanel());
     $('panelBack').addEventListener('pointerdown', (e) => { if (e.target.id === 'panelBack') this.closePanel(); });
   }
   get blocking() { return this.dialogOpen || !!this.panelOpen; }
 
   // ---------- 对话 ----------
-  // d = { name, sub, lines: [...] 或 line, info, hint, choices: [{ label, fn, off }], onClose }
+  // d = { name, sub, lines: [...] 或 line, info, hint, choices: [{ label, fn, off }], onClose, portrait }
+  // portrait：立绘地址；false = 不要立绘。不给就按名字找（this.portraitOf 由 main.js 接到村民），找不到用默认立绘。旁白没有立绘。
   dialog(d) {
     this.d = d; this.page = 0; this.dialogOpen = true;
     document.body.classList.add('talking');
@@ -29,6 +35,9 @@ export class UI {
   get lines() { return this.d.lines || [this.d.line ?? '']; }
   renderDialog() {
     const d = this.d, box = $('dialog'), lines = this.lines, last = this.page >= lines.length - 1, t = lines[this.page];
+    const pic = this.portraitFor(d), img = box.querySelector('.dportrait');
+    box.classList.toggle('hasPortrait', !!pic); box.classList.toggle('narrate', !d.name || !!d.narrate);
+    if (pic) { if (img.getAttribute('src') !== pic) { img.src = pic; img.classList.remove('in'); void img.offsetWidth; } img.classList.add('in'); }
     box.querySelector('.dname').textContent = d.name || '';
     box.querySelector('.dsub').textContent = d.sub || '';
     box.querySelector('.dline').textContent = d.name && !d.narrate ? `「${t}」` : t;
@@ -37,7 +46,19 @@ export class UI {
     const ch = box.querySelector('.dchoices'); ch.innerHTML = '';
     if (last && d.choices?.length) for (const c of d.choices) ch.append(btn(c.label, () => { if (!c.keep) this.closeDialog(true); c.fn?.(); }, c.off ? 'off' : ''));
     box.querySelector('.dmore').hidden = last;
+    if (d.name && !d.narrate && !d.silent) snd('talk', d.name, t); else snd('page');
     box.classList.remove('hidden');
+    this.fitPortrait();
+  }
+  // 手机竖屏：立绘的脚踩在名牌下面那行（身份 + 好感心）的底边上，行数变了也跟着走（CSS 用 --subB）
+  fitPortrait() {
+    const box = $('dialog'), sub = box.querySelector('.dsub');
+    box.style.setProperty('--subB', `${sub.offsetTop + sub.offsetHeight}px`);
+  }
+  portraitFor(d) {
+    if (d.portrait === false || d.narrate || !d.name) return null;
+    if (typeof d.portrait === 'string') return d.portrait;
+    return this.portraitOf?.(d.name) || portraitByName(d.name);
   }
   advance() {
     if (!this.dialogOpen) return;
@@ -47,13 +68,14 @@ export class UI {
   // chosen = 点了选项（不触发 onClose）
   closeDialog(chosen = false) {
     if (!this.dialogOpen) return;
-    this.dialogOpen = false; $('dialog').classList.add('hidden'); document.body.classList.remove('talking');
+    this.dialogOpen = false; $('dialog').classList.add('hidden'); document.body.classList.remove('talking'); snd('hush');
     const f = this.d.onClose; this.d = null;
     if (!chosen) f?.();
   }
 
   // ---------- 面板 ----------
   panel(title, render, onClose) {
+    if (!this.panelOpen) snd('open');
     this.panelOpen = { title, render, onClose };
     $('panelBack').classList.remove('hidden');
     this.refresh();
@@ -65,7 +87,7 @@ export class UI {
   }
   closePanel() {
     const p = this.panelOpen; if (!p) return;
-    this.panelOpen = null; $('panelBack').classList.add('hidden'); p.onClose?.();
+    this.panelOpen = null; $('panelBack').classList.add('hidden'); snd('close'); p.onClose?.();
   }
   // 一行：图标、名字、说明、右侧按钮
   row(icon, name, sub, buttons = [], cls = '') {
@@ -153,6 +175,7 @@ export class UI {
       s.title = it ? it.name : '';
       s.classList.toggle('sel', i === inv.sel);
       s.classList.toggle('empty', !it);
+      s.classList.toggle('heal', !!(it && (it.heal || it.qiHeal)));   // 战斗中补血 / 回灵的格子保持可用
     });
     const id = inv.selId;
     $('hotName').textContent = id ? item(id).name : '';

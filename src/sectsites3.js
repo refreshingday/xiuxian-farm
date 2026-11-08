@@ -268,7 +268,7 @@ const YC = { wall: '#e6d6a8', col: '#6a4426', roof: '#55663a', ridge: '#2a341e',
 const YS = { R: 64, ring: [0, 22], crag: [30, -32], hill: [-40, -22.5] };
 const YS_PATHS = [{ pts: [[0, -8], [0, -28]], w: 2.4 }, { pts: [[16, -31], [27, -33]], w: 1.3 }, { pts: [[-24, -12], [-34, -17.4]], w: 1.3 }];
 const YS_T = makeTerrain({
-  LH: 1.4, rock: '#7a6a52',
+  LH: 1.9, rock: '#7a6a52',
   shapes: [
     plat({ x: 0, z: -37, w: 48, d: 24, round: 3, lv: 3, ring: 3.6, wob: 1.2, seed: 21 }),           // 北面 3 级台地：御兽殿
     plat({ x: YS.hill[0], z: YS.hill[1], w: 16, d: 13, round: 3, lv: 2, ring: 3.4, wob: 1.2, seed: 23 }), // 西北竹楼小丘

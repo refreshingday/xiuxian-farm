@@ -20,7 +20,7 @@ const BC = { wall: '#fff2f4', col: '#b0607a', roof: '#d88aa0', ridge: '#9a4a62',
 const BH_POND = [-14, 18], BH_WY = -0.14;
 const BH_PATHS = [{ pts: [[0, -14], [0, -31]], w: 2.2 }, { pts: [[-22, 30], [-52, 30]], w: 1.3 }, { pts: [[23, -8], [49.5, -8]], w: 1.3 }, { pts: [[7, -12], [12, -12]], w: 1.1 }];
 const BH_T = makeTerrain({
-  LH: 1.2, rock: '#a8949a',
+  LH: 1.7, rock: '#a8949a',
   shapes: [
     // 东西两侧花田梯台：越往外越高（顶上 5 级），北面也围起来；靠近谷口和外圈回落到 0 级
     shape([-80, -80, 80, 56.5], (x, z) => { const ax = Math.abs(x), r = Math.hypot(x, z), base = Math.max((ax - 24) / 5, (-54 - z) / 3) + (vnoise(x * 0.09 + 3, z * 0.09, 5) - 0.5) * 0.9; return Math.min(5.3, base, (76 - r) / 2.4, (55.8 - z) / 0.25); }),
@@ -97,12 +97,21 @@ function flowerSea(S, skip, rng) {
   }
   const head = mergeGeometries([new THREE.IcosahedronGeometry(0.17, 0).translate(0, 0.44, 0), new THREE.IcosahedronGeometry(0.12, 0).translate(0.14, 0.3, 0.06), new THREE.IcosahedronGeometry(0.1, 0).translate(-0.1, 0.26, -0.1)]);
   const leaf = new THREE.ConeGeometry(0.16, 0.42, 4).translate(0, 0.21, 0).toNonIndexed();
-  const H = new THREE.InstancedMesh(head, toon('#ffffff', { unique: true }), pts.length), Lm = new THREE.InstancedMesh(leaf, M('#5a9a4a'), pts.length);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
-  pts.forEach(([x, z, a, s], i) => { q.setFromEuler(e.set(0, a * TAU, 0)); sc.setScalar(0.9 + s * 0.7); m.compose(v.set(x, S.hy(x, z), z), q, sc); H.setMatrixAt(i, m); Lm.setMatrixAt(i, m); });
-  const c = new THREE.Color(), paint = (se) => { const pal = SEASON_FL[se]; pts.forEach((p, i) => H.setColorAt(i, c.set(pal[p[4]]))); H.instanceColor.needsUpdate = true; };
+  // 切成 20 米一块：每块有自己的包围球，镜头外 / 雾外的块不画（以前整片 6000 多朵、约 44 万个三角形不做剔除，在地图哪里都画）
+  const T = 20, tiles = new Map();
+  for (const p of pts) { const k = Math.floor(p[0] / T) + ',' + Math.floor(p[1] / T); (tiles.get(k) || tiles.set(k, []).get(k)).push(p); }
+  const hm = toon('#ffffff', { unique: true }), lm = M('#5a9a4a');
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+  const parts = [...tiles.values()].map((tp) => {
+    const H = new THREE.InstancedMesh(head, hm, tp.length), Lm = new THREE.InstancedMesh(leaf, lm, tp.length);
+    tp.forEach(([x, z, a, s], i) => { q.setFromEuler(e.set(0, a * TAU, 0)); sc.setScalar(0.9 + s * 0.7); m.compose(v.set(x, S.hy(x, z), z), q, sc); H.setMatrixAt(i, m); Lm.setMatrixAt(i, m); });
+    const grp = new THREE.Group(); grp.position.set(S.x, 0, S.z);
+    for (const o of [H, Lm]) { o.castShadow = false; o.receiveShadow = true; o.computeBoundingSphere(); grp.add(o); }
+    S.g.scene.add(grp);
+    return { H, tp };
+  });
+  const paint = (se) => { const pal = SEASON_FL[se]; for (const { H, tp } of parts) { tp.forEach((p, i) => H.setColorAt(i, c.set(pal[p[4]]))); H.instanceColor.needsUpdate = true; } };
   paint(0);
-  for (const o of [H, Lm]) { o.position.set(S.x, 0, S.z); o.frustumCulled = false; o.castShadow = false; o.receiveShadow = true; S.g.scene.add(o); }
   let last = 0;
   S.anims.push(() => { const se = S.g.farm?.season ?? 0; if (se !== last) { last = se; paint(se); } });
   return pts.length;
@@ -341,7 +350,7 @@ const DC = { wall: '#f4e8d8', col: '#8a3a1a', roof: '#6a3a22', ridge: '#3a1a0a',
 const DD_PIT = [-30, 8], DD_PLAZA = [0, 14];
 const DD_PATHS = [{ pts: [[0, -17], [0, -29]], w: 2.4 }, { pts: [[34, 46], [34, -27]], w: 1.6 }];
 const DD_T = makeTerrain({
-  LH: 1.2, rock: '#8a7a6a',
+  LH: 1.7, rock: '#8a7a6a',
   shapes: [
     plat({ x: 0, z: -39, w: 48, d: 26, round: 4, lv: 3, ring: 2.6, wob: 1, seed: 61 }),                             // 丹鼎殿台地
     ...[0, 1, 2, 3, 4, 5].map((k) => plat({ x: 38, z: 36 - 12 * k, w: 14, d: 10, round: 1.5, lv: k + 1, ring: 1.6, seed: 63 + k })), // 丹房街：六级

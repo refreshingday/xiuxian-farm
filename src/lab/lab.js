@@ -7,6 +7,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadTextures, PNG, toon, canvasTex, mulberry32, hash01, smooth, clamp, lerp } from '../util.js';
 import { createChibi, animChibi } from '../chibi.js';
+import { createMirror } from './mirror.js';
 import { TouchControls } from '../touch.js';
 import { createWaterFx, swimPose, fallPose, waterSound, WADE_SLOW, SWIM_IN, SWIM_OUT } from './swim.js';
 import { U, instance } from './kit.js';
@@ -70,7 +71,7 @@ composer.addPass(grade);
 function resize() {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setPixelRatio(pixelRatio);
-  renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(pixelRatio); composer.setSize(innerWidth, innerHeight);
+  renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(pixelRatio); composer.setSize(innerWidth, innerHeight); mirror.resize(innerWidth, innerHeight, pixelRatio);
 }
 addEventListener('resize', resize);
 
@@ -100,11 +101,16 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.Shad
 }));
 sky.renderOrder = -1;
 scene.add(sky);
+// 雨天水面 / 湿地实验：共享 uniform（水面着色器里的假云倒影、角色倒影贴图、雨点涟漪、闪电打亮）
+const mirror = createMirror(renderer, camera);
+const MIR = { tRef: { value: mirror.rt.texture }, texM: { value: mirror.texM }, on: { value: 0 }, flash: { value: 0 }, rain: { value: 0 }, skyB: { value: new THREE.Color() }, lit: { value: new THREE.Color(1, 1, 1) } };
+const WET_U = { value: 0 };
+mirror.resize(innerWidth, innerHeight, Math.min(devicePixelRatio, 2));
 
 // ---------- 状态 ----------
 const S = {
   biome: 0, mode: 'scene', src: 'claude', time: 10, seed: 1,
-  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, v: 3, bloomK: {}, bloomT: {},
+  outline: false, ink: false, shadows: true, bloom: true, grade: true, particles: true, chibi: true, labels: true, spin: false, sound: true, refgrad: true, mirror: true, rain: false, v: 3, bloomK: {}, bloomT: {},
 };
 try {
   const saved = JSON.parse(localStorage.getItem('xxlab') || '{}');
@@ -185,9 +191,9 @@ function buildIsland(b) {
   const gm = toon('#ffffff', { map: tex, unique: true });
   const rockC = new THREE.Color(b.terrace?.rock || ROCK[b.id] || '#8a8478');
   gm.onBeforeCompile = (sh) => {
-    sh.uniforms.tCliff = { value: PNG.cliff_rock || _white }; sh.uniforms.uRock = { value: rockC };
+    sh.uniforms.tCliff = { value: PNG.cliff_rock || _white }; sh.uniforms.uRock = { value: rockC }; sh.uniforms.uWet = WET_U; sh.uniforms.uSkyT = skyU.top;
     sh.vertexShader = 'varying vec3 vGW;\nvarying vec3 vGN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = (modelMatrix * vec4(transformed, 1.0)).xyz; vGN = normalize(mat3(modelMatrix) * objectNormal);');
-    sh.fragmentShader = 'uniform sampler2D tCliff;\nuniform vec3 uRock;\nvarying vec3 vGW;\nvarying vec3 vGN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+    sh.fragmentShader = 'uniform sampler2D tCliff;\nuniform vec3 uRock;\nuniform float uWet;\nuniform vec3 uSkyT;\nvarying vec3 vGW;\nvarying vec3 vGN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
   {
     vec3 gn = normalize(vGN);
     float steep = 1.0 - smoothstep(0.42, 0.74, gn.y);
@@ -199,6 +205,13 @@ function buildIsland(b) {
       diffuseColor.rgb = mix(diffuseColor.rgb, uRock * tx * 1.15 * strata, steep);
     }
     diffuseColor.rgb *= 1.0 - 0.28 * smoothstep(0.08, 0.3, steep) * (1.0 - smoothstep(0.45, 0.8, steep));
+    // 下雨天的湿地：整体压暗、饱和度略升，掠射角加一层天空反光（地面是湿的，像刷了一层釉）
+    float wk = uWet * (1.0 - steep);
+    if (wk > 0.001) {
+      diffuseColor.rgb *= 1.0 - 0.34 * wk;
+      float fr = pow(1.0 - clamp(dot(normalize(cameraPosition - vGW), gn), 0.0, 1.0), 3.0);
+      diffuseColor.rgb += uSkyT * (0.06 + 0.5 * fr) * wk;
+    }
   }`);
   };
   gm.customProgramCacheKey = () => 'labGround';
@@ -280,17 +293,18 @@ function makeWater(W, hAt, area, masked = false) {
   const mode = { water: 0, ice: 1, lava: 2 }[W.mode];
   const mat = new THREE.ShaderMaterial({
     transparent: mode !== 2, fog: true,
-    uniforms: fogU({
+    uniforms: Object.assign(fogU({
       tDepth: { value: dt }, uTime: U.time, uOrigin: { value: new THREE.Vector2(x0, z0) }, uSize: { value: sz }, uMask: { value: masked ? 1 : 0 }, uMode: { value: mode },
       cShallow: { value: new THREE.Color(W.shallow) }, cDeep: { value: new THREE.Color(W.deep) }, cFoam: { value: new THREE.Color(W.foam) },
-      uSky: { value: new THREE.Color() }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
-    }),
+      uSky: { value: new THREE.Color() }, uMirEn: { value: W.mirror ? 1 : 0 }, uChar: { value: masked ? 0 : 1 }, uGlow: { value: W.glow || 0 }, uClear: { value: W.clear ? 1 : 0 }, uCaus: { value: W.caus || 1 }, uFlow: { value: new THREE.Vector2(...(W.flow || [0.3, 0.2])) },
+    }), { tRef: MIR.tRef, texM: MIR.texM, uOn: MIR.on, uFlash: MIR.flash, uRain: MIR.rain, uSkyB: MIR.skyB, uLit: MIR.lit }),
     vertexShader: `varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXZ = w.xz; vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky; uniform vec2 uFlow;
+    fragmentShader: `uniform sampler2D tDepth; uniform float uTime, uSize, uMask, uMode, uGlow, uClear, uCaus; uniform vec2 uOrigin; uniform vec3 cShallow, cDeep, cFoam, uSky, uSkyB, uLit; uniform vec2 uFlow;
+      uniform sampler2D tRef; uniform mat4 texM; uniform float uMirEn, uOn, uFlash, uRain, uChar;
       varying vec2 vXZ; varying vec3 vW;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -300,6 +314,33 @@ function makeWater(W, hAt, area, masked = false) {
         for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(h(i + o), h(i + o + 7.3)) - f; float d = dot(r, r);
           if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
         return vec2(sqrt(d1), sqrt(d2)); }
+      // 雨点涟漪：两层格子，每格一个随机相位的扩散圆环；返回 (法线偏移xy, 环亮度)
+      vec3 ripples(vec2 p) {
+        vec3 r = vec3(0.0);
+        for (int L = 0; L < 2; L++) {
+          vec2 q = p * (L == 0 ? 1.3 : 2.2) + float(L) * 17.3, id = floor(q), f = fract(q) - 0.5;
+          float t = fract(uTime * (0.55 + h(id + 1.7) * 0.5) + h(id + float(L) * 3.1));
+          vec2 d = f - (vec2(h(id + 4.1), h(id + 9.2)) - 0.5) * 0.3; float dist = length(d), rad = t * 0.3;
+          float env = exp(-pow((dist - rad) / 0.05, 2.0)) * (1.0 - t) * (1.0 - t);
+          float ph = sin((dist - rad) * 60.0);
+          r.xy += d / max(dist, 0.001) * env * ph; r.z += env * (0.5 + 0.5 * ph);
+        }
+        return r;
+      }
+      float waveH(vec2 x) { return vn(x + uTime * vec2(0.5, 0.3)) * 0.6 + vn(x * 2.1 - uTime * vec2(0.7, 0.4) + 7.0) * 0.4; }
+      float cloudN(vec2 p) { float a = 0.0, w = 0.5; for (int i = 0; i < 4; i++) { a += w * vn(p); p = p * 2.03 + 5.7; w *= 0.5; } return a; }
+      // 假云倒影：把反射方向投到一层云上，用天空球的上下两色上色；云有明暗，闪电时被打亮
+      vec3 skyRefl(vec3 r) {
+        r.y = max(r.y, 0.1);
+        vec2 p = r.xz / (r.y + 0.18) * 0.9 + vec2(uTime * 0.025, uTime * 0.012);
+        float cl = cloudN(p), cl2 = cloudN(p + vec2(0.07, 0.05));
+        float m = smoothstep(0.42, 0.66, cl), shade = clamp(0.55 + (cl - cl2) * 5.0, 0.0, 1.0);
+        vec3 sk = mix(uSkyB, uSky, smoothstep(0.0, 0.6, r.y));
+        float lum = clamp(dot(uSkyB + uSky, vec3(0.33)) * 1.3, 0.04, 1.0);
+        vec3 cc = mix(vec3(0.62, 0.68, 0.8), vec3(1.0), shade) * lum;
+        sk *= 0.9;
+        return mix(sk, cc, m * 0.95) + vec3(0.55, 0.6, 0.85) * uFlash * (0.3 + 0.7 * m);
+      }
       void main() {
         vec2 uv = (vXZ - uOrigin) / uSize;
         vec4 dm = texture2D(tDepth, uv);
@@ -338,7 +379,30 @@ function makeWater(W, hAt, area, masked = false) {
           float rings = smoothstep(0.1, 0.0, abs(wave - 0.5)) * (1.0 - smoothstep(0.08, 0.38, d));
           c = mix(c, cFoam, max(foam, rings * 0.7));
           c += cShallow * uGlow * (1.0 - d);
+          // 积水倒影：只有水面这一层会反射（地面不反射）；岸边一圈渐隐，避免和泡沫打架
+          float mk = uMirEn * uOn;
+          if (mk > 0.5) {
+            vec3 rp = ripples(p) * uRain;
+            // 波纹法线：静水是慢慢晃的小波；溪流里沿流向拉长、顺流快速滚动，倒影被拉成一条条流动的条纹
+            vec2 wp = p * 1.5 - drift * 1.5, wfd = fd, wfp = vec2(-fd.y, fd.x);
+            float fk = smoothstep(0.05, 0.4, fs), e = 0.12, w0 = waveH(wp);
+            vec2 wg = vec2(waveH(wp + vec2(e, 0.0)) - w0, waveH(wp + vec2(0.0, e)) - w0) / e;
+            if (fk > 0.0) { // 溪流：另算一组沿流向拉长的波，只混合法线（不混坐标，否则交界处会出一条长线）
+              vec2 sp = vec2(dot(p, wfd) * 0.45 - uTime * fs * 3.2, dot(p, wfp) * 2.4); float s0 = waveH(sp);
+              vec2 sg = vec2(waveH(sp + vec2(e, 0.0)) - s0, waveH(sp + vec2(0.0, e)) - s0) / e;
+              wg = mix(wg, wfd * sg.x + wfp * sg.y, fk);
+            }
+            float amp = 0.16 + 0.3 * fk;
+            vec3 N = normalize(vec3(-(wg.x * amp + rp.x * 0.35), 1.0, -(wg.y * amp + rp.y * 0.35)));
+            vec3 V = normalize(cameraPosition - vW), R = reflect(-V, N);
+            float fr = 0.5 + 0.5 * pow(1.0 - max(dot(N, V), 0.0), 3.0), inner = smoothstep(0.03, 0.2, d);
+            c = mix(c, skyRefl(R), fr * 0.9 * inner * (1.0 - 0.45 * fk));
+            vec4 rc = texture2D(tRef, (texM * vec4(vW, 1.0)).xy / (texM * vec4(vW, 1.0)).w + clamp(N.xz * 0.12, -0.05, 0.05));
+            c = mix(c, rc.rgb, rc.a * inner * uChar * (0.55 + 0.4 * fr));
+            c += rp.z * 0.18 * inner;
+          }
           a = uClear > 0.5 ? mix(0.55, 0.86, smoothstep(0.0, 0.8, d)) : mix(0.7, 0.94, smoothstep(0.0, 0.5, d));
+          a = mix(a, max(a, 0.95), uMirEn * uOn * smoothstep(0.03, 0.2, d));
         } else if (uMode < 1.5) {
           vec2 v = cell(p * 0.6);
           c = mix(cShallow, cDeep, smoothstep(0.1, 0.9, d) * 0.6);
@@ -357,6 +421,7 @@ function makeWater(W, hAt, area, masked = false) {
           c = mix(c, vec3(0.1, 0.04, 0.04), smoothstep(0.05, 0.0, d) * 0.8);
           a = 1.0;
         }
+        if (uMode < 1.5) c *= uLit; // 水面本身不发光：跟着环境光（白天 / 黄昏 / 夜里）变亮变暗
         gl_FragColor = vec4(c, a);
         #include <fog_fragment>
       }`,
@@ -378,13 +443,13 @@ function waterfall(f, W) {
   g.computeVertexNormals();
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true,
-    uniforms: fogU({ uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }),
+    uniforms: Object.assign(fogU({ uTime: U.time, cA: { value: new THREE.Color(W.shallow) }, cB: { value: new THREE.Color(W.foam) } }), { uLit: MIR.lit }),
     vertexShader: `varying vec2 vUv;
       #include <fog_pars_vertex>
       void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform float uTime; uniform vec3 cA, cB; varying vec2 vUv;
+    fragmentShader: `uniform float uTime; uniform vec3 cA, cB, uLit; varying vec2 vUv;
       #include <fog_pars_fragment>
       float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -395,7 +460,7 @@ function waterfall(f, W) {
         vec3 c = mix(cA * 1.1, cB, smoothstep(0.45, 0.75, s));
         c = mix(c, cB, smoothstep(0.85, 1.0, vUv.y) * 0.7 + smoothstep(0.2, 0.0, vUv.y) * 0.8);
         float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
-        gl_FragColor = vec4(c * 1.15, (0.78 + 0.2 * s) * edge);
+        gl_FragColor = vec4(c * 1.15 * uLit, (0.78 + 0.2 * s) * edge);
         #include <fog_fragment>
       }`,
   });
@@ -405,11 +470,11 @@ function waterfall(f, W) {
   root.add(m);
   // 落水白沫：一圈向外扩散的波纹
   const foam = new THREE.Mesh(new THREE.CircleGeometry(f.w * 1.1, 24).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms: { uTime: U.time },
+    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uLit: MIR.lit },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float uTime; varying vec2 vUv;
+    fragmentShader: `uniform float uTime; uniform vec3 uLit; varying vec2 vUv;
       void main() { float r = length(vUv - 0.5) * 2.0; float w = fract(r * 2.5 - uTime * 1.2);
-        float a = smoothstep(1.0, 0.55, r) * (0.35 + 0.65 * step(0.6, w)) * 0.85; gl_FragColor = vec4(vec3(0.95, 0.98, 1.0) * 1.3, a); }`,
+        float a = smoothstep(1.0, 0.55, r) * (0.35 + 0.65 * step(0.6, w)) * 0.85; gl_FragColor = vec4(vec3(0.95, 0.98, 1.0) * 1.3 * uLit, a); }`,
   }));
   foam.position.set(f.x + fx * 0.75, f.bottom + 0.02, f.z + fz * 0.75); foam.renderOrder = 2;
   root.add(foam);
@@ -418,13 +483,13 @@ function waterfall(f, W) {
   for (let i = 0; i < n; i++) { pp.set([f.x + fx * 0.75, f.bottom, f.z + fz * 0.75], i * 3); for (let c = 0; c < 4; c++) rnd[i * 4 + c] = Math.random(); }
   const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); mg.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 4));
   const mist = new THREE.Points(mg, new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uW: { value: f.w } },
-    vertexShader: `attribute vec4 aRnd; uniform float uTime, uW; varying float vA;
+    transparent: true, depthWrite: false, uniforms: { uTime: U.time, uW: { value: f.w }, uLit: MIR.lit },
+    vertexShader: `attribute vec4 aRnd; uniform float uTime, uW; uniform vec3 uLit; varying float vA, vL;
       void main() { float t = fract(aRnd.x + uTime * (0.35 + aRnd.y * 0.3));
         vec3 p = position + vec3((aRnd.z - 0.5) * uW * 1.3, t * 1.4, (aRnd.w - 0.3) * 1.2 + t * 0.3);
         vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
-        gl_PointSize = min((6.0 + t * 22.0) * (30.0 / -mv.z), 60.0); vA = (1.0 - t) * smoothstep(0.0, 0.15, t) * 0.5; }`,
-    fragmentShader: 'varying float vA; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(1.0, 1.0, 1.0, smoothstep(0.5, 0.1, d) * vA); }',
+        gl_PointSize = min((6.0 + t * 22.0) * (30.0 / -mv.z), 60.0); vA = (1.0 - t) * smoothstep(0.0, 0.15, t) * 0.5; vL = (uLit.r + uLit.g + uLit.b) / 3.0; }`,
+    fragmentShader: 'varying float vA, vL; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vec3(vL), smoothstep(0.5, 0.1, d) * vA); }',
   }));
   mist.frustumCulled = false; root.add(mist); particleSys.push(mist);
 }
@@ -758,7 +823,8 @@ function build() {
     if (b.fish) fishSchool(b, hAt);
     span = R;
     if (b.water) waterFx.setColor(b.water.foam);
-    for (const p of b.particles) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
+    const pl = S.rain && !b.particles.some((p) => p.type === 'rain') ? [...b.particles, { type: 'rain', n: 1000, color: '#c8d8f0', size: 6 }] : b.particles;
+    for (const p of pl) { const ps = particles(p); root.add(ps); particleSys.push(ps); }
   } else {
     const ids = S.mode === 'all' || S.mode === 'allcmp' ? ALL_IDS() : b.catalog;
     span = buildCatalog(ids, S.mode);
@@ -768,7 +834,8 @@ function build() {
   // 参照角色
   if (!chibi) {
     chibi = createChibi({ skin: '#f8d8bc', hair: '#4a2e22', hairStyle: 2, robe: '#f2f4f6', robe2: '#4f7fb0', belt: '#3a5a78', pants: '#3a4250', sword: true });
-    chibi.root.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+    chibi.root.traverse((m) => { if (m.isMesh) m.castShadow = true; m.layers.enable(1); });
+    scene.traverse((o) => { if (o.isLight) o.layers.enable(1); });
   }
   // 角色站在离中心最近的陆地上
   const lvl = S.mode === 'scene' && b.water ? b.water.level + 0.1 : -99;
@@ -837,6 +904,8 @@ function applyLight() {
   $('#bloomTV').textContent = `${bloom.threshold.toFixed(2)}${bt == null ? '（默认）' : `（默认 ${tDef}）`}`;
   grade.uniforms.uWarm.value = L.warm ?? 1;
   for (const m of waterMats) m.uniforms.uSky.value.copy(skyU.top.value);
+  MIR.skyB.value.copy(skyU.bottom.value);
+  MIR.lit.value.setRGB(1, 1, 1).lerp(_b.set(L.dark ? '#2a3050' : '#2c3a66'), nightK * 0.85).lerp(_b.set('#ffb890'), dusk * 0.35);
   $('#timeV').textContent = `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.floor((t % 1) * 60)).padStart(2, '0')}`;
 }
 
@@ -859,6 +928,7 @@ function applyToggles() {
   root.traverse((o) => { if (o.userData.isLine) o.visible = o.userData.ink ? S.ink : S.outline; }); // 参考画风的墨线单独一个开关（默认关）
   sun.castShadow = S.shadows;
   REFU.grad.value = S.refgrad ? 1 : 0;
+  { const fx = S.mode === 'scene' && (BIOMES[S.biome].light.fx === 'storm' || S.rain); MIR.rain.value = fx ? 1 : 0; WET_U.value = fx ? 1 : 0; }
   bloom.enabled = S.bloom; grade.enabled = S.grade;
   for (const p of particleSys) p.visible = S.particles;
   if (chibi) chibi.root.visible = S.chibi && S.mode === 'scene';
@@ -890,7 +960,7 @@ function setupUI() {
   });
   document.querySelectorAll('#modes button').forEach((el) => el.onclick = () => { S.mode = el.dataset.m; save(); rebuild(true); });
   document.querySelectorAll('[data-src]').forEach((el) => el.onclick = () => { S.src = el.dataset.src; save(); rebuild(false); });
-  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { const k = el.dataset.t === 'outline' ? lineKey() : el.dataset.t; S[k] = !S[k]; save(); applyToggles(); ui(); });
+  document.querySelectorAll('[data-t]').forEach((el) => el.onclick = () => { const k = el.dataset.t === 'outline' ? lineKey() : el.dataset.t; S[k] = !S[k]; save(); if (k === 'rain') build(); else { applyToggles(); ui(); } });
   $('#time').oninput = (e) => { S.time = +e.target.value; save(); applyLight(); };
   $('#wind').oninput = (e) => { U.wind.value = +e.target.value; };
   $('#bloomS').oninput = (e) => { S.bloomK[BIOMES[S.biome].id] = +e.target.value; save(); applyLight(); };
@@ -1149,7 +1219,7 @@ function storm(dt) {
     scene.add(bolt); boltT = 0.35; flash = 1;
   }
   if (bolt) { boltT -= dt; boltMat.opacity = Math.max(0, boltT / 0.35) * (0.6 + Math.random() * 0.4); if (boltT <= 0) { scene.remove(bolt); bolt.geometry.dispose(); bolt = null; } }
-  flash = Math.max(0, flash - dt * 4);
+  flash = Math.max(0, flash - dt * 4); MIR.flash.value = flash;
   hemi.intensity = lerp(BIOMES[S.biome].light.hemiI, 0.55, nightK) + flash * 2.5;
 }
 
@@ -1180,6 +1250,8 @@ renderer.setAnimationLoop(() => {
   storm(dt);
   updateFish(t);
   updateLights(t);
+  { const W = BIOMES[S.biome].water, on = S.mirror && S.mode === 'scene' && W && W.mirror && chibi && chibi.root.visible;
+    MIR.on.value = on ? 1 : 0; if (on) mirror.render(scene, W.level); }
   composer.render();
   updateStats(dt);
   renderer.info.reset();

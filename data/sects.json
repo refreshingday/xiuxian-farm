@@ -1,5 +1,5 @@
 {
-  "_note": "宗门（GDD 第 10 节）。join = 入门要的大境界（0 炼气 1 筑基 2 金丹 3 元婴）。techs = 功法：rank 要的门内地位（0 外门 1 内门 2 真传 3 长老），cost = 贡献点。fx 效果：dmg_sword / dmg_fist / dmg_talisman / dmg_all 伤害、crit 暴击率、dashCd 闪避冷却（秒）、dashIframe 闪避无敌（秒）、skillCd 技能冷却比例、slow 命中减速、qiRegen 灵力恢复、qiMax 灵力上限、hp 气血上限、hpPct 气血上限比例、regen 脱战回血（每秒比例）、dmgTaken 受伤减免、nightDef 夜里受伤减免、lifesteal 吸血、vsUndead 对鬼物行尸、moveSpeed 移速、flySpeed 御剑速度、flyQi 御剑耗灵减免、sense 神识、scanCost 扫描省神识、luck 掉落、meditate 打坐修为、alch 控火区间、pillPow 丹药药力、tox 丹毒减轻、herbAge 药龄加速（倍）、soilQi 灵田每天自生灵气、autoWater 灵雨阵自动浇水、tribRes 天劫减伤、pet 灵兽助战。",
+  "_note": "宗门（GDD 第 10 节）。join = 入门要的大境界（0 炼气 1 筑基 2 金丹 3 元婴）。techs = 功法：rank 要的门内地位（0 外门 1 内门 2 真传 3 长老），cost = 贡献点。fx 效果：dmg_sword / dmg_fist / dmg_talisman / dmg_all 伤害、crit 暴击率、dashCd 闪避冷却（秒）、dashIframe 闪避无敌（秒）、skillCd 技能冷却比例、slow 命中减速、qiRegen 灵力恢复、qiMax 灵力上限、hp 气血上限、hpPct 气血上限比例、regen 脱战回血（每秒比例）、dmgTaken 受伤减免、nightDef 夜里受伤减免、lifesteal 吸血、vsUndead 对鬼物行尸、moveSpeed 移速、flySpeed 御剑速度、flyQi 御剑耗灵减免、luck 掉落、meditate 打坐修为、alch 控火区间、pillPow 丹药药力、tox 丹毒减轻、herbAge 药龄加速（倍）、soilQi 灵田每天自生灵气、autoWater 灵雨阵自动浇水、tribRes 天劫减伤、pet 灵兽助战。",
   "sects": {
     "青锋剑派": { "id": "qingfeng", "join": 0, "robe": "#7ab8e8", "intro": "雪峰脚下的小剑派，剑法入门的好去处。", "techs": [
       { "id": "qf1", "name": "青锋诀", "rank": 0, "cost": 40, "desc": "剑招伤害 +15%", "fx": { "dmg_sword": 0.15 } },
@@ -61,10 +61,10 @@
       { "id": "hs3", "name": "禅定", "rank": 1, "cost": 240, "desc": "睡觉打坐修为 +30%", "fx": { "meditate": 0.3 } } ] },
     "镇魂观": { "id": "zhenhun", "join": 0, "robe": "#5a6a8a", "intro": "古战场边驱鬼的小观。", "techs": [
       { "id": "zh1", "name": "镇魂诀", "rank": 0, "cost": 40, "desc": "对游魂、行尸伤害 +60%", "fx": { "vsUndead": 0.6 } },
-      { "id": "zh2", "name": "安神咒", "rank": 0, "cost": 60, "desc": "神识 +30", "fx": { "sense": 30 } },
+      { "id": "zh2", "name": "安神咒", "rank": 0, "cost": 60, "desc": "灵力上限 +30", "fx": { "qiMax": 30 } },
       { "id": "zh3", "name": "驱邪", "rank": 1, "cost": 120, "desc": "夜里受到的伤害 −15%", "fx": { "nightDef": 0.15 } } ] },
-    "天机阁": { "id": "tianji", "join": 1, "robe": "#4a4a7a", "intro": "神识与占卜的中宗。", "techs": [
-      { "id": "tj_1", "name": "天机诀", "rank": 0, "cost": 100, "desc": "神识 +50，扫描省一半", "fx": { "sense": 50, "scanCost": 0.5 } },
+    "天机阁": { "id": "tianji", "join": 1, "robe": "#4a4a7a", "intro": "占卜的中宗。", "techs": [
+      { "id": "tj_1", "name": "天机诀", "rank": 0, "cost": 100, "desc": "灵力上限 +50", "fx": { "qiMax": 50 } },
       { "id": "tj_2", "name": "观星", "rank": 0, "cost": 120, "desc": "暴击率 +8%", "fx": { "crit": 0.08 } },
       { "id": "tj_3", "name": "卜算", "rank": 1, "cost": 200, "desc": "掉落 +20%", "fx": { "luck": 0.2 } } ] }
   }
