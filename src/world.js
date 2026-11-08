@@ -195,6 +195,16 @@ function gsRegion(x0, z0, x1, z1) {
     clearings: CLEARINGS.filter((c) => hit(c.x, c.z, c.x, c.z, Math.max(c.r, (c.plaza || 0) + 1) + 1)),
   };
 }
+// 草丛占地（约 r 半径）周围 6 个点都还是草地、没混到土路 / 石板 / 岩地
+const _ga = [0, 0, 0];
+function grassAround(x, z, r) {
+  for (let i = 0; i < 6; i++) {
+    const a = i * 1.047;
+    groundSample(x + Math.cos(a) * r, z + Math.sin(a) * r, _ga);
+    if (GS.path > 0.05 || GS.kind === 1 || GS.kind === 4) return false;
+  }
+  return true;
+}
 function groundSample(x, z, out) {
   const L = GSL !== null && x >= GSL.x0 && x <= GSL.x1 && z >= GSL.z0 && z <= GSL.z1 ? GSL : null;
   const dv = Math.hypot(x, z), dm = Math.hypot(x - MINE.x, z - MINE.y);
@@ -1050,7 +1060,9 @@ export class World {
           if (terr && Math.abs(groundY(gx2 + 0.3, gz2) - groundY(gx2 - 0.3, gz2)) + Math.abs(groundY(gx2, gz2 + 0.3) - groundY(gx2, gz2 - 0.3)) > 0.5) continue; // 断崖上不长草
           const v = 0.9 + rng() * 0.25;
           _c.setRGB(_b[0] / 255 * v * 1.08, _b[1] / 255 * v * 1.1, _b[2] / 255 * v, THREE.SRGBColorSpace);
-          grass.push({ x: gx2, z: gz2, s: 0.75 + rng() * 0.6, sy: (0.7 + rng() * 0.7) * (0.7 + lush * 0.5), rot: rng() * 6.28, c: '#' + _c.getHexString() });
+          const gs = 0.75 + rng() * 0.6, gsy = (0.7 + rng() * 0.7) * (0.7 + lush * 0.5), grot = rng() * 6.28;
+          if (GS.path > 0.05 || !grassAround(gx2, gz2, 0.75 * gs)) continue; // 整丛草的范围都得是草地：不长到土路 / 田边 / 石板上（用户 2026-11-08）
+          grass.push({ x: gx2, z: gz2, s: gs, sy: gsy, rot: grot, c: '#' + _c.getHexString() });
         }
         if (rng() < 0.16 * (1 + (sec.grass - 1) * bk)) {
           const c = FLOWERS[Math.floor(rng() * 5)];
