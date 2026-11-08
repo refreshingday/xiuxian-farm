@@ -392,18 +392,23 @@ export function foliage(k, parts, color, accent, seed, o = {}) {
   if (sy !== 1) g.translate(0, -cy, 0).scale(1, sy, 1).translate(0, cy, 0);
   k.add(g, crownPaint(color, accent, seed, o.accentAmt), { kind: o.kind || 'card', mat: o.mat, at: o.at });
 }
-// 用生成的彩色透明叶簇贴图（如 apple_leaf_a.png）做叶卡材质：和 card 同一套摆动 / 镂空 / 不翻法线，只换贴图
+// 用生成的彩色透明叶簇贴图（如 apple_leaf_a.png）做叶卡材质：和 card 同一套摆动 / 镂空 / 不翻法线，只换贴图。
+// fill：叶簇在卡片里占多大（生成图几乎铺满整张卡，原样用会糊成一整团、还露出方卡边）；缩到中间，四周留透明，
+// 和程序叶簇（leafClumpTex）的大小差不多，树冠才像果树那样一团团、有缝。
 const _cardMats = new Map();
-export function cardMatFor(tex) {
+export function cardMatFor(tex, fill = 0.62) {
   if (!tex) return null;
-  if (_cardMats.has(tex)) return _cardMats.get(tex);
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.needsUpdate = true;
-  const m = chain(toon('#ffffff', { vc: true, unique: true, map: tex }), (s) => {
+  const key = tex.uuid + fill;
+  if (_cardMats.has(key)) return _cardMats.get(key);
+  const src = tex.image, N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const w = N * fill; cv.getContext('2d').drawImage(src, (N - w) / 2, (N - w) / 2, w, w);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const m = chain(toon('#ffffff', { vc: true, unique: true, map: t }), (s) => {
     swayPatch(s, 1, 0.8);
     s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', '#undef DOUBLE_SIDED\n#include <normal_fragment_begin>\n#define DOUBLE_SIDED');
   }, 'cardTex');
   m.side = THREE.DoubleSide; m.alphaTest = 0.5;
-  _cardMats.set(tex, m);
+  _cardMats.set(key, m);
   return m;
 }
 // 实叶版树冠：一片片叶子几何（只放在「全部素材」里对比，场景不用）
