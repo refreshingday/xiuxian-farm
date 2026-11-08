@@ -278,6 +278,14 @@ g.addMoney = (n, p) => { inv.money += n; audio.cue('money'); if (p) fx.num({ x: 
 
 // ---------- 刷怪 ----------
 const okSpawn = (x, z) => Math.hypot(x, z) > VILLAGE_R + 8 && Math.hypot(x - MINE.x, z - MINE.y) > MINE_R + 6 && roadDist(x, z) > 2 && !g.hubs?.at({ x, z }, 50) && !g.sects?.at?.({ x, z }, 26);
+// 野怪的强度：取「往里 / 往外 ±50 米内随机一点」的危险度（三角分布，中间多两头少）——
+// 境界圈的边上不是一刀切：越往外，刷出下一圈强怪的机会越大（边界前 50 米约 0%，边界上 50%，过了 50 米 100%）
+const SPAWN_SPREAD = 50;
+function spawnDanger(x, z) {
+  const d = Math.hypot(x, z) || 1, s = Math.max(0, d + (Math.random() + Math.random() - 1) * SPAWN_SPREAD) / d;
+  return dangerAt(x * s, z * s);
+}
+const spawnAmb = (x, z) => { const pw = spawnDanger(x, z); enemies.spawn(mobAt(x, z), x, z, Math.floor(pw), pw).amb = true; }; // amb：普通野怪，联机时可以交给更近的道友
 // 在这里刷什么：走得越远越多本扇区的妖兽；夜里多出游魂、花妖（GDD：只在夜晚出现的敌人）
 function mobAt(x, z) {
   const sec = sectorAt(x, z), far = Math.hypot(x, z);
@@ -292,7 +300,7 @@ world.onSpawn = (cx, cz, rng) => {
   for (let i = 0; i < n; i++) {
     const x = x0 + 4 + rng() * 24, z = z0 + 4 + rng() * 24;
     if (!okSpawn(x, z) || Math.hypot(x - P.pos.x, z - P.pos.z) < 16) continue;
-    enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)), dangerAt(x, z)).amb = true; // amb：普通野怪，联机时可以交给更近的道友
+    spawnAmb(x, z);
   }
 };
 let spawnT = 4, golemT = 0;
@@ -312,7 +320,7 @@ function ambientSpawns(dt) {
     if (near < 11 + g.nightK * 7 + hb && !P.dead) {
       const a = Math.random() * 6.28, r = (24 + Math.random() * 6) * Math.min(camZoom, 1.6);
       const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
-      if (okSpawn(x, z)) enemies.spawn(mobAt(x, z), x, z, Math.floor(dangerAt(x, z)), dangerAt(x, z)).amb = true;
+      if (okSpawn(x, z)) spawnAmb(x, z);
     }
   }
   const dm = Math.hypot(P.pos.x - MINE.x, P.pos.z - MINE.y);
