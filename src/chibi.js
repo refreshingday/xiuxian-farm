@@ -4,7 +4,7 @@ import { toon, mesh, at, lerp, setFlash, outlineMat, addOutline } from './util.j
 // 统一 Q 版骨架：所有人（玩家、村民、小孩、老人）共用同一套关节与动画，
 // 只换部件、颜色和比例。
 const G = {};
-// 扇面画（全部角色共用一张）：256×256，扇面以外填纸色，防止 mipmap 渗出别的颜色
+// 扇面画（全部角色共用一张）：256×256，扇面以外填纸色，防止 mipmap 渗出别的颜色；折痕直接画在图上
 let FAN_TEX = null;
 function fanTex() {
   if (!FAN_TEX) {
@@ -179,7 +179,8 @@ export function createChibi(a) {
     arms[0].hand.add(sword);
   }
 
-  addOutline(root, outlineMat('#2b1d14', 0.022), (m) => face.includes(m) || m.geometry === g.blade || m.geometry === g.daoBlade);
+  // 扇面不描边：扇面是没有厚度的单片，主游戏里玩家的描边能透墙显示（不管深度），描边那层会整片盖在扇面上、从背面看全黑
+  addOutline(root, outlineMat('#2b1d14', 0.022), (m) => face.includes(m) || m.geometry === g.blade || m.geometry === g.daoBlade || g.fanLeaves.includes(m.geometry));
 
   if (a.age === 'child') { rig.scale.setScalar(0.7); head.scale.setScalar(1.12); }
   if (a.age === 'elder') { body.rotation.x = 0.2; neck.rotation.x = -0.15; rig.scale.setScalar(0.95); }
