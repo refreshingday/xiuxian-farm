@@ -4,6 +4,15 @@ import { toon, mesh, at, lerp, setFlash, outlineMat, addOutline } from './util.j
 // 统一 Q 版骨架：所有人（玩家、村民、小孩、老人）共用同一套关节与动画，
 // 只换部件、颜色和比例。
 const G = {};
+// 扇面画（全部角色共用一张）：256×256，扇面以外填纸色，防止 mipmap 渗出别的颜色
+let FAN_TEX = null;
+function fanTex() {
+  if (!FAN_TEX) {
+    FAN_TEX = new THREE.TextureLoader().load(new URL('../assets/textures/folding_fan.png', import.meta.url).href);
+    FAN_TEX.colorSpace = THREE.SRGBColorSpace; FAN_TEX.anisotropy = 4;
+  }
+  return FAN_TEX;
+}
 function geos() {
   if (G.head) return G;
   const sph = (r, w = 16, h = 12) => new THREE.SphereGeometry(r, w, h);
@@ -49,7 +58,22 @@ function geos() {
   // 折扇：扇面是一段圆环（开 130°，正对 +y 张开），两根边骨，扇柄在手里
   const FAN_A = 2.3;
   G.fanN = 9; // 扇面分成 9 折，每折绕扇骨根部转：收起时叠成一根，出招时展开（comboAnim.js fanFold）
-  G.fanLeaf = new THREE.RingGeometry(0.17, 0.66, 2, 1, Math.PI / 2 - FAN_A / G.fanN / 2, FAN_A / G.fanN).translate(0, 0.04, 0);
+  // 每折各一份几何体：UV 按「展开后」的位置算，九折拼起来正好是一整张扇面画（assets/textures/folding_fan.png）。
+  // 贴图里扇面的位置：扇骨根部在 (0.5, FAN_V0)，外半径 0.66 对应 FAN_UVR（和生成贴图用的模板一致）
+  const FAN_V0 = 1 - 813 / 1024, FAN_UVR = 543 / 1024 / 0.66;
+  G.fanLeaves = [];
+  for (let i = 0; i < G.fanN; i++) {
+    const geo = new THREE.RingGeometry(0.17, 0.66, 2, 1, Math.PI / 2 - FAN_A / G.fanN / 2, FAN_A / G.fanN);
+    const a = ((i + 0.5) / G.fanN - 0.5) * FAN_A, ca = Math.cos(a), sa = Math.sin(a);
+    const p = geo.attributes.position, uv = geo.attributes.uv;
+    for (let j = 0; j < p.count; j++) {
+      const x = p.getX(j), y = p.getY(j);
+      uv.setXY(j, 0.5 + (x * ca - y * sa) * FAN_UVR, FAN_V0 + (x * sa + y * ca) * FAN_UVR);
+    }
+    G.fanLeaves.push(geo.translate(0, 0.04, 0));
+  }
+  // 扇面里圈下面露出来的小扇骨（每折一根，跟着折一起转）
+  G.fanStick = new THREE.BoxGeometry(0.018, 0.2, 0.01).translate(0, 0.1 + 0.03, 0);
   G.fanRib = new THREE.BoxGeometry(0.03, 0.66, 0.025).translate(0, 0.33 + 0.04, 0);
   G.fanStub = new THREE.CylinderGeometry(0.03, 0.035, 0.16, 6).translate(0, -0.02, 0);
   G.fanA = FAN_A;
@@ -138,11 +162,13 @@ export function createChibi(a) {
     dao.add(mesh(g.daoGrip, M('#6a2a22')));
     dao.add(mesh(g.daoRing, M('#8a6a3a')), mesh(g.daoTassel, M('#c0302a')));
     shan = new THREE.Group(); shan.visible = false; // 扇
-    const paper = M('#e6d7b4', { emissive: '#8fe8c0', ei: 0.03 }); paper.side = THREE.DoubleSide;
-    const folds = [], wood = M('#5a3a2a');
+    const paper = M('#ffffff', { emissive: '#8fe8c0', ei: 0.03, map: fanTex() }); paper.side = THREE.DoubleSide;
+    const folds = [], wood = M('#5a3a2a'), stickM = M('#8a6440');
     for (let i = 0; i < g.fanN; i++) { // 每折一片，open = 1 时铺满 fanA
-      const f = mesh(g.fanLeaf, paper); f.position.z = (i - g.fanN / 2) * 0.004; shan.add(f);
-      folds.push({ o: f, a: ((i + 0.5) / g.fanN - 0.5) * g.fanA });
+      const a = ((i + 0.5) / g.fanN - 0.5) * g.fanA, z = (i - g.fanN / 2) * 0.004;
+      const f = mesh(g.fanLeaves[i], paper); f.position.z = z; shan.add(f);
+      const st = mesh(g.fanStick, stickM); st.position.z = z; shan.add(st);
+      folds.push({ o: f, a }, { o: st, a });
     }
     for (const sd of [-1, 1]) { const r = mesh(g.fanRib, wood); r.position.z = sd * 0.022; shan.add(r); folds.push({ o: r, a: sd * g.fanA / 2 }); }
     shan.userData.folds = folds; shan.userData.open = -1;
