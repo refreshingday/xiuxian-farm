@@ -75,7 +75,7 @@ const sm = k => k * k * (3 - 2 * k), cl = k => Math.min(1, Math.max(0, k));
 export function attackStance(m, t) {
   if (m.air || m.pose === 'leap') return null;
   if (m.keys) { // 刀的关键帧招式：弓步深浅直接跟关键帧的 st 走
-    const S = ST.over, k = daoKeyVal(m, t, 'st'), o = { lead: S.lead, lift: 0 };
+    const S = ST[m.stance] || ST.over, k = daoKeyVal(m, t, 'st'), o = { lead: S.lead, lift: 0 };
     for (const key in S.R) o[key] = S.R[key] + (S.H[key] - S.R[key]) * k;
     o.shift = 0.09 * k;
     return o;

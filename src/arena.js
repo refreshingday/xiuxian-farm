@@ -10,6 +10,7 @@ import { TUNE, ComboRunner } from './combo.js';
 import { AIR_FX, AIR_SFX } from './comboAir.js';
 import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
 import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
+import { FAN_FX, FAN_SFX, FAN_SKILL_FX, FAN_SKILL_SFX } from './comboFan.js';
 import { KITS, SKILL_KEYS, ELEM, KE, showWeapon } from './comboKit.js';
 import { attachHeroModel } from './hero_model.js';
 import { ComboFX } from './comboFx.js';
@@ -18,7 +19,7 @@ import { TouchControls } from './touch.js';
 import { animCombo } from './comboAnim.js';
 import { HealthBar, screenOf } from './hpbar.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 
 // 试炼场：只有平台 + 木桩 + 玩家，专门打磨战斗手感，不加载大世界
@@ -330,7 +331,7 @@ const fistGlow = P.c.arms.map((A) => {
 const handPaper = cfx.talisman('敕令', '#ffd27a', 0.6);
 handPaper.g.position.set(0, -0.14, 0.03); P.c.arms[0].hand.add(handPaper.g);
 
-// 当前武器（剑 / 拳 / 符 / 刀）：决定连招树和技能槽，切换见 setKit
+// 当前武器（剑 / 拳 / 符 / 刀 / 扇）：决定连招树和技能槽，切换见 setKit
 let kit = KITS[0];
 const runner = new ComboRunner(TUNE, kit.moves, kit.tree);
 runner.afford = (m) => { if (P.qi >= (m.qi || 0)) return true; P.atkCd = 0.7; return false; }; // 灵力不够就断回第一击，普攻冷却 0.7 秒
@@ -422,7 +423,7 @@ runner.on.hit = (m, h, idx) => {
     }
   } else if (h.shape === 'wave') {
     debugLine(P.pos.x, P.pos.z, P.yaw, h.len, h.w);
-    waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color, hit: new Set(), m: spawnWaveMesh(color) });
+    waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw + (h.ang || 0), left: h.len, h, color, hit: new Set(), m: spawnWaveMesh(color) });
   } else if (h.shape === 'bolt') {
     spawnBolt(P.pos.x + f.x * 0.8, P.pos.z + f.y * 0.8, P.yaw + (h.ang || 0), h, color);
     P.paperT = 0.2; // 手里那张符甩出去了，一会儿再摸出一张
@@ -1015,7 +1016,7 @@ function setKit(i) {
     el.querySelector('.nm').textContent = s.name;
     const q = el.querySelector('.qc'); if (q) q.textContent = s.qi ? s.qi + ' 灵' : '回气';
   }
-  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = { sword: '斩', dao: '劈' }[kit.id] || kit.name;
+  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = { sword: '斩', dao: '劈', fan: '扇' }[kit.id] || kit.name;
 }
 const cycleWeapon = () => setKit(kitI + 1);
 const SKILLS = {
@@ -1091,6 +1092,28 @@ const SKILLS = {
       DAO_SKILL_FX.dao_split_seg(c, x, z, last);
       if (sfx.ok) sfx.groundBoom(last ? 0.8 : 0.1);
     }));
+  },
+  sh_tornado: () => { // 龙卷：瞄准处起一根旋风柱，2.4 秒里一直把人往里卷、托着转，最后往上甩飞
+    const g0 = groundAt(4), c = fxCtx({ color: '#8fe8c0' });
+    if (sfx.ok) FAN_SKILL_SFX.tornado(sfx);
+    for (let i = 0; i < 9; i++) later(i * 0.27, () => {
+      const last = i === 8;
+      ring(2.4, last ? 18 : 5, last ? { knock: 6, launch: 9, stop: 0.05, shake: 0.3 } : { knock: -8, launch: 1.6, stop: 0.01, shake: 0.04 }, '#8fe8c0', g0.x, g0.z);
+      FAN_SKILL_FX.sh_tornado(c, g0.x, g0.z, last);
+      if (last && sfx.ok) FAN_SKILL_SFX.gale(sfx, 0.5);
+    });
+  },
+  sh_wall: () => { // 风墙：一圈狂风从身边炸开，把贴身的全吹走，出手那一下不吃伤害
+    P.iframe = Math.max(P.iframe, 0.4);
+    ring(4.2, 8, { knock: 22, launch: 1.5, stop: 0.04, shake: 0.3 }, '#8fe8c0');
+    FAN_SKILL_FX.sh_wall(fxCtx({ color: '#8fe8c0' }));
+    if (sfx.ok) FAN_SKILL_SFX.gale(sfx, 0.8);
+  },
+  sh_blades: () => { // 风刃：扇面一甩，五道风刃散开
+    const f = fwd();
+    for (const a of [-0.6, -0.3, 0, 0.3, 0.6]) waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw + a, left: 7, h: { len: 7, w: 1.1, dmg: 12, knock: 8, stop: 0.02, shake: 0.12 }, color: '#8fe8c0', hit: new Set(), m: spawnWaveMesh('#8fe8c0') });
+    FAN_SKILL_FX.sh_blades(fxCtx({ color: '#8fe8c0' }));
+    if (sfx.ok) FAN_SKILL_SFX.whoosh(sfx, { dur: 0.35, f0: 1000, f1: 400, gain: 0.4 });
   },
   qi: () => { P.qi = Math.min(P.qiMax, P.qi + 40); },
 };

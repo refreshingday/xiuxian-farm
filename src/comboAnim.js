@@ -68,6 +68,7 @@ function squash(c, a) {
 }
 
 // ---- 刀：关键帧动作（comboDao.js 的 keys）----
+// m.lp = 单手时左手放哪（扇：背在身后），缺省张开压平衡
 // 每段之间默认平滑过渡；in = 这一段加速（k²）劈下；lin = 匀速（舞刀转圈）。数值字段缺省为 0，sw 缺省 π（正握）
 const KF = ['lean', 'hip', 'st', 'sq', 'spin', 'one', 'tr'];
 const FREE_L = [-0.9, 0.2, -0.5]; // 单手时左手张开压住平衡
@@ -89,7 +90,7 @@ function daoKeys(c, m, t) {
   setPose(c, p);
   const [R, L] = c.arms;
   const g = [p[0] * 0.95, p[1] - L.s * 0.3, p[2] - 0.35]; // 左手握刀柄
-  const l = mix(g, FREE_L, o.one);
+  const l = mix(g, m.lp || FREE_L, o.one);
   L.sh.rotation.set(l[0], l[1], L.s * (0.15 + 0.3 * o.one)); L.el.rotation.x = l[2];
   if (c.sword) c.sword.rotation.x = o.sw;
   c.legs[0].rotation.x = -0.7 * o.st; c.legs[1].rotation.x = 0.5 * o.st;

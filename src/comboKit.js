@@ -1,7 +1,8 @@
-// 四种武器（GDD 第 4 节：剑 / 拳 / 符 / 刀）：连招树、灵力消耗、四个技能槽、五行。
+// 五种武器（GDD 第 4 节：剑 / 拳 / 符 / 刀 / 扇）：连招树、灵力消耗、四个技能槽、五行。
 // 剑的招式在 comboAir.js，刀在 comboDao.js；拳和符的招式、连招树在这里。特效 / 音效在 comboKitFx.js
 import { AIR_MOVES, AIR_TREE, AIR_ROUTES } from './comboAir.js';
 import { DAO_MOVES, DAO_TREE, DAO_ROUTES, DAO_SKILLS } from './comboDao.js';
+import { FAN_MOVES, FAN_TREE, FAN_ROUTES, FAN_SKILLS } from './comboFan.js';
 
 // 五行相克：KE[a] 克 b。金克木、木克土、土克水、水克火、火克金
 export const ELEM = ['金', '木', '水', '火', '土'];
@@ -99,14 +100,16 @@ export const KITS = [
     { id: 'tl_put', name: '埋符', qi: 20, cd: 4, pose: 'throw', ht: 0.12 }, QI_SKILL] },
   // 新武器往后加：jobs.js 的 KIT_ID 按下标对应
   { id: 'dao', name: '刀', moves: DAO_MOVES, tree: DAO_TREE, routes: DAO_ROUTES, skills: [...DAO_SKILLS, QI_SKILL] },
+  { id: 'fan', name: '扇', moves: FAN_MOVES, tree: FAN_TREE, routes: FAN_ROUTES, skills: [...FAN_SKILLS, QI_SKILL] },
 ];
 
-// 手上显示哪件兵器：剑 / 刀共用角色手里那一组（c.sword），里面 jian / dao 二选一
+// 手上显示哪件兵器：剑 / 刀 / 扇共用角色手里那一组（c.sword），里面 jian / dao / shan 三选一
 export function showWeapon(c, id) {
   if (!c.sword) return;
-  c.sword.visible = id === 'sword' || id === 'dao';
-  if (c.jian) c.jian.visible = id !== 'dao';
+  c.sword.visible = id === 'sword' || id === 'dao' || id === 'fan';
+  if (c.jian) c.jian.visible = id !== 'dao' && id !== 'fan';
   if (c.dao) c.dao.visible = id === 'dao';
+  if (c.shan) c.shan.visible = id === 'fan';
 }
 
 // 连招第一击以外，伤害 ×2：第一击免费、打得轻；往后每招花灵力，打得更痛。

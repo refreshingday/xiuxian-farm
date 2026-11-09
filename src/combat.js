@@ -7,11 +7,12 @@ import { TUNE, ComboRunner } from './combo.js';
 import { AIR_FX, AIR_SFX } from './comboAir.js';
 import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
 import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
+import { FAN_FX, FAN_SFX, FAN_SKILL_FX, FAN_SKILL_SFX } from './comboFan.js';
 import { KITS, showWeapon } from './comboKit.js';
 import { animCombo } from './comboAnim.js';
 import { animChibi } from './chibi.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 const lerp = (a, b, k) => a + (b - a) * k;
 export const GRAV = 26;
@@ -173,7 +174,7 @@ export class Combat {
       }
       if (P.pos.y < 0.5) this.hitWorld?.(inC);
     } else if (h.shape === 'wave') {
-      this.waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color, hit: new Set(), m: this.spawnWaveMesh(color) });
+      this.waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw + (h.ang || 0), left: h.len, h, color, hit: new Set(), m: this.spawnWaveMesh(color) });
     } else if (h.shape === 'bolt') {
       this.spawnBolt(P.pos.x + f.x * 0.8, P.pos.z + f.y * 0.8, P.yaw + (h.ang || 0), h, color);
       this.paperT = 0.2; // 手里那张符甩出去了，一会儿再摸出一张
@@ -630,5 +631,28 @@ const SKILLS = {
       if (c.sfx.ok) c.sfx.groundBoom(last ? 0.8 : 0.1);
     }));
   },
+  sh_tornado: (c) => { // 龙卷：瞄准处起一根旋风柱，2.4 秒里一直把人往里卷、托着转，最后往上甩飞
+    const g0 = c.groundAt(4), ctx = c.fxCtx({ color: '#8fe8c0' });
+    if (c.sfx.ok) FAN_SKILL_SFX.tornado(c.sfx);
+    for (let i = 0; i < 9; i++) c.later(i * 0.27, () => {
+      const last = i === 8;
+      c.ring(2.4, last ? 18 : 5, last ? { knock: 6, launch: 9, stop: 0.05, shake: 0.3 } : { knock: -8, launch: 1.6, stop: 0.01, shake: 0.04 }, '#8fe8c0', g0.x, g0.z);
+      FAN_SKILL_FX.sh_tornado(ctx, g0.x, g0.z, last);
+      if (last && c.sfx.ok) FAN_SKILL_SFX.gale(c.sfx, 0.5);
+    });
+  },
+  sh_wall: (c) => { // 风墙：一圈狂风从身边炸开，把贴身的全吹走，出手那一下不吃伤害
+    c.P.iframe = Math.max(c.P.iframe, 0.4);
+    c.ring(4.2, 8, { knock: 22, launch: 1.5, stop: 0.04, shake: 0.3 }, '#8fe8c0');
+    FAN_SKILL_FX.sh_wall(c.fxCtx({ color: '#8fe8c0' }));
+    if (c.sfx.ok) FAN_SKILL_SFX.gale(c.sfx, 0.8);
+  },
+  sh_blades: (c) => { // 风刃：扇面一甩，五道风刃散开
+    const f = c.fwd(), P = c.P;
+    for (const a of [-0.6, -0.3, 0, 0.3, 0.6]) c.waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw + a, left: 7, h: { len: 7, w: 1.1, dmg: 12, knock: 8, stop: 0.02, shake: 0.12, skill: true }, color: '#8fe8c0', hit: new Set(), m: c.spawnWaveMesh('#8fe8c0') });
+    FAN_SKILL_FX.sh_blades(c.fxCtx({ color: '#8fe8c0' }));
+    if (c.sfx.ok) FAN_SKILL_SFX.whoosh(c.sfx, { dur: 0.35, f0: 1000, f1: 400, gain: 0.4 });
+  },
+
   qi: (c) => { c.P.qi = Math.min(c.P.maxQi, c.P.qi + 40 * c.P.maxQi / 100); c.fx.burst(c.P.pos, '#9fdcff', 16, { speed: 2, up: 4, life: 0.7, grav: -1 }); },
 };
