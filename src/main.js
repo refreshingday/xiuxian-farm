@@ -365,7 +365,8 @@ addEventListener('keydown', (e) => {
   if (si >= 0) useSkill(si);
   if (e.code === 'KeyX') cycleWeapon();
   if (e.code.startsWith('Digit')) { const i = +e.code.slice(5) - 1; if (i >= 0 && i < 8) hotKey(i); }
-  if (e.code === 'Space' || e.code === 'ShiftLeft') dash();
+  if (e.code === 'Space') jump();
+  if (e.code === 'ShiftLeft') dash();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); mouseDown.fill(false); });
@@ -541,6 +542,11 @@ function hotKey(i) {
   if (it && (it.heal || it.qiHeal || it.xp || it.use) && !gui.blocking) life.use(id);
 }
 const dashCd = () => Math.max(0.5, DASH_CD * (1 - (P.st?.dash || 0)) + (P.mods.dashCd || 0)); // 敏捷大幅缩短闪避冷却，最低 0.5 秒
+// 跳：空格（出招中也能跳）。御剑 / 游泳 / 干活时不跳
+function jump() {
+  if (P.dead || g.paused || gui.blocking || realm.fly || SW.on || P.work > 0 || P.pos.y > 0.01 || P.vy > 0 || P.dashT > 0) return;
+  P.vy = 10.5; P.pos.y = 0.011;
+}
 function dash() {
   if (P.dashCd > 0 || P.dead || g.paused || gui.blocking) return;
   const mv = moveInput();
@@ -1089,7 +1095,7 @@ function updatePlayer(dt) {
   }
   // 出招 / 放技能时朝向在起手那一刻锁定；按住左键时转向鼠标
   if (P.dashT > 0) P.yaw = P.dashDir;
-  else if (runner.move || combat.skill) { /* 锁定 */ }
+  else if ((runner.move || combat.skill) && !combat.kit.free) { /* 锁定 */ }
   else if (mouseDown[0]) P.yaw = lerpAngle(P.yaw, aimYaw(), 1 - Math.exp(-20 * dt));
   else if (mv.lengthSq() > 0 && P.work <= 0) P.yaw = lerpAngle(P.yaw, Math.atan2(mv.x, mv.y), 1 - Math.exp(-14 * dt));
   P.c.root.rotation.y = P.yaw;

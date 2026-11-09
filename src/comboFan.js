@@ -16,18 +16,18 @@ export const FAN_MOVES = {
     keys: [k(0, READY), k(0.1, [-1.4, -1.45, -1.0, -0.6], { st: 0.3, lean: -0.05 }),
       k(0.14, [-1.5, 1.25, -0.12, 0.55], { in: 1, st: 0.7, lean: 0.15, sq: -0.04 }), k(0.24, [-1.48, 1.2, -0.15, 0.5], { st: 0.7, lean: 0.12 }),
       k(0.4, [-1.1, 0.5, -0.9, 0.2], { st: 0.3 })],
-    hits: [{ t: 0.14, shape: 'arc', range: 3.8, arc: 0.9, dmg: 8, knock: 9, stop: 0.03, shake: 0.1 }] },
+    hits: [{ t: 0.14, shape: 'arc', range: 3.8, arc: 0.9, dmg: 8, knock: 3, stop: 0.03, shake: 0.1 }] },
   // 回扇：反手扇回来
   sh2: { ...base, name: '回扇', qi: 4, dur: 0.4, cancel: 0.26,
     keys: [k(0, [-1.1, 0.5, -0.9, 0.2]), k(0.1, [-1.3, 1.55, -1.1, 0.7], { st: 0.3, lean: -0.05 }),
       k(0.14, [-1.45, -1.35, -0.12, -0.6], { in: 1, st: 0.7, lean: 0.15, sq: -0.04 }), k(0.24, [-1.42, -1.3, -0.15, -0.55], { st: 0.7, lean: 0.12 }),
       k(0.4, [-1.05, -0.3, -0.9, -0.2], { st: 0.3 })],
-    hits: [{ t: 0.14, shape: 'arc', range: 3.8, arc: 0.9, dmg: 8, knock: 9, stop: 0.03, shake: 0.1 }] },
+    hits: [{ t: 0.14, shape: 'arc', range: 3.8, arc: 0.9, dmg: 8, knock: 3, stop: 0.03, shake: 0.1 }] },
   // 风刃：扇子举到耳后，往前一甩，三道风刃散开飞出去
   sh3: { ...base, name: '风刃', qi: 8, dur: 0.52, cancel: 0.34,
     keys: [k(0, [-1.05, -0.3, -0.9, -0.2]), k(0.11, [-2.8, -0.6, -1.4, -0.45], { lean: -0.15, sq: 0.05, st: 0.3 }),
       k(0.16, [-1.5, 0.15, -0.05, 0.25], { in: 1, lean: 0.2, st: 0.8 }), k(0.3, [-1.5, 0.15, -0.08, 0.25], { lean: 0.18, st: 0.8 }), k(0.52, READY, { st: 0.3 })],
-    hits: [-0.4, 0, 0.4].map((ang) => ({ t: 0.16, shape: 'wave', ang, len: 6, w: 1.0, dmg: 7, knock: 5, stop: 0.02, shake: 0.1 })) },
+    hits: [-0.4, 0, 0.4].map((ang) => ({ t: 0.16, shape: 'wave', ang, len: 6, w: 1.0, dmg: 7, knock: 1.2, stop: 0.02, shake: 0.1 })) },
   // 狂风：往后拧身蓄满，扇面整个推出去——一大片风墙把所有人吹飞
   sh_gale: { ...base, name: '狂风', qi: 16, end: true, dur: 0.88, cancel: 0.66,
     keys: [k(0, READY), k(0.2, [-1.3, -1.85, -0.8, -1.25], { st: 0.5, lean: -0.12, sq: 0.04 }), k(0.31, [-1.32, -1.9, -0.8, -1.3], { st: 0.55, lean: -0.14, sq: 0.05, tr: 0.03 }),
@@ -41,7 +41,7 @@ export const FAN_MOVES = {
       k(0.3, [-2.4, 0.2, -0.6, 0.2], { lean: -0.12, st: 0.3 }), k(0.36, [-3.0, 0.3, -0.1, 0.3], { in: 1, lean: -0.2, hip: 0.06, sq: 0.06, st: 0.3 }),
       k(0.46, [-2.4, 0.2, -0.6, 0.2], { lean: -0.12, st: 0.3 }), k(0.52, [-3.0, 0.3, -0.1, 0.3], { in: 1, lean: -0.2, hip: 0.06, sq: 0.06, st: 0.3 }),
       k(0.88, READY, { st: 0.3 })],
-    hits: [{ t: 0.2, shape: 'circle', at: 2, r: 2.4, dmg: 12, knock: 1, launch: 9, stop: 0.05, shake: 0.25 },
+    hits: [{ t: 0.2, shape: 'circle', at: 2.6, r: 3.4, dmg: 12, knock: -4, launch: 9, stop: 0.05, shake: 0.25 },
       ...[0.36, 0.52].map((t) => ({ t, shape: 'circle', at: 2, r: 2.8, dmg: 5, knock: -2, lift: 6, vr: 6, stop: 0.02, shake: 0.08 }))] },
   // 卷风：扇子伸到最远，往怀里一兜——远处的人被风卷到跟前
   sh_pull: { ...base, name: '卷风', qi: 8, dur: 0.56, cancel: 0.38,

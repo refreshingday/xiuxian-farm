@@ -84,7 +84,7 @@ function keyAt(m, t) {
   return o;
 }
 export const daoKeyVal = (m, t, f) => keyAt(m, t)[f];
-function daoKeys(c, m, t) {
+function daoKeys(c, m, t, walk) {
   const o = keyAt(m, t), p = o.p.slice();
   if (o.tr) { const j = Math.sin(t * 90) * o.tr; p[0] += j; p[3] += j * 0.5; } // 憋劲发抖
   setPose(c, p);
@@ -93,8 +93,8 @@ function daoKeys(c, m, t) {
   const l = mix(g, m.lp || FREE_L, o.one);
   L.sh.rotation.set(l[0], l[1], L.s * (0.15 + 0.3 * o.one)); L.el.rotation.x = l[2];
   if (c.sword) c.sword.rotation.x = o.sw;
-  c.legs[0].rotation.x = -0.7 * o.st; c.legs[1].rotation.x = 0.5 * o.st;
-  c.hips.position.y += o.hip - 0.1 * o.st;
+  if (!walk) { c.legs[0].rotation.x = -0.7 * o.st; c.legs[1].rotation.x = 0.5 * o.st; }
+  c.hips.position.y += o.hip - (walk ? 0 : 0.1 * o.st);
   c.rig.rotation.x = o.lean; c.rig.rotation.y = o.spin;
   squash(c, o.sq);
 }
@@ -106,7 +106,7 @@ function arm(A, [rx, ry, el], fwd = 0) { A.sh.rotation.set(rx, -A.s * ry, A.s * 
 // 出手曲线：0 = 架势，1 = 打满。判定前加速打出去，停一拍再收
 const strike = (t, h, back = 0.14) => (t < h ? (t / h) ** 2 : 1 - ease(clamp((t - h - 0.03) / back, 0, 1)));
 // 弓步：前腿迈出、后腿蹬直、身体压低前倾
-function stance(c, k, lean = 0.2) { c.legs[0].rotation.x = -0.7 * k; c.legs[1].rotation.x = 0.5 * k; c.hips.position.y -= 0.1 * k; c.rig.rotation.x = lean * k; }
+function stance(c, k, lean = 0.2) { if (!(c.free && c.moveK > 0.15)) { c.legs[0].rotation.x = -0.7 * k; c.legs[1].rotation.x = 0.5 * k; c.hips.position.y -= 0.1 * k; } c.rig.rotation.x = lean * k; } // 扇边走边放：腿照常走
 const POSE2 = {
   jabL(c, m, t, h) { const [R, L] = c.arms, k = strike(t, h); arm(L, mix(GUARD, JAB, k), k * 0.1); arm(R, GUARD); c.body.rotation.y = -0.45 * k; },
   jabR(c, m, t, h) { const [R, L] = c.arms, k = strike(t, h); arm(R, mix(GUARD, JAB, k), k * 0.1); arm(L, GUARD); c.body.rotation.y = 0.45 * k; },
@@ -167,16 +167,28 @@ const POSE2 = {
 };
 
 // 招式进行中返回 true（已摆好姿势）；不在出招时返回 false，由调用方走普通动画
+// 扇：平时收拢成一根，出招 / 放技能时“唰”地展开（开得快，收得慢一点）
+function fanFold(c, dt, on) {
+  const u = c.shan.userData, k0 = u.open < 0 ? 0 : u.open;
+  const k = on ? Math.min(1, k0 + dt * 14) : Math.max(0, k0 - dt * 5);
+  if (k === u.open) return;
+  u.open = k;
+  const e = k * k * (3 - 2 * k);
+  for (const f of u.folds) f.o.rotation.z = f.a * e;
+}
+
 export function animCombo(c, dt, m, t) {
+  if (c.shan?.userData.folds) fanFold(c, dt, !!m && t <= m.dur);
   const [R, L] = c.arms;
   R.sh.position.z = 0; L.sh.position.z = 0;
   if (c._sqOn) { c.root.scale.setScalar(c._sqBase); c._sqOn = false; } // 刀的压扁 / 拉长复原
   if (!m || t > m.dur) return false; // 姿势撑满整招（原来 cancel+0.06 就收，收招段会提前变回待机）
-  const base = { move: 0, attack: -1, combo: 0, cast: 0, spin: 0, work: 0 };
+  const walk = c.free && c.moveK > 0.15 ? c.moveK : 0; // 扇：出招时还在走，腿跟着走路步伐
+  const base = { move: walk, attack: -1, combo: 0, cast: 0, spin: 0, work: 0 };
   const h0 = m.hits[0]?.t ?? m.lunge?.[1] ?? 0.2;
   if (m.keys) {
     animChibi(c, dt, base);
-    daoKeys(c, m, t);
+    daoKeys(c, m, t, walk);
   } else if (POSE2[m.pose]) {
     animChibi(c, dt, base);
     POSE2[m.pose](c, m, t, h0);

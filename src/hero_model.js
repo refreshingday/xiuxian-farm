@@ -97,7 +97,7 @@ async function load(c, proxyMeshes) {
       (q['a' + s + '2'] ||= new THREE.Quaternion()).copy(qU).invert().multiply(_q.setFromUnitVectors(rest, _dF));
     }
     const neck = c.head.parent;
-    const st = m && t <= m.dur ? attackStance(m, t) : null;
+    const st = m && t <= m.dur && !c.air && !(c.free && c.moveK > 0.15) ? attackStance(m, t) : null; // 空中 / 扇边走边打：腿照常走
     if (!st) {
       rot('root', pitch, c.rig.rotation.y, c.rig.rotation.z);
       const rk = c.runK || 0; // 跑步：胸口再前倾一点，头抬回来看前面

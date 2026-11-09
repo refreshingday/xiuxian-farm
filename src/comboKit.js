@@ -100,7 +100,7 @@ export const KITS = [
     { id: 'tl_put', name: '埋符', qi: 20, cd: 4, pose: 'throw', ht: 0.12 }, QI_SKILL] },
   // 新武器往后加：jobs.js 的 KIT_ID 按下标对应
   { id: 'dao', name: '刀', moves: DAO_MOVES, tree: DAO_TREE, routes: DAO_ROUTES, skills: [...DAO_SKILLS, QI_SKILL] },
-  { id: 'fan', name: '扇', moves: FAN_MOVES, tree: FAN_TREE, routes: FAN_ROUTES, skills: [...FAN_SKILLS, QI_SKILL] },
+  { id: 'fan', name: '扇', free: true, moves: FAN_MOVES, tree: FAN_TREE, routes: FAN_ROUTES, skills: [...FAN_SKILLS, QI_SKILL] },
 ];
 
 // 手上显示哪件兵器：剑 / 刀 / 扇共用角色手里那一组（c.sword），里面 jian / dao / shan 三选一

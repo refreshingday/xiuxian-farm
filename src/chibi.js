@@ -48,7 +48,8 @@ function geos() {
   G.daoTassel = new THREE.ConeGeometry(0.05, 0.2, 6).translate(0, -0.5, 0);
   // 折扇：扇面是一段圆环（开 130°，正对 +y 张开），两根边骨，扇柄在手里
   const FAN_A = 2.3;
-  G.fanLeaf = new THREE.RingGeometry(0.17, 0.66, 16, 1, Math.PI / 2 - FAN_A / 2, FAN_A).translate(0, 0.04, 0);
+  G.fanN = 9; // 扇面分成 9 折，每折绕扇骨根部转：收起时叠成一根，出招时展开（comboAnim.js fanFold）
+  G.fanLeaf = new THREE.RingGeometry(0.17, 0.66, 2, 1, Math.PI / 2 - FAN_A / G.fanN / 2, FAN_A / G.fanN).translate(0, 0.04, 0);
   G.fanRib = new THREE.BoxGeometry(0.03, 0.66, 0.025).translate(0, 0.33 + 0.04, 0);
   G.fanStub = new THREE.CylinderGeometry(0.03, 0.035, 0.16, 6).translate(0, -0.02, 0);
   G.fanA = FAN_A;
@@ -138,9 +139,14 @@ export function createChibi(a) {
     dao.add(mesh(g.daoRing, M('#8a6a3a')), mesh(g.daoTassel, M('#c0302a')));
     shan = new THREE.Group(); shan.visible = false; // 扇
     const paper = M('#e6d7b4', { emissive: '#8fe8c0', ei: 0.03 }); paper.side = THREE.DoubleSide;
-    shan.add(mesh(g.fanLeaf, paper));
-    for (const sd of [-1, 1]) { const r = mesh(g.fanRib, M('#5a3a2a')); r.rotation.z = sd * g.fanA / 2; shan.add(r); }
-    shan.add(mesh(g.fanStub, M('#5a3a2a')));
+    const folds = [], wood = M('#5a3a2a');
+    for (let i = 0; i < g.fanN; i++) { // 每折一片，open = 1 时铺满 fanA
+      const f = mesh(g.fanLeaf, paper); f.position.z = (i - g.fanN / 2) * 0.004; shan.add(f);
+      folds.push({ o: f, a: ((i + 0.5) / g.fanN - 0.5) * g.fanA });
+    }
+    for (const sd of [-1, 1]) { const r = mesh(g.fanRib, wood); r.position.z = sd * 0.022; shan.add(r); folds.push({ o: r, a: sd * g.fanA / 2 }); }
+    shan.userData.folds = folds; shan.userData.open = -1;
+    shan.add(mesh(g.fanStub, wood));
     sword.add(jian, dao, shan);
     jian.rotation.y = dao.rotation.y = Math.PI / 2; // 刃口朝上下（不是平躺着）
     sword.rotation.x = 1.7;

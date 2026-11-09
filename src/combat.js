@@ -58,7 +58,7 @@ export class Combat {
     this.kitI = (i + KITS.length) % KITS.length; const kit = this.kit = KITS[this.kitI];
     this.cancel();
     this.runner.moves = kit.moves; this.runner.tree = kit.tree;
-    showWeapon(this.P.c, kit.id);
+    showWeapon(this.P.c, kit.id); this.P.c.free = !!kit.free;
     for (const m of this.fistGlow) m.visible = kit.id === 'fist';
     this.handPaper.g.visible = kit.id === 'talisman';
     this.onKit?.(kit);
@@ -498,7 +498,7 @@ export class Combat {
     const P = this.P, m = this.runner.move, t = this.runner.t, fx = this.fx;
     let vx = mv.x * walk, vz = mv.y * walk, y = P.pos.y, yHeld = false;
     if (m) {
-      const spd = m.moveSpd || 0;
+      const spd = this.kit.free ? walk * 0.85 : m.moveSpd || 0; // 扇：边走边出招
       vx = mv.x * spd; vz = mv.y * spd;
       for (const s of this.motion) if (t > s.t0 && t - dt < s.t1) {
         const k = (Math.min(t, s.t1) - Math.max(t - dt, s.t0)) / (s.t1 - s.t0) * s.d / dt, a = P.yaw + (s.ang || 0);
@@ -547,7 +547,9 @@ export class Combat {
     let m = this.runner.move, t = this.runner.t;
     if (this.skill) { this.skill.t += dt; if (m || this.skill.t > this.skill.m.cancel + 0.06) this.skill = null; }
     if (!m && this.skill) { m = this.skill.m; t = this.skill.t; }
+    P.c.moveK = moving;
     if (!animCombo(P.c, dt, m, t)) animChibi(P.c, dt, { move: P.dashT > 0 ? 0 : moving, attack: -1, combo: 0, cast: 0, dash: P.dashT > 0, spin: 0, work: 0, ...extra });
+    P.c.air = P.pos.y > 0.3;
     if (P.pos.y > 0.3 && !(m && m.pose === 'leap')) { P.c.legs[0].rotation.x = -0.8; P.c.legs[1].rotation.x = -0.3; } // 空中收腿
   }
 }

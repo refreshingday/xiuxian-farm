@@ -746,7 +746,8 @@ addEventListener('keydown', (e) => {
   sfx.unlock();
   if (e.repeat) return;
   keys.add(e.code);
-  if (e.code === 'Space' || e.code === 'ShiftLeft') dash();
+  if (e.code === 'Space') jump();
+  if (e.code === 'ShiftLeft') dash();
   if (['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) layout(+e.code.slice(5));
   const si = SKILL_KEYS.indexOf(e.code);
   if (si >= 0) useSkill(si);
@@ -885,6 +886,12 @@ function moveInput() {
 }
 function clampArena(v) { const l = Math.hypot(v.x, v.y); if (l > ARENA_R - 0.6) v.multiplyScalar((ARENA_R - 0.6) / l); }
 
+// 跳：空格。出招中也能跳（招式照常放完，人在空中受重力落下）
+const FREE_SPD = 0.85, JUMP_V = 10.5;
+function jump() {
+  if (P.pos.y > 0.01 || P.vy > 0 || P.dashT > 0) return;
+  P.vy = JUMP_V; P.pos.y = 0.011;
+}
 function dash() {
   if (P.dashCd > 0) return;
   const mv = moveInput();
@@ -908,7 +915,7 @@ function updatePlayer(dt) {
   let vx = mv.x * 6, vz = mv.y * 6, y = P.pos.y, yHeld = false;
 
   if (m) {
-    const spd = m.moveSpd || 0;
+    const spd = kit.free ? 6 * FREE_SPD : m.moveSpd || 0; // 扇：边走边出招
     vx = mv.x * spd; vz = mv.y * spd;
     for (const s of P.motion) if (t > s.t0 && t - dt < s.t1) {
       const k = (Math.min(t, s.t1) - Math.max(t - dt, s.t0)) / (s.t1 - s.t0) * s.d / dt, a = P.yaw + (s.ang || 0);
@@ -965,10 +972,11 @@ function updatePlayer(dt) {
   }
 
   if (P.dashT > 0) P.yaw = P.dashDir;
-  else if (!m && mv.lengthSq() > 0) P.yaw = lerpAngle(P.yaw, Math.atan2(mv.x, mv.y), 1 - Math.exp(-14 * dt));
+  else if ((!m || kit.free) && mv.lengthSq() > 0) P.yaw = lerpAngle(P.yaw, Math.atan2(mv.x, mv.y), 1 - Math.exp(-14 * dt));
   P.c.root.rotation.y = P.yaw;
   P.c.root.position.y = y;
   animate(dt, m, t, Math.min(1, Math.hypot(vx, vz) / 6));
+  P.c.air = y > 0.3;
   if (y > 0.3 && !(m && m.pose === 'leap')) { P.c.legs[0].rotation.x = -0.8; P.c.legs[1].rotation.x = -0.3; } // 空中收腿
   P.c.root.visible = !(P.iframe > 0 && !m && Math.floor(realTime * 20) % 2 === 0);
   if (heroModel.ready) { const rm = runner.move || P.skill?.m, rt = runner.move ? runner.t : P.skill?.t; heroModel.sync(P.c, dt, rm, rt); }
@@ -977,6 +985,7 @@ function updatePlayer(dt) {
 function animate(dt, m, t, moving) {
   if (P.skill) { P.skill.t += dt; if (m || P.skill.t > P.skill.m.cancel + 0.06) P.skill = null; }
   if (!m && P.skill) { m = P.skill.m; t = P.skill.t; }
+  P.c.moveK = moving;
   if (!animCombo(P.c, dt, m, t)) animChibi(P.c, dt, { move: P.dashT > 0 ? 0 : moving, attack: -1, combo: 0, cast: 0, dash: P.dashT > 0, spin: 0, work: 0 });
 }
 
@@ -1007,7 +1016,7 @@ function setKit(i) {
   kitI = (i + KITS.length) % KITS.length; kit = KITS[kitI];
   if (runner.path !== null) { runner.cancel(); showMove(null); }
   runner.moves = kit.moves; runner.tree = kit.tree;
-  showWeapon(P.c, kit.id);
+  showWeapon(P.c, kit.id); P.c.free = !!kit.free;
   for (const m of fistGlow) m.visible = kit.id === 'fist';
   handPaper.g.visible = kit.id === 'talisman';
   buildRoutes();
