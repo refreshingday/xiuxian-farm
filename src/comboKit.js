@@ -4,6 +4,7 @@ import { AIR_MOVES, AIR_TREE, AIR_ROUTES } from './comboAir.js';
 import { DAO_MOVES, DAO_TREE, DAO_ROUTES, DAO_SKILLS } from './comboDao.js';
 import { FAN_MOVES, FAN_TREE, FAN_ROUTES, FAN_SKILLS } from './comboFan.js';
 import { STAFF_MOVES, STAFF_TREE, STAFF_ROUTES, STAFF_SKILLS } from './comboStaff.js';
+import { BELL_MOVES, BELL_TREE, BELL_ROUTES, BELL_SKILLS } from './comboBell.js';
 
 // 五行相克：KE[a] 克 b。金克木、木克土、土克水、水克火、火克金
 export const ELEM = ['金', '木', '水', '火', '土'];
@@ -103,16 +104,18 @@ export const KITS = [
   { id: 'dao', name: '刀', moves: DAO_MOVES, tree: DAO_TREE, routes: DAO_ROUTES, skills: [...DAO_SKILLS, QI_SKILL] },
   { id: 'fan', name: '扇', free: true, moves: FAN_MOVES, tree: FAN_TREE, routes: FAN_ROUTES, skills: [...FAN_SKILLS, QI_SKILL] },
   { id: 'staff', name: '棍', moves: STAFF_MOVES, tree: STAFF_TREE, routes: STAFF_ROUTES, skills: [...STAFF_SKILLS, QI_SKILL] },
+  { id: 'bell', name: '铃', free: true, moves: BELL_MOVES, tree: BELL_TREE, routes: BELL_ROUTES, skills: [...BELL_SKILLS, QI_SKILL] },
 ];
 
 // 手上显示哪件兵器：剑 / 刀 / 扇共用角色手里那一组（c.sword），里面 jian / dao / shan 三选一
 export function showWeapon(c, id) {
   if (!c.sword) return;
-  c.sword.visible = id === 'sword' || id === 'dao' || id === 'fan' || id === 'staff';
+  c.sword.visible = id === 'sword' || id === 'dao' || id === 'fan' || id === 'staff' || id === 'bell';
   if (c.jian) c.jian.visible = id === 'sword';
   if (c.dao) c.dao.visible = id === 'dao';
   if (c.shan) c.shan.visible = id === 'fan';
   if (c.staff) c.staff.visible = id === 'staff';
+  if (c.ling) c.ling.visible = id === 'bell';
 }
 
 // 连招第一击以外，伤害 ×2：第一击免费、打得轻；往后每招花灵力，打得更痛。

@@ -9,11 +9,12 @@ import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
 import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
 import { FAN_FX, FAN_SFX, FAN_SKILL_FX, FAN_SKILL_SFX } from './comboFan.js';
 import { STAFF_FX, STAFF_SFX, STAFF_SKILL_FX } from './comboStaff.js';
+import { BELL_FX, BELL_SFX, BELL_SKILL_FX, BELL_SKILL_SFX } from './comboBell.js';
 import { KITS, showWeapon } from './comboKit.js';
 import { animCombo } from './comboAnim.js';
 import { animChibi } from './chibi.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX, ...BELL_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX, ...BELL_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 const lerp = (a, b, k) => a + (b - a) * k;
 export const GRAV = 26;
@@ -31,7 +32,15 @@ export class Combat {
     const P = this.P;
     // 技能打出的伤害带 h.skill（能打断前摇 / 把破绽中的妖王打倒）；技能放出的符、剑气、延时也算
     this.skillTag = false;
-    this.hit = (d, dmg, x, z, knock, color, h) => o.hit(d, dmg, x, z, knock, color, this.skillTag && !h?.skill ? { ...h, skill: true } : h);
+    this.hit = (d, dmg, x, z, knock, color, h) => {
+      const r = o.hit(d, dmg, x, z, knock, color, this.skillTag && !h?.skill ? { ...h, skill: true } : h);
+      if (h?.hold && d.alive) { // 铃：定身（妖王只吃三成）
+        const t = h.hold * (d.boss ? 0.3 : 1);
+        if (!(d.rootT > t * 0.5)) { this.cfx.chains(() => d.pos, color, t); this.fx.num(d.pos, '定', ''); }
+        d.rootT = Math.max(d.rootT || 0, t); d.kx = d.kz = 0;
+      }
+      return r;
+    };
     this.kitI = 0; this.kit = KITS[0];
     this.runner = new ComboRunner(TUNE, this.kit.moves, this.kit.tree);
     this.runner.afford = (m) => P.qi >= (m.qi || 0); // 灵力不够就断回第一击
@@ -681,6 +690,33 @@ const SKILLS = {
       c.ring(3.2, 34, { knock: 8, launch: 7, stop: 0.1, shake: 0.8 }, '#b9a4ff', g0.x, g0.z);
       STAFF_SKILL_FX.gn_drop(ctx, g0.x, g0.z);
       if (c.sfx.ok) { c.sfx.slam(1); c.sfx.groundBoom(0.8); }
+    });
+  },
+
+  ln_lure: (c) => { // 摄魂：铃声一直响，两秒里把四周的人一步步摄到身边，最后一震定住
+    const ctx = c.fxCtx({ color: '#ff9ad2' });
+    for (let i = 0; i < 8; i++) c.later(i * 0.25, () => {
+      const last = i === 7, cc = { ...ctx, x: c.P.pos.x, z: c.P.pos.z };
+      c.ring(last ? 3.6 : 7.5, last ? 18 : 3, last ? { knock: 0, hold: 1.5, stop: 0.05, shake: 0.3 } : { knock: -9, stop: 0, shake: 0.03 }, '#ff9ad2');
+      BELL_SKILL_FX.ln_lure(cc, last);
+      if (c.sfx.ok) BELL_SKILL_SFX.dong(c.sfx, last ? { f: 131, dur: 1.4, gain: 0.36 } : { f: 196, dur: 0.3, gain: 0.14 });
+    });
+  },
+  ln_wave: (c) => { // 音波：三圈音波一圈比一圈大，从身边荡出去
+    const ctx = c.fxCtx({ color: '#ff9ad2' });
+    if (c.sfx.ok) BELL_SKILL_SFX.dong(c.sfx, { f: 147, dur: 1.2, gain: 0.36 });
+    [3, 5.5, 8].forEach((r, i) => c.later(i * 0.14, () => {
+      c.ring(r, 10, { knock: 7 + i * 3, stop: 0.03, shake: 0.2 }, '#ff9ad2');
+      BELL_SKILL_FX.ln_wave({ ...ctx, x: c.P.pos.x, z: c.P.pos.z }, r);
+    }));
+  },
+  ln_bind: (c) => { // 镇魂：一口大钟扣在瞄准的地方，罩住的人三秒动不了
+    const g0 = c.groundAt(5), ctx = c.fxCtx({ color: '#ff9ad2' });
+    BELL_SKILL_FX.ln_bind_mark(ctx, g0.x, g0.z);
+    c.later(0.3, () => {
+      c.ring(3.4, 18, { knock: 0, spike: 10, hold: 3.2, stop: 0.08, shake: 0.6 }, '#ff9ad2', g0.x, g0.z);
+      BELL_SKILL_FX.ln_bind(ctx, g0.x, g0.z, 3.2);
+      if (c.sfx.ok) { BELL_SKILL_SFX.dong(c.sfx, { f: 98, dur: 2.2, gain: 0.42 }); c.sfx.groundBoom(0.4); }
     });
   },
 

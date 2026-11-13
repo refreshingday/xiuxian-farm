@@ -57,6 +57,10 @@ function geos() {
   G.daoTassel = new THREE.ConeGeometry(0.05, 0.2, 6).translate(0, -0.5, 0);
   // 长棍：握在偏下的位置，棍头在 +y。乌木棍身，两头包金箍
   G.staffPole = new THREE.CylinderGeometry(0.03, 0.033, 2.3, 8).translate(0, 0.4, 0);
+  // 铃：喇叭口朝前（+y），柄握在手里，口里一颗铃舌
+  G.bellBody = new THREE.LatheGeometry([[0.02, 0.1], [0.06, 0.12], [0.085, 0.2], [0.1, 0.3], [0.15, 0.38], [0.16, 0.4]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
+  G.bellGrip = new THREE.CylinderGeometry(0.022, 0.022, 0.24, 6);
+  G.bellClap = new THREE.SphereGeometry(0.035, 8, 6).translate(0, 0.36, 0);
   G.staffCap = new THREE.CylinderGeometry(0.042, 0.042, 0.2, 8);
   // 折扇：扇面是一段圆环（开 130°，正对 +y 张开），两根边骨，扇柄在手里
   const FAN_A = 2.3;
@@ -152,7 +156,7 @@ export function createChibi(a) {
   }
 
   // 手里的兵器：sword 整组跟着挥，里面 jian（剑）/ dao（刀）/ shan（扇）三选一显示，见 comboKit.js showWeapon
-  let sword = null, jian = null, dao = null, shan = null, staff = null;
+  let sword = null, jian = null, dao = null, shan = null, staff = null, ling = null;
   if (a.sword) {
     sword = new THREE.Group();
     jian = new THREE.Group();
@@ -179,7 +183,10 @@ export function createChibi(a) {
     staff = new THREE.Group(); staff.visible = false; // 棍
     staff.add(mesh(g.staffPole, M('#3a2a3a', { emissive: '#b9a4ff', ei: 0.08 })));
     for (const y of [1.46, -0.66]) { const cap = mesh(g.staffCap, M('#d9b24a', { emissive: '#ffd27a', ei: 0.2 })); cap.position.y = y; staff.add(cap); }
-    sword.add(jian, dao, shan, staff);
+    ling = new THREE.Group(); ling.visible = false; // 铃
+    const brass = M('#e0b84a', { emissive: '#ff9ad2', ei: 0.18 }); brass.side = THREE.DoubleSide;
+    ling.add(mesh(g.bellBody, brass), mesh(g.bellGrip, M('#6a2a3a')), mesh(g.bellClap, M('#8a6a3a')));
+    sword.add(jian, dao, shan, staff, ling);
     jian.rotation.y = dao.rotation.y = Math.PI / 2; // 刃口朝上下（不是平躺着）
     sword.rotation.x = 1.7;
     arms[0].hand.add(sword);
@@ -191,7 +198,7 @@ export function createChibi(a) {
   if (a.age === 'child') { rig.scale.setScalar(0.7); head.scale.setScalar(1.12); }
   if (a.age === 'elder') { body.rotation.x = 0.2; neck.rotation.x = -0.15; rig.scale.setScalar(0.95); }
 
-  return { root, rig, hips, body, head, arms, legs, sword, jian, dao, shan, staff, mats, phase: Math.random() * 10, flash: 0, lean: a.age === 'elder' ? 0.2 : 0 };
+  return { root, rig, hips, body, head, arms, legs, sword, jian, dao, shan, staff, ling, mats, phase: Math.random() * 10, flash: 0, lean: a.age === 'elder' ? 0.2 : 0 };
 }
 
 const easeOut = (t) => 1 - (1 - t) * (1 - t);

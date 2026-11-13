@@ -43,7 +43,7 @@ const LOST = ['走失的樵夫', '采药未归的药农', '迷路的放牛娃'];
 const OMEN = { 宝光: { color: '#ffe28a', verb: '✨ 收取宝光', sky: '冒起一道宝光' }, 灵泉: { color: '#7af0ff', verb: '💧 饮下灵泉', sky: '升起白雾，怕是有灵泉涌出' }, 陨石: { color: '#ff8a4a', verb: '☄ 撬下陨铁', sky: '落下一团火光，像是陨石' } };
 const FOES = [{ type: 'bandit', name: '擂主', line: '听说村里出了个修士？来，过两招！' }, { type: 'demoncult', name: '通缉魔修', line: '就凭你，也想拿我去领赏？' }, { type: 'bandit', name: '游方剑客', line: '久闻青竹村有高人，在下讨教了。' }];
 const RULES = { nohit: '挨打不超过 2 下', kit: '只许用{kit}', nopill: '不许服丹', time: '60 秒内取胜' };
-const KIT_ID = ['sword', 'fist', 'talisman', 'dao', 'fan', 'staff'], KIT_NAME = ['剑', '拳', '符', '刀', '扇', '棍']; // 与 comboKit.js KITS 的顺序一致
+const KIT_ID = ['sword', 'fist', 'talisman', 'dao', 'fan', 'staff', 'bell'], KIT_NAME = ['剑', '拳', '符', '刀', '扇', '棍', '铃']; // 与 comboKit.js KITS 的顺序一致
 const RIVALS = ['散修·赵四', '散修·钱老怪', '散修·孙不二', '散修·周独眼'];
 const BOLT = new THREE.CylinderGeometry(0.08, 0.35, 24, 6, 1, true).translate(0, 12, 0);
 

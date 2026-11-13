@@ -12,6 +12,7 @@ import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
 import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
 import { FAN_FX, FAN_SFX, FAN_SKILL_FX, FAN_SKILL_SFX } from './comboFan.js';
 import { STAFF_FX, STAFF_SFX, STAFF_SKILL_FX } from './comboStaff.js';
+import { BELL_FX, BELL_SFX, BELL_SKILL_FX, BELL_SKILL_SFX } from './comboBell.js';
 import { KITS, SKILL_KEYS, ELEM, KE, showWeapon } from './comboKit.js';
 import { attachHeroModel } from './hero_model.js';
 import { ComboFX } from './comboFx.js';
@@ -20,7 +21,7 @@ import { TouchControls } from './touch.js';
 import { animCombo } from './comboAnim.js';
 import { HealthBar, screenOf } from './hpbar.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX, ...BELL_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX, ...BELL_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 
 // 试炼场：只有平台 + 木桩 + 玩家，专门打磨战斗手感，不加载大世界
@@ -189,6 +190,10 @@ function hitDummy(d, dmg, fromX, fromZ, knock, color = '#ffffff', h = {}) {
   else if (h.launch) { d.vy = Math.max(d.vy, h.launch); d.pos.y = Math.max(d.pos.y, 0.03); d.airSpin = 3 + h.launch * 0.4; }
   else if (air) d.vy = Math.max(d.vy * 0.3, (h.lift ?? 3.5) * clamp(1 + (P.pos.y + 0.2 - d.pos.y) * 0.8, 0.15, 1.6)); // 空中挨打会被托住，托到和角色差不多高
   d.stun = 0.75;
+  if (h.hold && d.hp > 0) { // 铃：定身
+    if (d.rootT < h.hold * 0.5) { cfx.chains(() => d.pos, color, h.hold); fx.num(d.pos, '定', ''); }
+    d.rootT = Math.max(d.rootT, h.hold); d.vx = d.vz = 0;
+  }
   d.yaw.rotation.y = Math.atan2(dx, dz); d.model.rotation.y = -d.yaw.rotation.y;
   d.angV += 4 + Math.abs(knock) * 0.7;
   d.flash = 0.1;
@@ -1026,7 +1031,7 @@ function setKit(i) {
     el.querySelector('.nm').textContent = s.name;
     const q = el.querySelector('.qc'); if (q) q.textContent = s.qi ? s.qi + ' 灵' : '回气';
   }
-  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = { sword: '斩', dao: '劈', fan: '扇', staff: '打' }[kit.id] || kit.name;
+  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = { sword: '斩', dao: '劈', fan: '扇', staff: '打', bell: '摇' }[kit.id] || kit.name;
 }
 const cycleWeapon = () => setKit(kitI + 1);
 const SKILLS = {
@@ -1149,6 +1154,32 @@ const SKILLS = {
       ring(3.2, 34, { knock: 8, launch: 7, stop: 0.1, shake: 0.8 }, '#b9a4ff', g0.x, g0.z);
       STAFF_SKILL_FX.gn_drop(c, g0.x, g0.z);
       if (sfx.ok) { sfx.slam(1); sfx.groundBoom(0.8); }
+    });
+  },
+  ln_lure: () => { // 摄魂：铃声一直响，两秒里把四周的人一步步摄到身边，最后一震定住
+    const c = fxCtx({ color: '#ff9ad2' });
+    for (let i = 0; i < 8; i++) later(i * 0.25, () => {
+      const last = i === 7, cc = { ...c, x: P.pos.x, z: P.pos.z };
+      ring(last ? 3.6 : 7.5, last ? 18 : 3, last ? { knock: 0, hold: 1.5, stop: 0.05, shake: 0.3 } : { knock: -9, stop: 0, shake: 0.03 }, '#ff9ad2');
+      BELL_SKILL_FX.ln_lure(cc, last);
+      if (sfx.ok) BELL_SKILL_SFX.dong(sfx, last ? { f: 131, dur: 1.4, gain: 0.36 } : { f: 196, dur: 0.3, gain: 0.14 });
+    });
+  },
+  ln_wave: () => { // 音波：三圈音波一圈比一圈大，从身边荡出去
+    const c = fxCtx({ color: '#ff9ad2' });
+    if (sfx.ok) BELL_SKILL_SFX.dong(sfx, { f: 147, dur: 1.2, gain: 0.36 });
+    [3, 5.5, 8].forEach((r, i) => later(i * 0.14, () => {
+      ring(r, 10, { knock: 7 + i * 3, stop: 0.03, shake: 0.2 }, '#ff9ad2');
+      BELL_SKILL_FX.ln_wave({ ...c, x: P.pos.x, z: P.pos.z }, r);
+    }));
+  },
+  ln_bind: () => { // 镇魂：一口大钟扣在瞄准的地方，罩住的人三秒动不了
+    const g0 = groundAt(5), c = fxCtx({ color: '#ff9ad2' });
+    BELL_SKILL_FX.ln_bind_mark(c, g0.x, g0.z);
+    later(0.3, () => {
+      ring(3.4, 18, { knock: 0, spike: 10, hold: 3.2, stop: 0.08, shake: 0.6 }, '#ff9ad2', g0.x, g0.z);
+      BELL_SKILL_FX.ln_bind(c, g0.x, g0.z, 3.2);
+      if (sfx.ok) { BELL_SKILL_SFX.dong(sfx, { f: 98, dur: 2.2, gain: 0.42 }); sfx.groundBoom(0.4); }
     });
   },
   qi: () => { P.qi = Math.min(P.qiMax, P.qi + 40); },
