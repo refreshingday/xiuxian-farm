@@ -55,6 +55,9 @@ function geos() {
   G.daoGrip = new THREE.CylinderGeometry(0.032, 0.034, 0.44, 6).translate(0, -0.1, 0);
   G.daoRing = new THREE.TorusGeometry(0.045, 0.012, 6, 12).translate(0, -0.37, 0);
   G.daoTassel = new THREE.ConeGeometry(0.05, 0.2, 6).translate(0, -0.5, 0);
+  // 长棍：握在偏下的位置，棍头在 +y。乌木棍身，两头包金箍
+  G.staffPole = new THREE.CylinderGeometry(0.03, 0.033, 2.3, 8).translate(0, 0.4, 0);
+  G.staffCap = new THREE.CylinderGeometry(0.042, 0.042, 0.2, 8);
   // 折扇：扇面是一段圆环（开 130°，正对 +y 张开），两根边骨，扇柄在手里
   const FAN_A = 2.3;
   G.fanN = 9; // 扇面分成 9 折，每折绕扇骨根部转：收起时叠成一根，出招时展开（comboAnim.js fanFold）
@@ -149,7 +152,7 @@ export function createChibi(a) {
   }
 
   // 手里的兵器：sword 整组跟着挥，里面 jian（剑）/ dao（刀）/ shan（扇）三选一显示，见 comboKit.js showWeapon
-  let sword = null, jian = null, dao = null, shan = null;
+  let sword = null, jian = null, dao = null, shan = null, staff = null;
   if (a.sword) {
     sword = new THREE.Group();
     jian = new THREE.Group();
@@ -173,7 +176,10 @@ export function createChibi(a) {
     for (const sd of [-1, 1]) { const r = mesh(g.fanRib, wood); r.position.z = sd * 0.022; shan.add(r); folds.push({ o: r, a: sd * g.fanA / 2 }); }
     shan.userData.folds = folds; shan.userData.open = -1;
     shan.add(mesh(g.fanStub, wood));
-    sword.add(jian, dao, shan);
+    staff = new THREE.Group(); staff.visible = false; // 棍
+    staff.add(mesh(g.staffPole, M('#3a2a3a', { emissive: '#b9a4ff', ei: 0.08 })));
+    for (const y of [1.46, -0.66]) { const cap = mesh(g.staffCap, M('#d9b24a', { emissive: '#ffd27a', ei: 0.2 })); cap.position.y = y; staff.add(cap); }
+    sword.add(jian, dao, shan, staff);
     jian.rotation.y = dao.rotation.y = Math.PI / 2; // 刃口朝上下（不是平躺着）
     sword.rotation.x = 1.7;
     arms[0].hand.add(sword);
@@ -185,7 +191,7 @@ export function createChibi(a) {
   if (a.age === 'child') { rig.scale.setScalar(0.7); head.scale.setScalar(1.12); }
   if (a.age === 'elder') { body.rotation.x = 0.2; neck.rotation.x = -0.15; rig.scale.setScalar(0.95); }
 
-  return { root, rig, hips, body, head, arms, legs, sword, jian, dao, shan, mats, phase: Math.random() * 10, flash: 0, lean: a.age === 'elder' ? 0.2 : 0 };
+  return { root, rig, hips, body, head, arms, legs, sword, jian, dao, shan, staff, mats, phase: Math.random() * 10, flash: 0, lean: a.age === 'elder' ? 0.2 : 0 };
 }
 
 const easeOut = (t) => 1 - (1 - t) * (1 - t);

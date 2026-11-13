@@ -8,11 +8,12 @@ import { AIR_FX, AIR_SFX } from './comboAir.js';
 import { KIT_FX, KIT_SFX, SKILL_FX } from './comboKitFx.js';
 import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
 import { FAN_FX, FAN_SFX, FAN_SKILL_FX, FAN_SKILL_SFX } from './comboFan.js';
+import { STAFF_FX, STAFF_SFX, STAFF_SKILL_FX } from './comboStaff.js';
 import { KITS, showWeapon } from './comboKit.js';
 import { animCombo } from './comboAnim.js';
 import { animChibi } from './chibi.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 const lerp = (a, b, k) => a + (b - a) * k;
 export const GRAV = 26;
@@ -654,6 +655,33 @@ const SKILLS = {
     for (const a of [-0.6, -0.3, 0, 0.3, 0.6]) c.waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw + a, left: 7, h: { len: 7, w: 1.1, dmg: 12, knock: 8, stop: 0.02, shake: 0.12, skill: true }, color: '#8fe8c0', hit: new Set(), m: c.spawnWaveMesh('#8fe8c0') });
     FAN_SKILL_FX.sh_blades(c.fxCtx({ color: '#8fe8c0' }));
     if (c.sfx.ok) FAN_SKILL_SFX.whoosh(c.sfx, { dur: 0.35, f0: 1000, f1: 400, gain: 0.4 });
+  },
+
+  gn_wheel: (c) => { // 棍花：棍在身边舞成一团，连打五下把人往里带，最后一下全扫飞
+    const ctx = c.fxCtx({ color: '#b9a4ff' });
+    if (c.sfx.ok) c.sfx.spin(0);
+    for (let i = 0; i < 6; i++) c.later(i * 0.13, () => {
+      const last = i === 5;
+      c.ring(3.6, last ? 16 : 5, last ? { knock: 16, launch: 3, stop: 0.06, shake: 0.4 } : { knock: -3, stop: 0.02, shake: 0.08 }, '#b9a4ff');
+      STAFF_SKILL_FX.gn_wheel({ ...ctx, x: c.P.pos.x, z: c.P.pos.z }, last);
+      if (last && c.sfx.ok) c.sfx.airPop(0.8);
+    });
+  },
+  gn_pierce: (c) => { // 贯虹：棍一下伸出去十来米，一条线上全捅穿
+    const f = c.fwd(), P = c.P, h = { len: 11, w: 1.4, dmg: 24, knock: 18, stop: 0.06, shake: 0.4, skill: true }, m = c.spawnWaveMesh('#b9a4ff');
+    m.scale.set(0.6, 0.8, 1.6);
+    c.waves.push({ x: P.pos.x + f.x * 0.8, z: P.pos.z + f.y * 0.8, yaw: P.yaw, left: h.len, h, color: '#b9a4ff', hit: new Set(), m });
+    STAFF_SKILL_FX.gn_pierce(c.fxCtx({ color: '#b9a4ff' }));
+    if (c.sfx.ok) { c.sfx.fistWhoosh({ lead: 0.01, pitch: 0.6, size: 1.8 }); c.sfx.airPop(0.6); }
+  },
+  gn_drop: (c) => { // 镇海：一根巨棍从天上砸在瞄准的地方
+    const g0 = c.groundAt(5), ctx = c.fxCtx({ color: '#b9a4ff' });
+    STAFF_SKILL_FX.gn_drop_mark(ctx, g0.x, g0.z);
+    c.later(0.3, () => {
+      c.ring(3.2, 34, { knock: 8, launch: 7, stop: 0.1, shake: 0.8 }, '#b9a4ff', g0.x, g0.z);
+      STAFF_SKILL_FX.gn_drop(ctx, g0.x, g0.z);
+      if (c.sfx.ok) { c.sfx.slam(1); c.sfx.groundBoom(0.8); }
+    });
   },
 
   qi: (c) => { c.P.qi = Math.min(c.P.maxQi, c.P.qi + 40 * c.P.maxQi / 100); c.fx.burst(c.P.pos, '#9fdcff', 16, { speed: 2, up: 4, life: 0.7, grav: -1 }); },

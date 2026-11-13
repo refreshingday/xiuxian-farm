@@ -70,7 +70,7 @@ function squash(c, a) {
 // ---- 刀：关键帧动作（comboDao.js 的 keys）----
 // m.lp = 单手时左手放哪（扇：背在身后），缺省张开压平衡
 // 每段之间默认平滑过渡；in = 这一段加速（k²）劈下；lin = 匀速（舞刀转圈）。数值字段缺省为 0，sw 缺省 π（正握）
-const KF = ['lean', 'hip', 'st', 'sq', 'spin', 'one', 'tr'];
+const KF = ['lean', 'hip', 'st', 'sq', 'spin', 'one', 'tr', 'ext']; // ext = 棍伸长（comboStaff.js）
 const FREE_L = [-0.9, 0.2, -0.5]; // 单手时左手张开压住平衡
 function keyAt(m, t) {
   const K = m.keys;
@@ -93,6 +93,7 @@ function daoKeys(c, m, t, walk) {
   const l = mix(g, m.lp || FREE_L, o.one);
   L.sh.rotation.set(l[0], l[1], L.s * (0.15 + 0.3 * o.one)); L.el.rotation.x = l[2];
   if (c.sword) c.sword.rotation.x = o.sw;
+  if (c.staff && o.ext) { c.staff.scale.set(1 + o.ext * 0.3, 1 + o.ext, 1 + o.ext * 0.3); c._ext = true; }
   if (!walk) { c.legs[0].rotation.x = -0.7 * o.st; c.legs[1].rotation.x = 0.5 * o.st; }
   c.hips.position.y += o.hip - (walk ? 0 : 0.1 * o.st);
   c.rig.rotation.x = o.lean; c.rig.rotation.y = o.spin;
@@ -181,6 +182,7 @@ export function animCombo(c, dt, m, t) {
   if (c.shan?.userData.folds) fanFold(c, dt, !!m && t <= m.dur);
   const [R, L] = c.arms;
   R.sh.position.z = 0; L.sh.position.z = 0;
+  if (c._ext) { c.staff.scale.set(1, 1, 1); c._ext = false; } // 棍缩回原长
   if (c._sqOn) { c.root.scale.setScalar(c._sqBase); c._sqOn = false; } // 刀的压扁 / 拉长复原
   if (!m || t > m.dur) return false; // 姿势撑满整招（原来 cancel+0.06 就收，收招段会提前变回待机）
   const walk = c.free && c.moveK > 0.15 ? c.moveK : 0; // 扇：出招时还在走，腿跟着走路步伐
