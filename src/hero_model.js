@@ -10,7 +10,7 @@ import { makeFists } from './hero_fist.js';
 import { sharpenHair } from './hero_hair.js';
 import { attackStance } from './hero_attack.js';
 import { toon } from './util.js';
-import { shoulderFix, trimSleeves } from './hero_shoulder.js';
+import { shoulderFix, trimSleeves, fixShoulderWeights } from './hero_shoulder.js';
 
 const ENABLED = true;
 const HEIGHT = 1.75; // 旧 chibi 头顶约 1.84
@@ -38,7 +38,7 @@ async function load(c, proxyMeshes) {
   const mat = toon('#ffffff', { map: tex, unique: true });
   model.traverse(o => { if (o.isMesh) { o.material = mat; o.castShadow = true; o.frustumCulled = false; } });
   let fist = {};
-  model.traverse(o => { if (o.isSkinnedMesh) { fist = makeFists(o); sharpenHair(o, tex.image); trimSleeves(o); } });
+  model.traverse(o => { if (o.isSkinnedMesh) { fist = makeFists(o); sharpenHair(o, tex.image); trimSleeves(o); c.shW = fixShoulderWeights(o); } });
   model.scale.setScalar(HEIGHT / 0.9995); // FBX 里身高约 1.0
   model.updateMatrixWorld(true);
   const find = k => model.getObjectByName('mixamorig' + k) || model.getObjectByName('mixamorig:' + k);
@@ -69,7 +69,7 @@ async function load(c, proxyMeshes) {
     A.ov = { p: new THREE.Vector3(), q: new THREE.Quaternion(), op: new THREE.Vector3(), oq: new THREE.Quaternion(), on: false };
   }
   for (const m of proxyMeshes) m.visible = false;
-  c.root.add(model);
+  c.root.add(model); c.heroModel = model;
   c.mats.push(mat); // 受击闪白
 
   const q = {}, rot = (n, x, y, z) => (q[n] ||= new THREE.Quaternion()).setFromEuler(_e.set(x, y, z, 'XYZ'));

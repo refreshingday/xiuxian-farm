@@ -61,3 +61,44 @@ export function trimSleeves(mesh, o = SLEEVE) {
   set(true);
   return { moved, set };
 }
+
+// 肩头权重修正：Mixamo 自动绑的权重里，锁骨（Shoulder）一点权重都没有，肩头那一圈（一直到脖子根）全是上臂 100%，
+// 手臂从 T 字放下来 80°，肩头跟着一起塌下去、斜下来 = 垮肩。
+// 把「肩关节内侧 + 肩头上方」那一圈顶点的上臂权重挪给锁骨：锁骨静止时跟着胸走，肩头就留在原地（方肩的转角），
+// shoulderFix 抬锁骨的时候肩头也跟着抬。越靠外（离肩关节越远）、越往下（腋下）挪得越少，腋下 / 袖子仍旧跟着手臂。
+// 在模型的绑定空间里改权重（加载时做一次）。返回 set(on)，查看器 / 预览页拿来开关对比。
+export const SHOULDER_W = { reach: 0.08, top0: -0.04, top1: 0.02, max: 1, ext: 0.0 };
+export function fixShoulderWeights(mesh, o = SHOULDER_W) {
+  const sk = mesh.skeleton, g = mesh.geometry, pos = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+  const names = sk.bones.map(b => b.name.replace(/^mixamorig:?/, ''));
+  const bp = sk.boneInverses.map(bi => new THREE.Vector3().setFromMatrixPosition(bi.clone().invert()));
+  const origI = si.array.slice(), origW = sw.array.slice();
+  const v = new THREE.Vector3(), ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  let moved = 0;
+  for (const side of ['Left', 'Right']) {
+    const arm = names.indexOf(side + 'Arm'), sh = names.indexOf(side + 'Shoulder'); if (arm < 0 || sh < 0) continue;
+    const A = bp[arm], sgn = Math.sign(A.x) || 1;
+    for (let i = 0; i < pos.count; i++) {
+      let wa = 0, ka = -1; for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === arm) { wa = sw.getComponent(i, k); ka = k; }
+      if (wa < 0.01) continue;
+      v.fromBufferAttribute(pos, i).applyMatrix4(mesh.bindMatrix);
+      if (v.x * sgn < 0) continue; // 另一侧
+      const out = (v.x - A.x) * sgn; // 在肩关节外侧多远
+      const f = (1 - ss(o.ext, o.ext + o.reach, out)) * ss(o.top0, o.top1, v.y - A.y) * o.max;
+      if (f <= 0.001) continue;
+      const mv = wa * f;
+      let ks = -1; for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === sh) ks = k;
+      if (ks < 0) { // 没有锁骨的槽：用权重最小的那个（不是上臂自己）
+        let mi = -1, mw = 9; for (let k = 0; k < 4; k++) { const w = sw.getComponent(i, k); if (k !== ka && w < mw) { mw = w; mi = k; } }
+        ks = mi; si.setComponent(i, ks, sh); sw.setComponent(i, ks, 0);
+      }
+      sw.setComponent(i, ka, wa - mv); sw.setComponent(i, ks, sw.getComponent(i, ks) + mv);
+      let sum = 0; for (let k = 0; k < 4; k++) sum += sw.getComponent(i, k);
+      if (sum > 0) for (let k = 0; k < 4; k++) sw.setComponent(i, k, sw.getComponent(i, k) / sum);
+      moved++;
+    }
+  }
+  const outI = si.array.slice(), outW = sw.array.slice();
+  const set = on => { si.array.set(on ? outI : origI); sw.array.set(on ? outW : origW); si.needsUpdate = sw.needsUpdate = true; };
+  return { moved, set };
+}

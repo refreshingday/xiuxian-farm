@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { createChibi, animChibi } from './chibi.js';
 import { attachHeroModel } from './hero_model.js';
-import { SHOULDER } from './hero_shoulder.js';
+import { SHOULDER, SHOULDER_W, fixShoulderWeights } from './hero_shoulder.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -65,3 +65,15 @@ renderer.setAnimationLoop(now => {
   renderer.setViewport(h, 0, W - h, H); renderer.setScissor(h, 0, W - h, H); renderer.render(scene, camG);
 });
 window.__prev = { SHOULDER, c, hero, camF, camG };
+
+// 肩头权重（hero_shoulder.js fixShoulderWeights）：开关 + 范围 / 高度滑块，改了就重算
+const wOrig = { ...SHOULDER_W }; let wOn = true;
+$('wr').value = wOrig.reach; $('wt').value = wOrig.top0;
+function rebuildW() {
+  if (!c.shW || !c.heroModel) return;
+  c.shW.set(false); c.heroModel.traverse(o => { if (o.isSkinnedMesh) { if (wOn) { Object.assign(SHOULDER_W, wOrig, { reach: +$('wr').value, top0: +$('wt').value }); c.shW = fixShoulderWeights(o); } else c.shW = { moved: 0, set() {} }; } });
+  for (const id of ['wr', 'wt']) $(id).nextElementSibling.textContent = (+$(id).value).toFixed(3);
+}
+$('wr').oninput = $('wt').oninput = rebuildW;
+$('bW').onclick = () => { wOn = !wOn; $('bW').textContent = '肩头权重：' + (wOn ? '开' : '关'); $('bW').classList.toggle('on', wOn); rebuildW(); };
+hero.ready || setTimeout(function w() { hero.ready ? rebuildW() : setTimeout(w, 200); }, 200);
