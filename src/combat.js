@@ -10,11 +10,12 @@ import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
 import { FAN_FX, FAN_SFX, FAN_SKILL_FX, FAN_SKILL_SFX } from './comboFan.js';
 import { STAFF_FX, STAFF_SFX, STAFF_SKILL_FX } from './comboStaff.js';
 import { BELL_FX, BELL_SFX, BELL_SKILL_FX, BELL_SKILL_SFX } from './comboBell.js';
+import { BOW_FX, BOW_SFX, BOW_SKILL_FX, BOW_SKILL_SFX, Arrows, arrowContact, boomFx, rainFx } from './comboBow.js';
 import { KITS, showWeapon } from './comboKit.js';
 import { animCombo } from './comboAnim.js';
 import { animChibi } from './chibi.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX, ...BELL_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX, ...BELL_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX, ...BELL_FX, ...BOW_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX, ...BELL_SFX, ...BOW_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 const lerp = (a, b, k) => a + (b - a) * k;
 export const GRAV = 26;
@@ -32,6 +33,7 @@ export class Combat {
     const P = this.P;
     // 技能打出的伤害带 h.skill（能打断前摇 / 把破绽中的妖王打倒）；技能放出的符、剑气、延时也算
     this.skillTag = false;
+    this.arrows = new Arrows(this.scene, this.fx); // 弓箭（comboBow.js）
     this.hit = (d, dmg, x, z, knock, color, h) => {
       const r = o.hit(d, dmg, x, z, knock, color, this.skillTag && !h?.skill ? { ...h, skill: true } : h);
       if (h?.hold && d.alive) { // 铃：定身（妖王只吃三成）
@@ -101,6 +103,19 @@ export class Combat {
   later(t, fn) { const tag = this.skillTag; this.timers.push({ t, fn: tag ? () => this.asSkill(fn) : fn }); }
   asSkill(fn) { const o = this.skillTag; this.skillTag = true; try { fn(); } finally { this.skillTag = o; } }
   hitFeel(h) { if (h.stop) this.stop(h.stop); this.shake(h.shake ?? 0.15); }
+  // 弓箭（comboBow.js Arrows）：射中 / 炸开。技能射出的箭 h.skill = true
+  updateArrows(dt) {
+    this.arrows.update(dt, this.live(), (d, a) => {
+      if (!d.alive) return;
+      this.hit(d, a.h.dmg, a.x - Math.sin(a.yaw), a.z - Math.cos(a.yaw), a.h.knock, a.color, a.h);
+      arrowContact(this.fxCtx({ color: a.color }), d, a); this.hitFeel(a.h);
+    }, (x, z, a) => {
+      const b = a.h.boom;
+      this.skillTag = !!a.h.skill; this.ring(b.r, b.dmg, { knock: b.knock, launch: b.launch, stop: 0.08, shake: 0.5 }, a.color, x, z); this.skillTag = false;
+      boomFx(this.fxCtx({ color: a.color }), x, z, b.r);
+      if (this.sfx.ok) { this.sfx.slam(0.5); this.sfx.groundBoom(0.5); }
+    });
+  }
   // 前方（±40°）最近、高度够得着的目标
   frontTarget(range) {
     const P = this.P; let best = null, bd = range;
@@ -197,9 +212,11 @@ export class Combat {
         this.placeBlast(g0.x + Math.cos(a) * rr, g0.z + Math.sin(a) * rr, { ...h, keep: false, delay: h.delay * (0.4 + Math.random() * 0.6) }, color);
       }
     } else if (h.shape === 'detonate') this.detonate(h, color);
+    else if (h.shape === 'arrow') { const a = P.yaw + (h.ang || 0); this.arrows.spawn(P.pos.x + Math.sin(a) * 0.6, P.pos.y + 1.15, P.pos.z + Math.cos(a) * 0.6, a, h, color); }
+    if (h.rain) rainFx(this.fxCtx(m), this.arrows, P.pos.x + f.x * h.at, P.pos.z + f.y * h.at, h.r, 5);
     MOVE_FX[m.id]?.hit?.(this.fxCtx(m, P.pos.x + f.x * (h.at || 0), P.pos.z + f.y * (h.at || 0)), h, idx);
     if (this.sfx.ok) MOVE_SFX[m.id]?.hit?.(this.sfx, h, idx, m);
-    if (hitAny || h.shape !== 'arc') this.hitFeel(h);
+    if (hitAny || (h.shape !== 'arc' && h.shape !== 'arrow')) this.hitFeel(h); // 箭：射中才顿帧
   }
 
   // ---------- 技能（Q E R C） ----------
@@ -501,7 +518,7 @@ export class Combat {
   // 飞符、陷阱、剑气、护符、定时（在妖兽更新之后）
   updateEffects(dt) {
     for (let i = this.timers.length - 1; i >= 0; i--) if ((this.timers[i].t -= dt) <= 0) this.timers.splice(i, 1)[0].fn();
-    this.updateWaves(dt); this.updateBolts(dt); this.updateBlasts(dt); this.updateStuck(dt); this.updateGuard(dt);
+    this.updateWaves(dt); this.updateArrows(dt); this.updateBolts(dt); this.updateBlasts(dt); this.updateStuck(dt); this.updateGuard(dt);
   }
   // 招式带来的位移和高度。mv = 摇杆 / WASD（单位向量以内），walk = 走路速度。返回 { vx, vz, y, ghost }
   step(dt, mv, walk) {
@@ -718,6 +735,27 @@ const SKILLS = {
       BELL_SKILL_FX.ln_bind(ctx, g0.x, g0.z, 3.2);
       if (c.sfx.ok) { BELL_SKILL_SFX.dong(c.sfx, { f: 98, dur: 2.2, gain: 0.42 }); c.sfx.groundBoom(0.4); }
     });
+  },
+  gw_volley: (c) => { // 万箭：瞄准处落两秒箭雨
+    const g0 = c.groundAt(5), ctx = c.fxCtx({ color: '#9be36a' });
+    BOW_SKILL_FX.gw_volley_mark(ctx, g0.x, g0.z);
+    if (c.sfx.ok) BOW_SKILL_SFX.twangS(c.sfx, 0.6);
+    for (let i = 0; i < 9; i++) c.later(0.25 + i * 0.2, () => {
+      rainFx(ctx, c.arrows, g0.x, g0.z, 3.2, 5);
+      c.later(0.09, () => { c.ring(3.2, 7, { knock: 1, stop: 0.01, shake: 0.05 }, '#9be36a', g0.x, g0.z); if (c.sfx.ok) BOW_SKILL_SFX.thunk(c.sfx, 0.16); });
+    });
+  },
+  gw_seek: (c) => { // 追魂：五支会拐弯的箭，各自追最近的敌人
+    const f = c.fwd(), P = c.P, ctx = c.fxCtx({ color: '#9be36a' });
+    for (const a of [-0.8, -0.4, 0, 0.4, 0.8]) c.arrows.spawn(P.pos.x + f.x * 0.6, P.pos.y + 1.15, P.pos.z + f.y * 0.6, P.yaw + a, { skill: true, spd: 24, range: 18, home: 5, dmg: 14, knock: 5, stop: 0.03, shake: 0.1 }, '#9be36a');
+    BOW_SKILL_FX.gw_seek(ctx);
+    if (c.sfx.ok) BOW_SKILL_SFX.twangS(c.sfx, 0.5);
+  },
+  gw_thunder: (c) => { // 惊雷：一支炸箭，打中或者射到底就炸一大圈
+    const f = c.fwd(), P = c.P;
+    c.arrows.spawn(P.pos.x + f.x * 0.6, P.pos.y + 1.15, P.pos.z + f.y * 0.6, P.yaw, { skill: true, spd: 40, range: 12, w: 0.5, big: true, dmg: 20, knock: 4, stop: 0.04, shake: 0.2, boom: { r: 3.4, dmg: 30, knock: 14, launch: 7 } }, '#9be36a');
+    BOW_SKILL_FX.gw_thunder(c.fxCtx({ color: '#9be36a' }));
+    if (c.sfx.ok) BOW_SKILL_SFX.twangS(c.sfx, 0.9);
   },
 
   qi: (c) => { c.P.qi = Math.min(c.P.maxQi, c.P.qi + 40 * c.P.maxQi / 100); c.fx.burst(c.P.pos, '#9fdcff', 16, { speed: 2, up: 4, life: 0.7, grav: -1 }); },

@@ -1,4 +1,5 @@
 // 连招动作：在共享骨架动画上叠加各招式姿势。试炼场和主游戏共用。
+import * as THREE from 'three';
 import { clamp } from './util.js';
 import { animChibi } from './chibi.js';
 
@@ -70,7 +71,8 @@ function squash(c, a) {
 // ---- 刀：关键帧动作（comboDao.js 的 keys）----
 // m.lp = 单手时左手放哪（扇：背在身后），缺省张开压平衡
 // 每段之间默认平滑过渡；in = 这一段加速（k²）劈下；lin = 匀速（舞刀转圈）。数值字段缺省为 0，sw 缺省 π（正握）
-const KF = ['lean', 'hip', 'st', 'sq', 'spin', 'one', 'tr', 'ext']; // ext = 棍伸长（comboStaff.js）
+const KF = ['lean', 'hip', 'st', 'sq', 'spin', 'one', 'tr', 'ext', 'dr']; // ext = 棍伸长（comboStaff.js）；dr = 弓拉开多少（comboBow.js）
+// 关键帧也可以带 l = 这一帧左手的姿势 [肩x, 肩y, 肘]（弓：左手持弓），有就不用 m.lp / one
 const FREE_L = [-0.9, 0.2, -0.5]; // 单手时左手张开压住平衡
 function keyAt(m, t) {
   const K = m.keys;
@@ -81,7 +83,22 @@ function keyAt(m, t) {
   k = B.in ? k * k : B.lin ? k : ease(k);
   const o = { p: mix(A.p, B.p, k), sw: (A.sw ?? Math.PI) + ((B.sw ?? Math.PI) - (A.sw ?? Math.PI)) * k };
   for (const f of KF) o[f] = (A[f] || 0) + ((B[f] || 0) - (A[f] || 0)) * k;
+  if (A.l || B.l) o.l = mix(A.l || B.l, B.l || A.l, k);
   return o;
+}
+// 弓弦拉到 draw（0 = 松弦，1 = 拉满），拉开时搭着一支箭
+const _up = new THREE.Vector3(0, 1, 0), _v = new THREE.Vector3();
+export function bowDraw(c, draw) {
+  const u = c.gong.userData;
+  c.gong.rotation.x = 0;
+  if (u.draw === draw) return;
+  u.draw = draw;
+  const ny = u.tipY + 0.06 + draw * 0.55, nz = 0.15; // 箭搭在手背上方（不然藏进左袖子里）
+  for (const s of u.strs) {
+    _v.set(0, ny - u.tipY, nz - s.userData.z); const len = _v.length();
+    s.position.set(0, u.tipY, s.userData.z); s.quaternion.setFromUnitVectors(_up, _v.normalize()); s.scale.set(1, len, 1);
+  }
+  u.nock.position.set(0, ny, nz); u.nock.visible = draw > 0.02;
 }
 export const daoKeyVal = (m, t, f) => keyAt(m, t)[f];
 function daoKeys(c, m, t, walk) {
@@ -90,10 +107,11 @@ function daoKeys(c, m, t, walk) {
   setPose(c, p);
   const [R, L] = c.arms;
   const g = [p[0] * 0.95, p[1] - L.s * 0.3, p[2] - 0.35]; // 左手握刀柄
-  const l = mix(g, m.lp || FREE_L, o.one);
+  const l = o.l || mix(g, m.lp || FREE_L, o.one);
   L.sh.rotation.set(l[0], l[1], L.s * (0.15 + 0.3 * o.one)); L.el.rotation.x = l[2];
   if (c.sword) c.sword.rotation.x = o.sw;
   if (c.staff && o.ext) { c.staff.scale.set(1 + o.ext * 0.3, 1 + o.ext, 1 + o.ext * 0.3); c._ext = true; }
+  if (c.gong?.visible) bowDraw(c, o.dr);
   if (c.ling && o.ext) { c.ling.scale.setScalar(1 + o.ext * 0.6); c._ext = true; } // 铃摇响时鼓一下
   if (!walk) { c.legs[0].rotation.x = -0.7 * o.st; c.legs[1].rotation.x = 0.5 * o.st; }
   c.hips.position.y += o.hip - (walk ? 0 : 0.1 * o.st);
@@ -184,6 +202,7 @@ export function animCombo(c, dt, m, t) {
   const [R, L] = c.arms;
   R.sh.position.z = 0; L.sh.position.z = 0;
   if (c._ext) { c.staff.scale.set(1, 1, 1); c.ling?.scale.setScalar(1); c._ext = false; } // 棍缩回原长
+  if (c.gong?.visible) { bowDraw(c, 0); c.gong.rotation.x = Math.PI / 2; } // 弓：松弦，不出招时竖着垂在手边
   if (c._sqOn) { c.root.scale.setScalar(c._sqBase); c._sqOn = false; } // 刀的压扁 / 拉长复原
   if (!m || t > m.dur) return false; // 姿势撑满整招（原来 cancel+0.06 就收，收招段会提前变回待机）
   const walk = c.free && c.moveK > 0.15 ? c.moveK : 0; // 扇：出招时还在走，腿跟着走路步伐

@@ -449,7 +449,7 @@ const elemMul = (e) => (KE[P.elem] === e.elem ? 1.5 : KE[e.elem] === P.elem ? 0.
 // 宗门功法（P.mods）：分武器加伤、暴击、对鬼物加伤、减速、吸血
 // 拼刀（GDD 第 4 节）：对方正冲过来 / 正砸下来时被普攻迎面打中＝两边同时命中，比重量。
 // 重量 = 武器重量 × 招式加成（连招越往后越重）× 炼器；妖兽按体型和等级。重的赢，轻的被弹开硬直；差不多就两边都弹开
-const KIT_W = { sword: 1, fist: 1.15, talisman: 0.7, dao: 1.4, fan: 0.8, staff: 1.2, bell: 0.75 };
+const KIT_W = { sword: 1, fist: 1.15, talisman: 0.7, dao: 1.4, fan: 0.8, staff: 1.2, bell: 0.75, bow: 0.85 };
 function clash(e) {
   const pw = (KIT_W[combat.kit.id] ?? 1) * (1 + 0.2 * (combat.depth || 0)) * (1 + 0.06 * (P.forge?.atk || 0)), ew = enemies.weight(e);
   const mx = (P.pos.x + e.pos.x) / 2, mz = (P.pos.z + e.pos.z) / 2, ax = P.pos.x - e.pos.x, az = P.pos.z - e.pos.z, al = Math.hypot(ax, az) || 1;
@@ -1284,7 +1284,7 @@ function updateKitUI() {
   const kit = combat.kit;
   for (const el of slotEls) { const s = kit.skills[+el.dataset.slot]; el.querySelector('.nm').textContent = s.name; el.querySelector('.qc').textContent = s.qi ? s.qi + ' 灵' : '回气'; }
   ui.weapName.textContent = kit.name;
-  ui.atkName.textContent = touch.on ? ({ sword: '斩', dao: '劈', fan: '扇', staff: '打', bell: '摇' }[kit.id] || kit.name) : '连招 · ' + kit.name;
+  ui.atkName.textContent = touch.on ? ({ sword: '斩', dao: '劈', fan: '扇', staff: '打', bell: '摇', bow: '射' }[kit.id] || kit.name) : '连招 · ' + kit.name;
 }
 combat.onKit = updateKitUI;
 updateKitUI();

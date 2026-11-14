@@ -13,6 +13,7 @@ import { DAO_FX, DAO_SFX, DAO_SKILL_FX } from './comboDao.js';
 import { FAN_FX, FAN_SFX, FAN_SKILL_FX, FAN_SKILL_SFX } from './comboFan.js';
 import { STAFF_FX, STAFF_SFX, STAFF_SKILL_FX } from './comboStaff.js';
 import { BELL_FX, BELL_SFX, BELL_SKILL_FX, BELL_SKILL_SFX } from './comboBell.js';
+import { BOW_FX, BOW_SFX, BOW_SKILL_FX, BOW_SKILL_SFX, Arrows, arrowContact, boomFx, rainFx } from './comboBow.js';
 import { KITS, SKILL_KEYS, ELEM, KE, showWeapon } from './comboKit.js';
 import { attachHeroModel } from './hero_model.js';
 import { ComboFX } from './comboFx.js';
@@ -21,7 +22,7 @@ import { TouchControls } from './touch.js';
 import { animCombo } from './comboAnim.js';
 import { HealthBar, screenOf } from './hpbar.js';
 
-const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX, ...BELL_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX, ...BELL_SFX };
+const MOVE_FX = { ...AIR_FX, ...KIT_FX, ...DAO_FX, ...FAN_FX, ...STAFF_FX, ...BELL_FX, ...BOW_FX }, MOVE_SFX = { ...AIR_SFX, ...KIT_SFX, ...DAO_SFX, ...FAN_SFX, ...STAFF_SFX, ...BELL_SFX, ...BOW_SFX };
 const rand = (a, b) => a + Math.random() * (b - a), TAU = Math.PI * 2;
 
 // 试炼场：只有平台 + 木桩 + 玩家，专门打磨战斗手感，不加载大世界
@@ -442,15 +443,30 @@ runner.on.hit = (m, h, idx) => {
       placeBlast(g0.x + Math.cos(a) * rr, g0.z + Math.sin(a) * rr, { ...h, keep: false, delay: h.delay * (0.4 + Math.random() * 0.6) }, color);
     }
   } else if (h.shape === 'detonate') detonate(h, color);
+  else if (h.shape === 'arrow') { const a = P.yaw + (h.ang || 0); arrows.spawn(P.pos.x + Math.sin(a) * 0.6, P.pos.y + 1.15, P.pos.z + Math.cos(a) * 0.6, a, h, color); }
+  if (h.rain) rainFx(fxCtx(m), arrows, P.pos.x + f.x * h.at, P.pos.z + f.y * h.at, h.r, 5);
   const f2 = fwd();
   MOVE_FX[m.id]?.hit?.(fxCtx(m, P.pos.x + f2.x * (h.at || 0), P.pos.z + f2.y * (h.at || 0)), h, idx);
   if (sfx.ok) MOVE_SFX[m.id]?.hit?.(sfx, h, idx, m);
-  if (hitAny || h.shape !== 'arc') hitFeel(h);
+  if (hitAny || (h.shape !== 'arc' && h.shape !== 'arrow')) hitFeel(h); // 箭：射中才顿帧
 };
 
 function hitFeel(h) {
   if (opt.stop && h.stop) hitStop = Math.max(hitStop, h.stop);
   g.shake(h.shake ?? 0.15);
+}
+
+// 弓箭（comboBow.js Arrows）：射中 / 炸开
+const arrows = new Arrows(scene, fx);
+function updateArrows(dt) {
+  arrows.update(dt, live(), (d, a) => {
+    hitDummy(d, a.h.dmg, a.x - Math.sin(a.yaw), a.z - Math.cos(a.yaw), a.h.knock, a.color, a.h);
+    arrowContact(fxCtx({ color: a.color }), d, a); hitFeel(a.h);
+  }, (x, z, a) => {
+    const b = a.h.boom; ring(b.r, b.dmg, { knock: b.knock, launch: b.launch, stop: 0.08, shake: 0.5 }, a.color, x, z);
+    boomFx(fxCtx({ color: a.color }), x, z, b.r);
+    if (sfx.ok) { sfx.slam(0.5); sfx.groundBoom(0.5); }
+  });
 }
 
 // 剑气（疾风·终）
@@ -1031,7 +1047,7 @@ function setKit(i) {
     el.querySelector('.nm').textContent = s.name;
     const q = el.querySelector('.qc'); if (q) q.textContent = s.qi ? s.qi + ' 灵' : '回气';
   }
-  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = { sword: '斩', dao: '劈', fan: '扇', staff: '打', bell: '摇' }[kit.id] || kit.name;
+  $('weapon').textContent = kit.name; $('mWeap').textContent = kit.name; $('mAtk').textContent = { sword: '斩', dao: '劈', fan: '扇', staff: '打', bell: '摇', bow: '射' }[kit.id] || kit.name;
 }
 const cycleWeapon = () => setKit(kitI + 1);
 const SKILLS = {
@@ -1182,6 +1198,27 @@ const SKILLS = {
       if (sfx.ok) { BELL_SKILL_SFX.dong(sfx, { f: 98, dur: 2.2, gain: 0.42 }); sfx.groundBoom(0.4); }
     });
   },
+  gw_volley: () => { // 万箭：瞄准处落两秒箭雨
+    const g0 = groundAt(5), c = fxCtx({ color: '#9be36a' });
+    BOW_SKILL_FX.gw_volley_mark(c, g0.x, g0.z);
+    if (sfx.ok) BOW_SKILL_SFX.twangS(sfx, 0.6);
+    for (let i = 0; i < 9; i++) later(0.25 + i * 0.2, () => {
+      rainFx(c, arrows, g0.x, g0.z, 3.2, 5);
+      later(0.09, () => { ring(3.2, 7, { knock: 1, stop: 0.01, shake: 0.05 }, '#9be36a', g0.x, g0.z); if (sfx.ok) BOW_SKILL_SFX.thunk(sfx, 0.16); });
+    });
+  },
+  gw_seek: () => { // 追魂：五支会拐弯的箭，各自追最近的敌人
+    const f = fwd(), c = fxCtx({ color: '#9be36a' });
+    for (const a of [-0.8, -0.4, 0, 0.4, 0.8]) arrows.spawn(P.pos.x + f.x * 0.6, P.pos.y + 1.15, P.pos.z + f.y * 0.6, P.yaw + a, { spd: 24, range: 18, home: 5, dmg: 14, knock: 5, stop: 0.03, shake: 0.1 }, '#9be36a');
+    BOW_SKILL_FX.gw_seek(c);
+    if (sfx.ok) BOW_SKILL_SFX.twangS(sfx, 0.5);
+  },
+  gw_thunder: () => { // 惊雷：一支炸箭，打中或者射到底就炸一大圈
+    const f = fwd();
+    arrows.spawn(P.pos.x + f.x * 0.6, P.pos.y + 1.15, P.pos.z + f.y * 0.6, P.yaw, { spd: 40, range: 12, w: 0.5, big: true, dmg: 20, knock: 4, stop: 0.04, shake: 0.2, boom: { r: 3.4, dmg: 30, knock: 14, launch: 7 } }, '#9be36a');
+    BOW_SKILL_FX.gw_thunder(fxCtx({ color: '#9be36a' }));
+    if (sfx.ok) BOW_SKILL_SFX.twangS(sfx, 0.9);
+  },
   qi: () => { P.qi = Math.min(P.qiMax, P.qi + 40); },
 };
 function useSkill(i) {
@@ -1287,7 +1324,7 @@ function frame(now) {
   updateAim();
   updatePlayer(dt);
   updateDummies(dt, gameTime);
-  updateWaves(dt);
+  updateWaves(dt); updateArrows(dt);
   updateBolts(dt); updateBlasts(dt); updateStuck(dt); updateGuard(dt); updateTimers(dt);
   updateDbg(raw);
   fx.update(raw * opt.timeScale);
@@ -1300,13 +1337,13 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // 控制台调试：arena.click(); arena.step(0.3) 按固定步长推进，便于脚本化测试招式
-window.arena = { sfx, cfx, touch, aim, mouse, setKit, useSkill, blasts, bolts, KITS, guard: () => guard, placeBlast,
+window.arena = { sfx, cfx, touch, aim, mouse, setKit, useSkill, blasts, bolts, arrows, KITS, guard: () => guard, placeBlast,
   runner, stats, dummies, P,
   click,
   step(sec, h = 1 / 60) {
     for (let t = 0; t < sec; t += h) {
       realTime += h; gameTime += h; hitStop = 0;
-      updateAim(); updatePlayer(h); updateDummies(h, gameTime); updateWaves(h); updateBolts(h); updateBlasts(h); updateStuck(h); updateGuard(h); updateTimers(h); updateDbg(h); fx.update(h); cfx.update(h);
+      updateAim(); updatePlayer(h); updateDummies(h, gameTime); updateWaves(h); updateArrows(h); updateBolts(h); updateBlasts(h); updateStuck(h); updateGuard(h); updateTimers(h); updateDbg(h); fx.update(h); cfx.update(h);
     }
     updateCamera(1); updateBars(sec); updateUI(); composer.render();
   },
