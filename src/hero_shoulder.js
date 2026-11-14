@@ -67,12 +67,12 @@ export function trimSleeves(mesh, o = SLEEVE) {
 // 把「肩关节内侧 + 肩头上方」那一圈顶点的上臂权重挪给锁骨：锁骨静止时跟着胸走，肩头就留在原地（方肩的转角），
 // shoulderFix 抬锁骨的时候肩头也跟着抬。越靠外（离肩关节越远）、越往下（腋下）挪得越少，腋下 / 袖子仍旧跟着手臂。
 // 在模型的绑定空间里改权重（加载时做一次）。返回 set(on)，查看器 / 预览页拿来开关对比。
-export const SHOULDER_W = { reach: 0.08, top0: -0.04, top1: 0.02, max: 1, ext: 0.0 };
+export const SHOULDER_W = { reach: 0.08, top0: -0.04, top1: 0.02, max: 1, ext: 0.0, lift: 0.03 }; // lift：权重挪给锁骨的那圈肩头顶点，在绑定姿态里再往上抬这么多（越靠外抬得越多，肩角更方）
 export function fixShoulderWeights(mesh, o = SHOULDER_W) {
   const sk = mesh.skeleton, g = mesh.geometry, pos = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
   const names = sk.bones.map(b => b.name.replace(/^mixamorig:?/, ''));
   const bp = sk.boneInverses.map(bi => new THREE.Vector3().setFromMatrixPosition(bi.clone().invert()));
-  const origI = si.array.slice(), origW = sw.array.slice();
+  const origI = si.array.slice(), origW = sw.array.slice(), origP = pos.array.slice(), up = new Float32Array(pos.count);
   const v = new THREE.Vector3(), ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   let moved = 0;
   for (const side of ['Left', 'Right']) {
@@ -95,10 +95,15 @@ export function fixShoulderWeights(mesh, o = SHOULDER_W) {
       sw.setComponent(i, ka, wa - mv); sw.setComponent(i, ks, sw.getComponent(i, ks) + mv);
       let sum = 0; for (let k = 0; k < 4; k++) sum += sw.getComponent(i, k);
       if (sum > 0) for (let k = 0; k < 4; k++) sw.setComponent(i, k, sw.getComponent(i, k) / sum);
+      up[i] = mv * o.lift * (0.4 + 0.6 * ss(-0.03, 0.05, out)); // 抬的高度：按挪走的权重比例，外侧更多
       moved++;
     }
   }
+  // 抬高：bindMatrix 是整体缩放 / 平移（没旋转），世界 y 的增量按 bindMatrix 的 y 缩放折回模型空间
+  const sy = mesh.bindMatrix.elements[5] || 1, outP = origP.slice();
+  for (let i = 0; i < pos.count; i++) if (up[i]) outP[i * 3 + 1] += up[i] / sy;
   const outI = si.array.slice(), outW = sw.array.slice();
-  const set = on => { si.array.set(on ? outI : origI); sw.array.set(on ? outW : origW); si.needsUpdate = sw.needsUpdate = true; };
+  const set = on => { si.array.set(on ? outI : origI); sw.array.set(on ? outW : origW); pos.array.set(on ? outP : origP); si.needsUpdate = sw.needsUpdate = pos.needsUpdate = true; g.computeBoundingSphere(); };
+  set(true);
   return { moved, set };
 }
